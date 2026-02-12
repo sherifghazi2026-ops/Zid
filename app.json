@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "Zayed-id",
+    "slug": "zayed-id",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "zayed-id",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.zayedid"
+    },
+    "android": {
+      "package": "com.yourcompany.zayedid"
+    }
+  }
+}
