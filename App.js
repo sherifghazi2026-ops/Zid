@@ -1,32 +1,23 @@
 import 'react-native-gesture-handler';
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AuthProvider, useAuth } from './src/context/AuthContext';
-import LoginScreen from './src/screens/LoginScreen';
-import HomeScreen from './src/screens/HomeScreen';
-import ServiceScreen from './src/screens/ServiceScreen';
-import WalletScreen from './src/screens/WalletScreen';
+import { Ionicons } from '@expo/vector-icons';
 
+import CustomerScreen from './src/screens/CustomerScreen';
+import DriverScreen from './src/screens/DriverScreen';
+import RestaurantScreen from './src/screens/RestaurantScreen';
+
+const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-function AppNavigator() {
-  const { user, loading } = useAuth();
-
-  if (loading) return null;
-
+function CustomerStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {user ? (
-        <>
-          <Stack.Screen name="Home" component={HomeScreen} />
-          <Stack.Screen name="Service" component={ServiceScreen} />
-          <Stack.Screen name="Wallet" component={WalletScreen} />
-        </>
-      ) : (
-        <Stack.Screen name="Login" component={LoginScreen} />
-      )}
+      <Stack.Screen name="CustomerMain" component={CustomerScreen} />
+      <Stack.Screen name="Restaurant" component={RestaurantScreen} />
     </Stack.Navigator>
   );
 }
@@ -34,11 +25,39 @@ function AppNavigator() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <NavigationContainer>
-          <AppNavigator />
-        </NavigationContainer>
-      </AuthProvider>
+      <NavigationContainer>
+        <Tab.Navigator
+          screenOptions={({ route }) => ({
+            tabBarIcon: ({ focused, color, size }) => {
+              let iconName;
+              if (route.name === 'طلب') {
+                iconName = focused ? 'cart' : 'cart-outline';
+              } else if (route.name === 'مندوب') {
+                iconName = focused ? 'bicycle' : 'bicycle-outline';
+              }
+              return <Ionicons name={iconName} size={size} color={color} />;
+            },
+            tabBarActiveTintColor: '#4F46E5',
+            tabBarInactiveTintColor: '#9CA3AF',
+            tabBarStyle: {
+              backgroundColor: '#FFFFFF',
+              borderTopWidth: 1,
+              borderTopColor: '#E5E7EB',
+              paddingBottom: 5,
+              paddingTop: 5,
+              height: 60,
+            },
+            tabBarLabelStyle: {
+              fontSize: 12,
+              fontWeight: '500',
+            },
+            headerShown: false,
+          })}
+        >
+          <Tab.Screen name="طلب" component={CustomerStack} />
+          <Tab.Screen name="مندوب" component={DriverScreen} />
+        </Tab.Navigator>
+      </NavigationContainer>
     </SafeAreaProvider>
   );
 }

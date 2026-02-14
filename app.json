@@ -2,16 +2,56 @@
   "expo": {
     "name": "Zayed-id",
     "slug": "zayed-id",
-    "version": "1.0.0",
+    "version": "3.0.0",
     "orientation": "portrait",
-    "scheme": "zayed-id",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "scheme": "zayedid",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.zayedid"
+      "bundleIdentifier": "com.zayedid.app"
     },
     "android": {
-      "package": "com.yourcompany.zayedid"
-    }
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.zayedid.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-av",
+        {
+          "microphonePermission": "يحتاج التطبيق للوصول إلى الميكروفون لتسجيل طلبك."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "يحتاج التطبيق للوصول إلى الكاميرا لتصوير الروشتة أو المشكلة."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "يحتاج التطبيق لموقعك لإرسال مندوب قريب منك."
+        }
+      ]
+    ],
+    "extra": {}
   }
 }
