@@ -1,14 +1,13 @@
 const API_KEY = "DwFjOWx31jB369PeEpIQGXc2g7qXGD9GJRGUd2D2VhwQgSuHzjFAJQQJ99CBACHYHv6XJ3w3AAAAACOGTZ35";
-const ENDPOINT = "https://sherifghazi-7065-resource.openai.azure.com";
-const DEPLOYMENT_NAME = "gpt-4o"; // غير هذا لاسم الـ deployment الصحيح
+const ENDPOINT = "https://sherifghazi-7065-resource.cognitiveservices.azure.com/";
+const DEPLOYMENT_NAME = "gpt-5.1-chat";
 
 const azureService = {
   askAI: async (userMessage) => {
     try {
-      const url = `${ENDPOINT}/openai/deployments/${DEPLOYMENT_NAME}/chat/completions?api-version=2024-08-01-preview`;
+      console.log("🚀 Sending to Azure AI...");
+      const url = `${ENDPOINT}openai/deployments/${DEPLOYMENT_NAME}/chat/completions?api-version=2024-05-01-preview`;
       
-      console.log("🌐 Sending to Azure:", url);
-
       const response = await fetch(url, {
         method: 'POST',
         headers: { 
@@ -19,16 +18,7 @@ const azureService = {
           messages: [
             { 
               role: "system", 
-              content: `أنت 'زايد'، مساعد محترم وراقي متخصص في مطاعم الشيخ زايد.
-              
-المطاعم المتاحة:
-1. مطعم البركة (وجبات: كفتة، فراخ مشوية، رز، مكرونة)
-2. بيتزا زايد (وجبات: بيتزا مارجريتا، بيتزا مشكل جبن، باستا)
-
-قواعد العمل:
-- رد بالعامية المصرية الراقية
-- ساعد المستخدم في اختيار الوجبات
-- لو طلب حاجة خارج القائمة، اعتذر بذكاء` 
+              content: `أنت مساعد ذكي لتطبيق Zayed-ID للمطاعم في الشيخ زايد. رد بالعامية المصرية.` 
             },
             { role: "user", content: userMessage }
           ]
@@ -36,22 +26,16 @@ const azureService = {
       });
       
       const data = await response.json();
-      console.log("Response status:", response.status);
-
-      if (!response.ok) {
-        console.error("Azure Error:", data);
-        return { 
-          success: false, 
-          text: "السيرفر بيقول: " + (data.error?.message || "مشكلة في الاتصال") 
-        };
-      }
-
-      if (data.choices && data.choices.length > 0) {
+      console.log("Azure response status:", response.status);
+      
+      if (response.ok && data.choices && data.choices.length > 0) {
         return { success: true, text: data.choices[0].message.content };
+      } else {
+        console.error("Azure error:", data);
+        return { success: false, text: "عذراً، لم أستطع الرد الآن." };
       }
-      return { success: false, text: "أعتذر منك، في حاجة غلط في الرد." };
     } catch (e) {
-      console.error("Fetch Error:", e);
+      console.error("Fetch error:", e);
       return { success: false, text: "في مشكلة في الشبكة، جرب تاني." };
     }
   }

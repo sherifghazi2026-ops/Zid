@@ -6,9 +6,13 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
+// شاشات العميل
 import CustomerScreen from './src/screens/CustomerScreen';
-import DriverScreen from './src/screens/DriverScreen';
 import RestaurantScreen from './src/screens/RestaurantScreen';
+import GroceryScreen from './src/screens/GroceryScreen';
+
+// شاشات المندوب
+import DriverScreen from './src/screens/DriverScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -18,6 +22,7 @@ function CustomerStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="CustomerMain" component={CustomerScreen} />
       <Stack.Screen name="Restaurant" component={RestaurantScreen} />
+      <Stack.Screen name="Grocery" component={GroceryScreen} />
     </Stack.Navigator>
   );
 }

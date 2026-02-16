@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,25 +7,10 @@ import {
   Text,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AIAssistantModal from '../components/AIAssistantModal';
-import { getCurrentLocation } from '../utils/permissions';
+import GroceryAIModal from '../components/GroceryAIModal';
 
-export default function RestaurantScreen({ navigation }) {
-  const [isModalVisible, setIsModalVisible] = useState(true);
-  const [userLocation, setUserLocation] = useState(null);
-
-  useEffect(() => {
-    (async () => {
-      const location = await getCurrentLocation();
-      setUserLocation(location);
-    })();
-  }, []);
-
-  const handleConfirmOrder = (orderDetails) => {
-    console.log("Order Confirmed:", orderDetails);
-    setIsModalVisible(false);
-    navigation.goBack();
-  };
+export default function GroceryScreen({ navigation }) {
+  const [modalVisible, setModalVisible] = useState(false);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -33,30 +18,26 @@ export default function RestaurantScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={28} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>طلب مطاعم (AI)</Text>
+        <Text style={styles.headerTitle}>سوبر ماركت</Text>
       </View>
 
       <View style={styles.content}>
-        <Ionicons name="restaurant-outline" size={80} color="#10B981" />
+        <Ionicons name="basket-outline" size={80} color="#F59E0B" />
         <Text style={styles.infoText}>
-          المساعد الذكي جاهز لمساعدتك في اختيار وجبتك
+          تحدث مع المساعد الذكي لتعبئة سلة التسوق
         </Text>
         <TouchableOpacity
           style={styles.openBtn}
-          onPress={() => setIsModalVisible(true)}
+          onPress={() => setModalVisible(true)}
         >
-          <Text style={styles.openBtnText}>ابدأ الدردشة الصوتية</Text>
+          <Text style={styles.openBtnText}>ابدأ المحادثة</Text>
         </TouchableOpacity>
       </View>
 
-      <AIAssistantModal
-        visible={isModalVisible}
-        onClose={() => {
-          setIsModalVisible(false);
-          navigation.goBack();
-        }}
-        userLocation={userLocation}
-        onConfirmOrder={handleConfirmOrder}
+      <GroceryAIModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        navigation={navigation}
       />
     </SafeAreaView>
   );
@@ -96,7 +77,7 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   openBtn: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#F59E0B',
     paddingHorizontal: 30,
     paddingVertical: 15,
     borderRadius: 25,
