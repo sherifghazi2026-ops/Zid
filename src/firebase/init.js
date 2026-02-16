@@ -1,6 +1,14 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, _longPollingId } from 'firebase/firestore';
 import { firebaseConfig } from './config';
 
+// تهيئة تطبيق Firebase
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+
+// تهيئة Firestore مع إعدادات تمنع أخطاء الاتصال (WebChannel Error)
+export const db = initializeFirestore(app, {
+  // تفعيل الـ Long Polling لضمان وصول طلبات تليجرام حتى لو الشبكة ضعيفة
+  experimentalAutoDetectLongPolling: true, 
+  // تفعيل التخزين المحلي عشان لو النت قطع الطلبات القديمة تفضل موجودة
+  localCache: persistentLocalCache()
+});
