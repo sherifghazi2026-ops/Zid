@@ -126,22 +126,34 @@ export default function GroceryAIModal({ visible, onClose }) {
   // ==================== رفع الملف الصوتي وتحويله إلى رابط ====================
   const uploadVoiceToServer = async (uri) => {
     try {
+      console.log('🎤 بدء رفع الملف الصوتي...');
+      
       // قراءة الملف الصوتي وتحويله إلى Base64
       const base64Audio = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      
+
+      console.log('📤 حجم الملف:', Math.floor(base64Audio.length / 1024), 'KB');
+
       // إرسال الملف الصوتي إلى السيرفر
       const response = await fetch('https://zayedid-production.up.railway.app/upload-voice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ audio: base64Audio })
       });
-      
+
       const result = await response.json();
-      return result.url; // السيرفر هيرجع رابط الملف الصوتي
+      console.log('📥 رد السيرفر على رفع الصوت:', result);
+
+      // التحقق من نجاح العملية
+      if (result.success && result.url) {
+        return result.url; // السيرفر هيرجع رابط الملف الصوتي
+      } else {
+        console.error('❌ فشل رفع الصوت:', result);
+        return null;
+      }
     } catch (error) {
-      console.error('خطأ في رفع الصوت:', error);
+      console.error('❌ خطأ في رفع الصوت:', error);
       return null;
     }
   };
