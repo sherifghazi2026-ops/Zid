@@ -217,11 +217,13 @@ app.post('/send-order', async (req, res) => {
 app.post('/webhook', async (req, res) => {
   const update = req.body;
   
+  // معالجة الأزرار
   if (update.callback_query) {
     const callback = update.callback_query;
     const data = callback.data;
     const messageId = callback.message.message_id;
     const chatId = callback.message.chat.id;
+    const messageText = callback.message.text;
     const driverName = callback.from.first_name || 'مندوب';
     const driverUsername = callback.from.username || 'غير معروف';
     const driverId = callback.from.id;
@@ -255,7 +257,7 @@ app.post('/webhook', async (req, res) => {
         };
         order.status = 'جديد';
         
-        let newText = callback.message.text;
+        let newText = messageText;
         newText = newText.replace(
           /🔻 <b>الحالة:<\/b> في انتظار مندوب/, 
           `🔻 <b>الحالة:</b> جديد`
@@ -317,10 +319,15 @@ app.post('/webhook', async (req, res) => {
         `(مثال: 01234567890)`
       );
       
-      pendingOrders[chatId] = { orderId, step: 'waiting_phone' };
+      pendingOrders[chatId] = { 
+        orderId, 
+        step: 'waiting_phone',
+        messageId: messageId,
+        currentText: messageText
+      };
     }
     
-    // ===== تغيير الحالة (كل زر بيختفي بعد الضغط) =====
+    // ===== تغيير الحالة =====
     else if (action === 'status') {
       if (!order.acceptedBy || order.acceptedBy.id !== driverId) {
         await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
@@ -338,11 +345,10 @@ app.post('/webhook', async (req, res) => {
       const newStatus = param;
       order.status = newStatus;
       
-      // نحدد الأزرار الجديدة (نشيل الزر اللي اتداس)
+      // نحدد الأزرار الجديدة
       let newKeyboard = [];
       
       if (newStatus === 'جاري تجهيز الطلب') {
-        // نشيل زر التجهيز، ونخلي الباقي
         newKeyboard = [
           [{ text: '🔵 جاري التوصيل', callback_data: `status_${orderId}_جاري التوصيل` }],
           [{ text: '🟢 تم التوصيل', callback_data: `status_${orderId}_تم التوصيل` }],
@@ -353,7 +359,6 @@ app.post('/webhook', async (req, res) => {
         ];
       }
       else if (newStatus === 'جاري التوصيل') {
-        // نشيل زر التوصيل، ونخلي الباقي
         newKeyboard = [
           [{ text: '🟢 تم التوصيل', callback_data: `status_${orderId}_تم التوصيل` }],
           [
@@ -363,7 +368,6 @@ app.post('/webhook', async (req, res) => {
         ];
       }
       else if (newStatus === 'تم التوصيل') {
-        // نشيل كل أزرار الحالة، ونخلي بس أزرار المعلومات
         newKeyboard = [
           [
             { text: '📞 اتصال', callback_data: `call_${orderId}` },
@@ -372,8 +376,7 @@ app.post('/webhook', async (req, res) => {
         ];
       }
       
-      // تحديث نص الرسالة
-      let newText = callback.message.text;
+      let newText = messageText;
       newText = newText.replace(/🔻 <b>الحالة:<\/b> [^\n]+/, `🔻 <b>الحالة:</b> ${newStatus}`);
       
       await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, newKeyboard);
@@ -428,36 +431,36 @@ app.post('/webhook', async (req, res) => {
     const text = update.message.text;
     const isAdmin = ADMIN_IDS.includes(chatId);
     
+    // لو المندوب في انتظار إدخال رقمه
     if (pendingOrders[chatId] && pendingOrders[chatId].step === 'waiting_phone') {
-      const { orderId } = pendingOrders[chatId];
+      const { orderId, messageId, currentText } = pendingOrders[chatId];
       const order = orders.find(o => o.id === orderId);
       
       if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
+        // حفظ رقم المندوب
         order.driverPhone = text;
         
-        const orderMsg = orders.find(o => o.id === orderId);
-        if (orderMsg && orderMsg.messageId) {
-          // تحديث الرسالة برقم المندوب
-          let newText = callback?.message?.text || '';
-          newText = newText.includes('📱 رقم المندوب') 
-            ? newText.replace(/📱 رقم المندوب: [^\n]+/, `📱 رقم المندوب: ${text}`)
-            : newText + `\n📱 رقم المندوب: ${text}`;
-          
-          // أزرار الحالة بالترتيب المطلوب
-          const keyboard = [
-            [{ text: '🟡 جاري تجهيز الطلب', callback_data: `status_${orderId}_جاري تجهيز الطلب` }],
-            [{ text: '🔵 جاري التوصيل', callback_data: `status_${orderId}_جاري التوصيل` }],
-            [{ text: '🟢 تم التوصيل', callback_data: `status_${orderId}_تم التوصيل` }],
-            [
-              { text: '📞 اتصال', callback_data: `call_${orderId}` },
-              { text: '📍 العنوان', callback_data: `address_${orderId}` }
-            ]
-          ];
-          
-          await editTelegramMessage(DRIVER_CHANNEL_ID, orderMsg.messageId, newText, keyboard);
-        }
+        // تحديث الرسالة في القناة
+        let newText = currentText;
+        newText = newText.includes('📱 رقم المندوب') 
+          ? newText.replace(/📱 رقم المندوب: [^\n]+/, `📱 رقم المندوب: ${text}`)
+          : newText + `\n📱 رقم المندوب: ${text}`;
+        
+        // أزرار الحالة بالترتيب
+        const keyboard = [
+          [{ text: '🟡 جاري تجهيز الطلب', callback_data: `status_${orderId}_جاري تجهيز الطلب` }],
+          [{ text: '🔵 جاري التوصيل', callback_data: `status_${orderId}_جاري التوصيل` }],
+          [{ text: '🟢 تم التوصيل', callback_data: `status_${orderId}_تم التوصيل` }],
+          [
+            { text: '📞 اتصال', callback_data: `call_${orderId}` },
+            { text: '📍 العنوان', callback_data: `address_${orderId}` }
+          ]
+        ];
+        
+        await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, keyboard);
         
         await sendToTelegram(chatId, '✅ تم حفظ رقمك بنجاح! يمكنك متابعة الطلب');
+        
         delete pendingOrders[chatId];
       }
     }
@@ -471,8 +474,7 @@ app.post('/webhook', async (req, res) => {
         if (index !== -1) {
           const order = orders[index];
           if (order.messageId) {
-            const cancelledText = callback?.message?.text + '\n\n❌ <b>تم إلغاء الطلب</b>';
-            await editTelegramMessage(DRIVER_CHANNEL_ID, order.messageId, cancelledText, []);
+            await editTelegramMessage(DRIVER_CHANNEL_ID, order.messageId, '❌ تم إلغاء الطلب', []);
           }
           orders.splice(index, 1);
           await sendToTelegram(chatId, `✅ تم مسح الطلب <code>${orderId}</code>`);
