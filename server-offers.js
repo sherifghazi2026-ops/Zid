@@ -290,3 +290,12 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   - /delete_offer ID → مسح عرض`);
   console.log(`   - /clear_all → مسح كل العروض`);
 });
+
+// ==================== مسار اختبار بسيط ====================
+app.get('/test-offers', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'سيرفر العروض شغال!',
+    time: new Date().toISOString()
+  });
+});
