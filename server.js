@@ -1,7 +1,10 @@
 const express = require('express');
 const app = express();
+const fs = require('fs');
+const path = require('path');
 
 app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true }));
 
 // ==================== إعدادات البوت ====================
 const TELEGRAM_TOKEN = "8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A";
@@ -9,7 +12,7 @@ const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 const DRIVER_CHANNEL_ID = "1814331589";
 
 let orders = [];
-let pendingOrders = {}; // الطلبات اللي في انتظار من يقبلها
+let pendingOrders = {};
 
 // ==================== دوال مساعدة ====================
 const sendToTelegram = async (chatId, message, keyboard = null) => {
@@ -38,6 +41,22 @@ const sendToTelegram = async (chatId, message, keyboard = null) => {
   }
 };
 
+const sendVoiceToTelegram = async (chatId, voiceUrl) => {
+  try {
+    const response = await fetch(`${TELEGRAM_API}/sendVoice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        voice: voiceUrl
+      })
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('خطأ في إرسال الصوت:', error);
+  }
+};
+
 const editTelegramMessage = async (chatId, messageId, newText, keyboard) => {
   try {
     const payload = {
@@ -57,6 +76,52 @@ const editTelegramMessage = async (chatId, messageId, newText, keyboard) => {
     console.error('خطأ في تعديل الرسالة:', error);
   }
 };
+
+// ==================== رفع الصوت ====================
+app.post('/upload-voice', async (req, res) => {
+  try {
+    const { audio } = req.body;
+    
+    if (!audio) {
+      return res.status(400).json({ success: false, error: 'لا يوجد ملف صوتي' });
+    }
+
+    console.log('📥 تم استقبال ملف صوتي، حجمه:', Math.floor(audio.length / 1024), 'KB');
+
+    // تحويل Base64 إلى Buffer
+    const audioBuffer = Buffer.from(audio, 'base64');
+    
+    // التأكد من وجود مجلد uploads
+    const uploadsDir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir);
+    }
+    
+    // إنشاء اسم ملف فريد
+    const fileName = `voice-${Date.now()}.ogg`;
+    const filePath = path.join(uploadsDir, fileName);
+    
+    // حفظ الملف
+    fs.writeFileSync(filePath, audioBuffer);
+    
+    // رابط الملف الصوتي
+    const baseUrl = process.env.RAILWAY_STATIC_URL || `https://zayedid-production.up.railway.app`;
+    const fileUrl = `${baseUrl}/uploads/${fileName}`;
+    
+    console.log('🔗 رابط الملف الصوتي:', fileUrl);
+    
+    res.json({
+      success: true,
+      url: fileUrl
+    });
+  } catch (error) {
+    console.error('❌ خطأ في رفع الصوت:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== خدمة الملفات الصوتية ====================
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ==================== الصفحة الرئيسية ====================
 app.get('/', (req, res) => {
@@ -80,23 +145,16 @@ app.get('/active-orders', (req, res) => {
       status: o.status || 'جديد',
       serviceName: o.serviceName || 'سوبر ماركت',
       driverPhone: o.driverPhone || null,
-      driverName: o.driverName || null,
       createdAt: o.date
     }))
   });
 });
 
-// ==================== رفع الصوت ====================
-app.post('/upload-voice', (req, res) => {
-  console.log('📥 طلب رفع صوت');
-  res.json({ success: true, url: 'https://example.com/voice.ogg' });
-});
-
-// ==================== استقبال الطلب ====================
+// ==================== استقبال الطلب مع الصوت ====================
 app.post('/send-order', async (req, res) => {
   console.log('📩 طلب جديد:', req.body);
   
-  const { phone, address, items, serviceName = 'سوبر ماركت' } = req.body;
+  const { phone, address, items, serviceName = 'سوبر ماركت', voiceUrl } = req.body;
   const orderId = 'ORD-' + Math.floor(Math.random() * 1000000);
   
   const newOrder = {
@@ -106,11 +164,10 @@ app.post('/send-order', async (req, res) => {
     items: Array.isArray(items) ? items : [items],
     serviceName,
     date: new Date().toISOString(),
-    status: 'في انتظار مندوب', // أول حالة: في انتظار مندوب
+    status: 'في انتظار مندوب',
     driverPhone: null,
-    driverName: null,
     messageId: null,
-    acceptedBy: null
+    voiceUrl: voiceUrl || null
   };
   
   orders.push(newOrder);
@@ -124,7 +181,7 @@ app.post('/send-order', async (req, res) => {
   
   // تجهيز الرسالة
   const itemsList = Array.isArray(items) ? items.join('، ') : items;
-  const message = 
+  let message = 
     `🆕 <b>طلب جديد في انتظار مندوب</b>\n` +
     `──────────────────\n\n` +
     `👤 <b>معلومات العميل:</b>\n` +
@@ -137,11 +194,25 @@ app.post('/send-order', async (req, res) => {
     `🔻 <b>الحالة:</b> في انتظار مندوب\n` +
     `🆔 رقم الطلب: <code>${orderId}</code>`;
   
-  // إرسال لتليجرام مع زر القبول فقط
+  if (voiceUrl) {
+    message += `\n\n🎤 <b>تسجيل صوتي مرفق مع الطلب</b>`;
+  }
+  
+  // إرسال الرسالة لتليجرام
   const result = await sendToTelegram(DRIVER_CHANNEL_ID, message, keyboard);
   
   if (result && result.ok) {
     newOrder.messageId = result.result.message_id;
+    
+    // إذا في ملف صوتي، نرسله بعد الرسالة
+    if (voiceUrl) {
+      const voiceResult = await sendVoiceToTelegram(DRIVER_CHANNEL_ID, voiceUrl);
+      if (voiceResult && voiceResult.ok) {
+        console.log(`✅ تم إرسال التسجيل الصوتي للطلب ${orderId}`);
+      } else {
+        console.error('❌ فشل إرسال الصوت:', voiceResult);
+      }
+    }
   }
   
   res.json({ success: true, orderId });
@@ -159,10 +230,8 @@ app.post('/webhook', async (req, res) => {
     const driverName = callback.from.first_name || 'مندوب';
     const driverUsername = callback.from.username || 'غير معروف';
     
-    // تحليل البيانات
     const [action, orderId, param] = data.split('_');
     
-    // العثور على الطلب
     const order = orders.find(o => o.id === orderId);
     
     if (!order) {
@@ -178,9 +247,7 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ===== حالة قبول الطلب =====
     if (action === 'accept') {
-      // نتأكد إن الطلب لسه متقبلش
       if (order.acceptedBy) {
         await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
           method: 'POST',
@@ -194,20 +261,19 @@ app.post('/webhook', async (req, res) => {
         return res.sendStatus(200);
       }
 
-      // تسجيل المندوب
       order.acceptedBy = {
         id: callback.from.id,
         name: driverName,
         username: driverUsername,
-        phone: null // هنطلب منه يدخل رقمه
       };
       order.status = 'جديد';
       
-      // تحديث الرسالة: نطلب رقم المندوب
-      const newText = callback.message.text + 
-        `\n\n✅ تم قبول الطلب بواسطة @${driverUsername}\n📱 الرجاء إرسال رقم الموبايل للتواصل مع العميل`;
+      let newText = callback.message.text.replace(
+        /🔻 <b>الحالة:<\/b> [^\n]+/, 
+        `🔻 <b>الحالة:</b> جديد`
+      );
+      newText += `\n\n✅ تم قبول الطلب بواسطة @${driverUsername}\n📱 الرجاء إرسال رقم الموبايل للتواصل مع العميل`;
       
-      // أزرار إدخال رقم المندوب
       const keyboard = [
         [
           { text: '📞 إرسال رقم الموبايل', callback_data: `phone_${orderId}` }
@@ -216,7 +282,6 @@ app.post('/webhook', async (req, res) => {
       
       await editTelegramMessage(chatId, messageId, newText, keyboard);
       
-      // رد على الضغطة
       await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -228,7 +293,6 @@ app.post('/webhook', async (req, res) => {
       });
     }
     
-    // ===== إدخال رقم المندوب =====
     else if (action === 'phone') {
       await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
         method: 'POST',
@@ -240,20 +304,16 @@ app.post('/webhook', async (req, res) => {
         })
       });
       
-      // نرسل رسالة خاصة للمندوب يكتب فيها رقمه
       await sendToTelegram(chatId, 
         `📱 مرحباً ${driverName}\n` +
         `الرجاء كتابة رقم موبايلك للتواصل مع العميل على الطلب ${orderId}\n` +
         `(مثال: 01234567890)`
       );
       
-      // نحفظ أن المندوب ده في انتظار إدخال رقمه
       pendingOrders[chatId] = { orderId, step: 'waiting_phone' };
     }
     
-    // ===== تحديث الحالة بعد ما المندوب يبقى مسؤول =====
     else if (action === 'status' && order.acceptedBy) {
-      // نتأكد إن اللي بيغير الحالة هو المندوب المسؤول
       if (order.acceptedBy.id !== callback.from.id) {
         await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
           method: 'POST',
@@ -270,7 +330,6 @@ app.post('/webhook', async (req, res) => {
       const newStatus = param === 'delivering' ? 'جاري التوصيل' : 'تم التوصيل';
       order.status = newStatus;
       
-      // تجهيز الأزرار المحدثة
       const keyboard = newStatus === 'تم التوصيل' ? [] : [
         [
           { text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` },
@@ -278,12 +337,13 @@ app.post('/webhook', async (req, res) => {
         ]
       ];
       
-      // تحديث الرسالة
       let newText = callback.message.text;
       newText = newText.replace(/🔻 <b>الحالة:<\/b> [^\n]+/, `🔻 <b>الحالة:</b> ${newStatus}`);
       
       if (order.driverPhone) {
-        newText += `\n📱 رقم المندوب: ${order.driverPhone}`;
+        newText = newText.replace(/📱 رقم المندوب: [^\n]+/, `📱 رقم المندوب: ${order.driverPhone}`);
+      } else {
+        newText += `\n📱 رقم المندوب: ${order.driverPhone || 'في انتظار الإدخال'}`;
       }
       
       await editTelegramMessage(chatId, messageId, newText, keyboard);
@@ -299,7 +359,6 @@ app.post('/webhook', async (req, res) => {
       });
     }
     
-    // ===== عرض معلومات العميل =====
     else if (action === 'call') {
       await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
         method: 'POST',
@@ -325,22 +384,17 @@ app.post('/webhook', async (req, res) => {
     }
   }
   
-  // ===== معالجة الرسائل النصية (لأرقام المندوبين) =====
   else if (update.message) {
     const chatId = update.message.chat.id;
     const text = update.message.text;
     
-    // لو المندوب ده في انتظار إدخال رقمه
     if (pendingOrders[chatId] && pendingOrders[chatId].step === 'waiting_phone') {
       const { orderId } = pendingOrders[chatId];
       const order = orders.find(o => o.id === orderId);
       
       if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
-        // حفظ رقم المندوب
         order.driverPhone = text;
-        order.driverName = order.acceptedBy.name;
         
-        // تحديث الرسالة الأصلية في القناة
         const messageText = 
           `🆕 <b>طلب جديد</b>\n` +
           `──────────────────\n` +
@@ -350,10 +404,8 @@ app.post('/webhook', async (req, res) => {
           `──────────────────\n` +
           `🔻 <b>الحالة:</b> ${order.status}\n` +
           `🆔 <code>${orderId}</code>\n` +
-          `👤 المندوب: ${order.driverName}\n` +
           `📱 رقم المندوب: ${text}`;
         
-        // الأزرار للمندوب المسؤول
         const keyboard = [
           [
             { text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` },
@@ -369,7 +421,6 @@ app.post('/webhook', async (req, res) => {
         
         await sendToTelegram(chatId, '✅ تم حفظ رقمك بنجاح! يمكنك متابعة الطلب');
         
-        // مسح من قائمة الانتظار
         delete pendingOrders[chatId];
       }
     }
@@ -382,9 +433,6 @@ app.post('/webhook', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 سيرفر شغال على بورت ${PORT}`);
-  console.log(`📱 نظام قبول الطلبات شغال:`);
-  console.log(`   1. أول مندوب يضغط قبول هو المسؤول`);
-  console.log(`   2. بيدخل رقم موبايله`);
-  console.log(`   3. بيظهر اسمه ورقمه في الطلب`);
-  console.log(`   4. هو بس اللي يقدر يغير الحالة`);
+  console.log(`📱 رفع الصوت: /upload-voice`);
+  console.log(`📱 الملفات الصوتية: /uploads/`);
 });
