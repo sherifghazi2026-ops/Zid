@@ -119,6 +119,25 @@ app.post('/upload-voice', async (req, res) => {
 // ==================== خدمة الملفات الصوتية ====================
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// ==================== الصفحة الرئيسية ====================
+app.get('/', (req, res) => {
+  res.json({
+    status: '✅ بوت Zayed-ID شغال على Railway!',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      'GET /': 'هذه الصفحة',
+      'GET /api/orders/new': 'جلب الطلبات الجديدة (آخر 24 ساعة)',
+      'POST /send-order': 'إرسال طلب جديد',
+      'POST /upload-voice': 'رفع ملف صوتي',
+      'POST /clear-orders': 'مسح جميع الطلبات',
+      'POST /webhook': 'ويب هوك تليجرام (للأزرار)'
+    },
+    stats: {
+      totalOrders: orders.length
+    }
+  });
+});
+
 // ==================== جلب الطلبات الجديدة فقط ====================
 app.get('/api/orders/new', (req, res) => {
   try {
@@ -137,28 +156,7 @@ app.get('/api/orders/new', (req, res) => {
         id: o.id,
         phone: o.phone,
         address: o.address,
-        items: o.items,
-        status: o.status || 'جديد',
-        createdAt: o.date,
-        source: 'telegram'
-      }))
-    });
-  } catch (error) {
-    console.error('خطأ:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ==================== جلب جميع الطلبات ====================
-app.get('/api/orders', (req, res) => {
-  try {
-    res.json({ 
-      success: true, 
-      orders: orders.map(o => ({
-        id: o.id,
-        phone: o.phone,
-        address: o.address,
-        items: o.items,
+        items: Array.isArray(o.items) ? o.items : [o.items],
         status: o.status || 'جديد',
         createdAt: o.date,
         source: 'telegram'
@@ -183,54 +181,6 @@ app.post('/clear-orders', (req, res) => {
   }
 });
 
-// ==================== جلب حالة الطلب ====================
-app.get('/order-status/:orderId', (req, res) => {
-  const { orderId } = req.params;
-  const order = orders.find(o => o.id === orderId);
-
-  if (order) {
-    res.json({ success: true, status: order.status });
-  } else {
-    res.status(404).json({ success: false, error: 'الطلب غير موجود' });
-  }
-});
-
-// ==================== الصفحة الرئيسية ====================
-app.get('/', (req, res) => {
-  res.send(`
-    <html dir="rtl">
-      <head>
-        <title>Zayed-ID Bot</title>
-        <style>
-          body { font-family: Arial; padding: 20px; background: #f5f5f5; }
-          .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 15px; }
-          h1 { color: #F59E0B; }
-          .status { background: #e8f5e9; padding: 15px; border-radius: 10px; margin: 20px 0; }
-          .endpoint { background: #f5f5f5; padding: 10px; border-radius: 5px; margin: 5px 0; font-family: monospace; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <h1>✅ بوت Zayed-ID شغال على Railway!</h1>
-          <div class="status">
-            <strong>📊 إحصائيات:</strong><br/>
-            الطلبات: ${orders.length}<br/>
-            آخر تحديث: ${new Date().toLocaleString('ar-EG')}
-          </div>
-          <h3>📡 الـ Endpoints المتاحة:</h3>
-          <div class="endpoint">POST /send-order - إرسال طلب جديد</div>
-          <div class="endpoint">POST /upload-voice - رفع ملف صوتي</div>
-          <div class="endpoint">GET /api/orders/new - جلب الطلبات الجديدة</div>
-          <div class="endpoint">GET /api/orders - جلب جميع الطلبات</div>
-          <div class="endpoint">POST /clear-orders - مسح جميع الطلبات</div>
-          <div class="endpoint">GET /order-status/:id - جلب حالة طلب</div>
-          <div class="endpoint">POST /webhook - استقبال أزرار تليجرام</div>
-        </div>
-      </body>
-    </html>
-  `);
-});
-
 // ==================== استقبال الطلب من التطبيق ====================
 app.post('/send-order', async (req, res) => {
   console.log('📩 طلب جديد:', req.body);
@@ -241,9 +191,9 @@ app.post('/send-order', async (req, res) => {
   const newOrder = {
     id: orderId,
     phone,
-    address,
-    items: Array.isArray(items) ? items.join('، ') : items,
-    fullText: rawText,
+    address: address || 'غير محدد',
+    items: Array.isArray(items) ? items : (items ? [items] : []),
+    fullText: rawText || '',
     date: new Date().toISOString(),
     status: 'جديد',
     customerChatId: phone,
@@ -254,15 +204,16 @@ app.post('/send-order', async (req, res) => {
   orders.push(newOrder);
   
   // رسالة منسقة للمندوبين
+  const itemsList = Array.isArray(newOrder.items) ? newOrder.items.join('، ') : newOrder.items;
   const message = 
     `🆕 <b>طلب جديد من Zayed-ID</b>\n` +
-    `──────────────────\n\n` +
+    `──────────────────\n` +
     `👤 <b>معلومات العميل:</b>\n` +
     `📞 ${phone}\n` +
     `📍 ${address || 'غير محدد'}\n\n` +
     `🛒 <b>المنتجات المطلوبة:</b>\n` +
     `──────────────────\n` +
-    (Array.isArray(items) ? items.map((item, index) => `${index + 1}. ${item}`).join('\n') : items) + '\n' +
+    `${itemsList}\n` +
     `──────────────────\n` +
     `🔻 <b>الحالة:</b> جديد\n` +
     `🆔 رقم الطلب: <code>${orderId}</code>`;
@@ -301,7 +252,7 @@ app.post('/send-order', async (req, res) => {
       // إذا في تسجيل صوتي، أرسله بعد الرسالة
       if (voiceUrl) {
         const voiceResult = await sendVoice(DRIVER_CHANNEL_ID, voiceUrl);
-        if (voiceResult.ok) {
+        if (voiceResult && voiceResult.ok) {
           console.log(`✅ تم إرسال التسجيل الصوتي للطلب ${orderId}`);
         } else {
           console.error('❌ فشل إرسال الصوت:', voiceResult);
@@ -314,7 +265,7 @@ app.post('/send-order', async (req, res) => {
     console.error('❌ خطأ في إرسال الطلب لتليجرام:', error);
   }
   
-  res.json({ success: true, orderId });
+  res.json({ success: true, orderId, message: 'تم استلام الطلب' });
 });
 
 // ==================== معالجة ضغط الأزرار من المندوبين ====================
@@ -336,7 +287,10 @@ app.post('/webhook', async (req, res) => {
     });
     
     // تحليل البيانات
-    const [action, orderId, param] = data.split('_');
+    const parts = data.split('_');
+    const action = parts[0];
+    const orderId = parts[1];
+    const param = parts[2];
     
     // العثور على الطلب
     const order = orders.find(o => o.id === orderId);
@@ -353,7 +307,8 @@ app.post('/webhook', async (req, res) => {
       order.status = newStatus;
       
       // تحديث رسالة المندوبين
-      const updatedMessage = callback.message.text.replace(/🔻 <b>الحالة:<\/b> .+/, `🔻 <b>الحالة:</b> ${newStatus}`);
+      let updatedMessage = callback.message.text;
+      updatedMessage = updatedMessage.replace(/🔻 <b>الحالة:<\/b> [^<]+/, `🔻 <b>الحالة:</b> ${newStatus}`);
       
       await editMessage(chatId, messageId, updatedMessage, [
         [
@@ -377,9 +332,10 @@ app.post('/webhook', async (req, res) => {
       await sendMessage(chatId, `📞 <b>رقم العميل:</b>\n${order.phone}`);
     }
     else if (action === 'address') {
+      const itemsList = Array.isArray(order.items) ? order.items.join('، ') : order.items;
       await sendMessage(chatId,
-        `📍 <b>العنوان بالكامل:</b>\n${order.address}\n\n` +
-        `📝 <b>المنتجات:</b>\n${order.items}`
+        `📍 <b>العنوان:</b>\n${order.address}\n\n` +
+        `📝 <b>المنتجات:</b>\n${itemsList}`
       );
     }
   }
@@ -398,11 +354,13 @@ app.post('/webhook', async (req, res) => {
       );
     }
     else if (text === '/stats') {
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const stats = {
         total: orders.length,
         new: orders.filter(o => o.status === 'جديد').length,
         delivering: orders.filter(o => o.status === 'جاري التوصيل').length,
-        done: orders.filter(o => o.status === 'تم التوصيل').length
+        done: orders.filter(o => o.status === 'تم التوصيل').length,
+        last24h: orders.filter(o => new Date(o.date || 0) > oneDayAgo).length
       };
 
       await sendMessage(chatId,
@@ -410,7 +368,8 @@ app.post('/webhook', async (req, res) => {
         `📦 إجمالي: ${stats.total}\n` +
         `🆕 جديد: ${stats.new}\n` +
         `🚚 جاري التوصيل: ${stats.delivering}\n` +
-        `✅ تم التوصيل: ${stats.done}`
+        `✅ تم التوصيل: ${stats.done}\n` +
+        `⏱️ آخر 24 ساعة: ${stats.last24h}`
       );
     }
     else if (text === '/orders') {
@@ -436,14 +395,14 @@ app.post('/webhook', async (req, res) => {
 
 // ==================== تشغيل السيرفر ====================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 سيرفر Zayed-ID شغال على بورت ${PORT}`);
-  console.log(`🔗 رابط السيرفر: https://zayedid-production.up.railway.app`);
-  console.log(`📱 مسار استقبال الطلبات: /send-order`);
-  console.log(`🎤 مسار رفع الصوت: /upload-voice`);
-  console.log(`🎧 مسار الملفات الصوتية: /uploads/:filename`);
-  console.log(`📊 مسار حالة الطلب: /order-status/:orderId`);
-  console.log(`📋 مسار الطلبات الجديدة: /api/orders/new`);
-  console.log(`🧹 مسار مسح الكل: /clear-orders`);
-  console.log(`🤖 مسار الويب هوك: /webhook`);
+  console.log(`🔗 الرابط: https://zayedid-production.up.railway.app`);
+  console.log(`📱 المسارات المتاحة:`);
+  console.log(`   GET  /              - الصفحة الرئيسية`);
+  console.log(`   GET  /api/orders/new - الطلبات الجديدة`);
+  console.log(`   POST /send-order     - إرسال طلب`);
+  console.log(`   POST /upload-voice   - رفع صوت`);
+  console.log(`   POST /clear-orders   - مسح الكل`);
+  console.log(`   POST /webhook        - ويب هوك تليجرام`);
 });
