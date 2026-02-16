@@ -1,6 +1,6 @@
 const express = require('express');
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // زيادة الحد لاستقبال الملفات الصوتية
 
 // ==================== إعدادات البوت ====================
 const TELEGRAM_TOKEN = "8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A";
@@ -67,6 +67,34 @@ const editMessage = async (chatId, messageId, text, keyboard = null) => {
   }
 };
 
+// ==================== رفع الملفات الصوتية ====================
+app.post('/upload-voice', async (req, res) => {
+  try {
+    const { audio } = req.body;
+    
+    if (!audio) {
+      return res.status(400).json({ success: false, error: 'لا يوجد ملف صوتي' });
+    }
+    
+    console.log('📥 تم استقبال ملف صوتي، حجمه:', Math.floor(audio.length / 1024), 'KB');
+    
+    // في الإنتاج، احفظ الملف في Cloud Storage (مثل AWS S3 أو Firebase)
+    // وإرجاع الرابط الحقيقي. هنا هنعمل محاكاة:
+    
+    const fakeUrl = `https://zayedid-production.up.railway.app/voice-${Date.now()}.ogg`;
+    
+    console.log('🔗 رابط الملف الصوتي:', fakeUrl);
+    
+    res.json({ 
+      success: true, 
+      url: fakeUrl 
+    });
+  } catch (error) {
+    console.error('❌ خطأ في رفع الصوت:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ==================== الصفحة الرئيسية ====================
 app.get('/', (req, res) => {
   res.send('✅ بوت Zayed-ID شغال على Railway!');
@@ -120,7 +148,7 @@ app.post('/send-order', async (req, res) => {
     ]
   ];
 
-  // إرسال الرسالة
+  // إرسال الرسالة إلى قناة المندوبين مع الأزرار
   const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -139,8 +167,12 @@ app.post('/send-order', async (req, res) => {
     
     // إذا في تسجيل صوتي، أرسله بعد الرسالة
     if (voiceUrl) {
-      await sendVoice(DRIVER_CHANNEL_ID, voiceUrl);
-      console.log(`✅ تم إرسال التسجيل الصوتي للطلب ${orderId}`);
+      const voiceResult = await sendVoice(DRIVER_CHANNEL_ID, voiceUrl);
+      if (voiceResult.ok) {
+        console.log(`✅ تم إرسال التسجيل الصوتي للطلب ${orderId}`);
+      } else {
+        console.error('❌ فشل إرسال الصوت:', voiceResult);
+      }
     }
   } else {
     console.error('❌ فشل إرسال الطلب:', result);
@@ -149,24 +181,28 @@ app.post('/send-order', async (req, res) => {
   res.json({ success: true, orderId });
 });
 
-// ==================== معالجة ضغط الأزرار ====================
+// ==================== معالجة ضغط الأزرار من المندوبين ====================
 app.post('/webhook', async (req, res) => {
   const update = req.body;
 
+  // معالجة الضغط على الأزرار
   if (update.callback_query) {
     const callback = update.callback_query;
     const chatId = callback.message.chat.id;
     const messageId = callback.message.message_id;
     const data = callback.data;
 
+    // تأكيد استلام الضغط (عشان تختفي علامة التحميل)
     await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ callback_query_id: callback.id })
     });
 
+    // تحليل البيانات
     const [action, orderId, param] = data.split('_');
 
+    // العثور على الطلب
     const order = orders.find(o => o.id === orderId);
     if (!order) {
       await sendMessage(chatId, '❌ الطلب غير موجود');
@@ -176,9 +212,13 @@ app.post('/webhook', async (req, res) => {
     if (action === 'status') {
       const oldStatus = order.status;
       const newStatus = param === 'delivering' ? 'جاري التوصيل' : 'تم التوصيل';
+
+      // تحديث الحالة
       order.status = newStatus;
 
+      // تحديث رسالة المندوبين
       const updatedMessage = callback.message.text.replace('جديد', newStatus);
+      
       await editMessage(chatId, messageId, updatedMessage, [
         [
           { text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` },
@@ -190,20 +230,31 @@ app.post('/webhook', async (req, res) => {
         ]
       ]);
 
+      // إرسال تحديث للعميل (لو عرفنا chatId بتاعه)
+      // حالياً بنستخدم رقم التليفون كـ chatId مؤقت
+
+      // إرسال إشعار للقناة
       const statusIcon = newStatus === 'جاري التوصيل' ? '🚚' : '✅';
       await sendMessage(DRIVER_CHANNEL_ID,
         `${statusIcon} <b>تحديث الطلب #${orderId}</b>\n` +
         `الحالة الجديدة: ${newStatus}`
       );
-    } else if (action === 'call') {
+    }
+
+    else if (action === 'call') {
       await sendMessage(chatId, `📞 <b>رقم العميل:</b>\n${order.phone}`);
-    } else if (action === 'address') {
+    }
+
+    else if (action === 'address') {
       await sendMessage(chatId, 
         `📍 <b>العنوان بالكامل:</b>\n${order.address}\n\n` +
         `📝 <b>المنتجات:</b>\n${order.items}`
       );
     }
-  } else if (update.message) {
+  }
+
+  // معالجة الرسائل النصية
+  else if (update.message) {
     const chatId = update.message.chat.id;
     const text = update.message.text;
 
@@ -215,13 +266,16 @@ app.post('/webhook', async (req, res) => {
         `/orders - عرض جميع الطلبات\n\n` +
         `أو استخدم الأزرار في الرسائل`
       );
-    } else if (text === '/stats') {
+    }
+
+    else if (text === '/stats') {
       const stats = {
         total: orders.length,
         new: orders.filter(o => o.status === 'جديد').length,
         delivering: orders.filter(o => o.status === 'جاري التوصيل').length,
         done: orders.filter(o => o.status === 'تم التوصيل').length
       };
+
       await sendMessage(chatId,
         `📊 <b>إحصائيات الطلبات</b>\n\n` +
         `📦 إجمالي: ${stats.total}\n` +
@@ -229,7 +283,9 @@ app.post('/webhook', async (req, res) => {
         `🚚 جاري التوصيل: ${stats.delivering}\n` +
         `✅ تم التوصيل: ${stats.done}`
       );
-    } else if (text === '/orders') {
+    }
+
+    else if (text === '/orders') {
       if (orders.length === 0) {
         await sendMessage(chatId, 'لا توجد طلبات حالياً');
       } else {
@@ -255,6 +311,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 بوت تليجرام شغال على بورت ${PORT}`);
   console.log(`🔗 رابط السيرفر: https://zayedid-production.up.railway.app`);
-  console.log(`📱 مسار استقبال الطلبات: /send-order (يدعم الصوت الآن!)`);
+  console.log(`📱 مسار استقبال الطلبات: /send-order`);
+  console.log(`🎤 مسار رفع الصوت: /upload-voice`);
   console.log(`🤖 مسار الويب هوك: /webhook`);
 });
