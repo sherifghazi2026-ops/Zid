@@ -10,11 +10,11 @@ app.use(express.urlencoded({ extended: true }));
 const TELEGRAM_TOKEN = "8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A";
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 const DRIVER_CHANNEL_ID = "1814331589";
-const ADMIN_IDS = [1814331589]; // اليوزر اللي مسموح له ينشر عروض (حط الID بتاعك)
+const ADMIN_IDS = [1814331589]; // اليوزر اللي مسموح له ينشر عروض
 
 let orders = [];
 let pendingOrders = {};
-let offers = []; // مصفوفة العروض
+let offers = [];
 
 // ==================== دوال مساعدة ====================
 const sendToTelegram = async (chatId, message, keyboard = null) => {
@@ -43,6 +43,22 @@ const sendToTelegram = async (chatId, message, keyboard = null) => {
   }
 };
 
+const sendVoiceToTelegram = async (chatId, voiceUrl) => {
+  try {
+    const response = await fetch(`${TELEGRAM_API}/sendVoice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        voice: voiceUrl
+      })
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('خطأ في إرسال الصوت:', error);
+  }
+};
+
 const sendPhotoToTelegram = async (chatId, photoUrl, caption = '') => {
   try {
     const response = await fetch(`${TELEGRAM_API}/sendPhoto`, {
@@ -61,6 +77,31 @@ const sendPhotoToTelegram = async (chatId, photoUrl, caption = '') => {
   }
 };
 
+const editTelegramMessage = async (chatId, messageId, newText, keyboard) => {
+  try {
+    const payload = {
+      chat_id: chatId,
+      message_id: messageId,
+      text: newText,
+      parse_mode: 'HTML'
+    };
+    
+    if (keyboard && keyboard.length > 0) {
+      payload.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
+    } else {
+      payload.reply_markup = JSON.stringify({ inline_keyboard: [] });
+    }
+    
+    await fetch(`${TELEGRAM_API}/editMessageText`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    console.error('خطأ في تعديل الرسالة:', error);
+  }
+};
+
 // ==================== رفع الصور ====================
 app.post('/upload-photo', async (req, res) => {
   try {
@@ -72,23 +113,18 @@ app.post('/upload-photo', async (req, res) => {
 
     console.log('📥 تم استقبال صورة');
 
-    // تحويل Base64 إلى Buffer
     const photoBuffer = Buffer.from(photo, 'base64');
     
-    // التأكد من وجود مجلد uploads
     const uploadsDir = path.join(__dirname, 'uploads');
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir);
     }
     
-    // إنشاء اسم ملف فريد
     const fileName = `offer-${Date.now()}.jpg`;
     const filePath = path.join(uploadsDir, fileName);
     
-    // حفظ الملف
     fs.writeFileSync(filePath, photoBuffer);
     
-    // رابط الملف
     const baseUrl = process.env.RAILWAY_STATIC_URL || `https://zayedid-production.up.railway.app`;
     const fileUrl = `${baseUrl}/uploads/${fileName}`;
     
@@ -118,7 +154,6 @@ app.get('/', (req, res) => {
 
 // ==================== جلب العروض للتطبيق ====================
 app.get('/api/offers', (req, res) => {
-  // ترتيب العروض من الأحدث للأقدم
   const sortedOffers = [...offers].sort((a, b) => 
     new Date(b.createdAt) - new Date(a.createdAt)
   );
@@ -129,7 +164,7 @@ app.get('/api/offers', (req, res) => {
   });
 });
 
-// ==================== مسح عرض (للاستخدام من تليجرام) ====================
+// ==================== مسح عرض ====================
 app.post('/api/offers/delete/:offerId', (req, res) => {
   const { offerId } = req.params;
   const index = offers.findIndex(o => o.id === offerId);
@@ -161,7 +196,7 @@ app.get('/active-orders', (req, res) => {
   });
 });
 
-// ==================== رفع الصوت (للطلبات) ====================
+// ==================== رفع الصوت ====================
 app.post('/upload-voice', async (req, res) => {
   try {
     const { audio } = req.body;
@@ -211,7 +246,8 @@ app.post('/send-order', async (req, res) => {
     status: 'في انتظار مندوب',
     driverPhone: null,
     messageId: null,
-    voiceUrl: voiceUrl || null
+    voiceUrl: voiceUrl || null,
+    acceptedBy: null
   };
   
   orders.push(newOrder);
@@ -229,7 +265,7 @@ app.post('/send-order', async (req, res) => {
     `👤 <b>معلومات العميل:</b>\n` +
     `📞 ${phone}\n` +
     `📍 ${address || 'غير محدد'}\n\n` +
-    `🛒 <b>المشتجات المطلوبة:</b>\n` +
+    `🛒 <b>المنتجات المطلوبة:</b>\n` +  // تم التعديل هنا
     `──────────────────\n` +
     `${itemsList}\n` +
     `──────────────────\n` +
@@ -256,19 +292,234 @@ app.post('/send-order', async (req, res) => {
   res.json({ success: true, orderId });
 });
 
-// ==================== ويب هوك لاستقبال كل حاجة من تليجرام ====================
+// ==================== ويب هوك لاستقبال كل حاجة ====================
 app.post('/webhook', async (req, res) => {
   const update = req.body;
   
-  // معالجة الرسائل النصية
-  if (update.message) {
+  // معالجة الأزرار (للطلبات)
+  if (update.callback_query) {
+    const callback = update.callback_query;
+    const data = callback.data;
+    const messageId = callback.message.message_id;
+    const chatId = callback.message.chat.id;
+    const driverName = callback.from.first_name || 'مندوب';
+    const driverUsername = callback.from.username || 'غير معروف';
+    const driverId = callback.from.id;
+    
+    console.log(`🔄 ضغط على زر: ${data} من ${driverName} (${driverId})`);
+    
+    const [action, orderId, param] = data.split('_');
+    
+    const order = orders.find(o => o.id === orderId);
+    
+    if (!order) {
+      await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          callback_query_id: callback.id,
+          text: '❌ الطلب غير موجود',
+          show_alert: true
+        })
+      });
+      return res.sendStatus(200);
+    }
+
+    if (action === 'accept') {
+      // لو الطلب لسه متقبلش من حد
+      if (!order.acceptedBy) {
+        // تسجيل المندوب اللي قبل الطلب
+        order.acceptedBy = {
+          id: driverId,
+          name: driverName,
+          username: driverUsername,
+        };
+        order.status = 'جديد';
+        
+        // تحديث الرسالة للطلب المقبول
+        let newText = callback.message.text;
+        newText = newText.replace(
+          /🔻 <b>الحالة:<\/b> في انتظار مندوب/, 
+          `🔻 <b>الحالة:</b> جديد`
+        );
+        
+        // إضافة معلومات المندوب
+        newText += `\n\n✅ تم قبول الطلب بواسطة ${driverName}`;
+        
+        // إزالة زر القبول وإضافة أزرار الحالة
+        const newKeyboard = [
+          [
+            { text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` },
+            { text: '✅ تم التوصيل', callback_data: `status_${orderId}_done` }
+          ],
+          [
+            { text: '📞 اتصال بالعميل', callback_data: `call_${orderId}` },
+            { text: '📍 العنوان', callback_data: `address_${orderId}` }
+          ]
+        ];
+        
+        await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, newKeyboard);
+        
+        // رسالة تأكيد للمندوب اللي قبل
+        await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            callback_query_id: callback.id,
+            text: '✅ تم قبول الطلب بنجاح!',
+            show_alert: false
+          })
+        });
+        
+        // رسالة خاصة للمندوب يكتب فيها رقمه
+        await sendToTelegram(chatId, 
+          `📱 مرحباً ${driverName}\n` +
+          `لقد قبلت الطلب ${orderId}\n` +
+          `الرجاء إرسال رقم موبايلك للتواصل مع العميل.`
+        );
+        
+        // نحفظ أن المندوب ده في انتظار إدخال رقمه
+        pendingOrders[chatId] = { orderId, step: 'waiting_phone' };
+        
+      } else {
+        // لو الطلب متقبل قبل كده
+        let message = '';
+        if (order.acceptedBy.id === driverId) {
+          message = '✅ أنت قبلت هذا الطلب بالفعل';
+        } else {
+          message = `❌ هذا الطلب تم قبوله بواسطة ${order.acceptedBy.name}`;
+        }
+        
+        await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            callback_query_id: callback.id,
+            text: message,
+            show_alert: true
+          })
+        });
+      }
+    }
+    
+    else if (action === 'status') {
+      // نتأكد أن اللي بيغير الحالة هو المندوب المسؤول
+      if (!order.acceptedBy || order.acceptedBy.id !== driverId) {
+        await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            callback_query_id: callback.id,
+            text: '❌ أنت لست المندوب المسؤول عن هذا الطلب',
+            show_alert: true
+          })
+        });
+        return res.sendStatus(200);
+      }
+
+      const newStatus = param === 'delivering' ? 'جاري التوصيل' : 'تم التوصيل';
+      order.status = newStatus;
+      
+      let newText = callback.message.text;
+      newText = newText.replace(/🔻 <b>الحالة:<\/b> [^\n]+/, `🔻 <b>الحالة:</b> ${newStatus}`);
+      
+      // لو تم التوصيل، نشيل الأزرار
+      const keyboard = newStatus === 'تم التوصيل' ? [] : [
+        [
+          { text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` },
+          { text: '✅ تم التوصيل', callback_data: `status_${orderId}_done` }
+        ],
+        [
+          { text: '📞 اتصال بالعميل', callback_data: `call_${orderId}` },
+          { text: '📍 العنوان', callback_data: `address_${orderId}` }
+        ]
+      ];
+      
+      await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, keyboard);
+      
+      await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          callback_query_id: callback.id,
+          text: `✅ تم تغيير الحالة إلى ${newStatus}`,
+          show_alert: false
+        })
+      });
+    }
+    
+    else if (action === 'call') {
+      await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          callback_query_id: callback.id,
+          text: `📞 رقم العميل: ${order.phone}`,
+          show_alert: true
+        })
+      });
+    }
+    
+    else if (action === 'address') {
+      const itemsList = Array.isArray(order.items) ? order.items.join('، ') : order.items;
+      await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          callback_query_id: callback.id,
+          text: `📍 ${order.address}\n🛒 ${itemsList}`,
+          show_alert: true
+        })
+      });
+    }
+  }
+  
+  // معالجة الرسائل النصية (لأرقام المندوبين)
+  else if (update.message) {
     const chatId = update.message.chat.id;
     const text = update.message.text;
     const isAdmin = ADMIN_IDS.includes(chatId);
     
-    // رسالة عادية - لو من الأدمن نحولها لعرض
-    if (isAdmin && text && !text.startsWith('/')) {
-      // نص عادي من الأدمن = عرض نصي
+    // لو المندوب في انتظار إدخال رقمه
+    if (pendingOrders[chatId] && pendingOrders[chatId].step === 'waiting_phone') {
+      const { orderId } = pendingOrders[chatId];
+      const order = orders.find(o => o.id === orderId);
+      
+      if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
+        // حفظ رقم المندوب
+        order.driverPhone = text;
+        
+        // تحديث الرسالة في القناة برقم المندوب
+        const messageText = callback?.message?.text || '';
+        const newText = messageText.includes('📱 رقم المندوب') 
+          ? messageText.replace(/📱 رقم المندوب: [^\n]+/, `📱 رقم المندوب: ${text}`)
+          : messageText + `\n📱 رقم المندوب: ${text}`;
+        
+        // جلب الـ messageId
+        const orderMsg = orders.find(o => o.id === orderId);
+        if (orderMsg && orderMsg.messageId) {
+          const keyboard = [
+            [
+              { text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` },
+              { text: '✅ تم التوصيل', callback_data: `status_${orderId}_done` }
+            ],
+            [
+              { text: '📞 اتصال بالعميل', callback_data: `call_${orderId}` },
+              { text: '📍 العنوان', callback_data: `address_${orderId}` }
+            ]
+          ];
+          
+          await editTelegramMessage(DRIVER_CHANNEL_ID, orderMsg.messageId, newText, keyboard);
+        }
+        
+        await sendToTelegram(chatId, '✅ تم حفظ رقمك بنجاح! يمكنك متابعة الطلب');
+        
+        delete pendingOrders[chatId];
+      }
+    }
+    
+    // نظام العروض للأدمن
+    else if (isAdmin && text && !text.startsWith('/')) {
       const offerId = 'OFFER-' + Date.now();
       const newOffer = {
         id: offerId,
@@ -287,7 +538,6 @@ app.post('/webhook', async (req, res) => {
       );
     }
     
-    // أوامر التحكم
     else if (isAdmin && text) {
       if (text === '/offers') {
         if (offers.length === 0) {
@@ -321,123 +571,51 @@ app.post('/webhook', async (req, res) => {
     }
     
     // معالجة الصور
-    if (update.message.photo) {
-      const isAdmin = ADMIN_IDS.includes(chatId);
+    if (update.message.photo && isAdmin) {
+      const photo = update.message.photo.pop();
+      const fileId = photo.file_id;
+      const caption = update.message.caption || '';
       
-      if (isAdmin) {
-        // الصورة وصلت - ناخد أعلى جودة
-        const photo = update.message.photo.pop();
-        const fileId = photo.file_id;
-        const caption = update.message.caption || '';
+      const fileResponse = await fetch(`${TELEGRAM_API}/getFile?file_id=${fileId}`);
+      const fileData = await fileResponse.json();
+      
+      if (fileData.ok) {
+        const filePath = fileData.result.file_path;
+        const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${filePath}`;
         
-        // نجيب رابط الصورة
-        const fileResponse = await fetch(`${TELEGRAM_API}/getFile?file_id=${fileId}`);
-        const fileData = await fileResponse.json();
+        const imageResponse = await fetch(fileUrl);
+        const imageBuffer = await imageResponse.buffer();
         
-        if (fileData.ok) {
-          const filePath = fileData.result.file_path;
-          const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${filePath}`;
-          
-          // نحمل الصورة
-          const imageResponse = await fetch(fileUrl);
-          const imageBuffer = await imageResponse.buffer();
-          
-          // نحفظها عندنا
-          const uploadsDir = path.join(__dirname, 'uploads');
-          if (!fs.existsSync(uploadsDir)) {
-            fs.mkdirSync(uploadsDir);
-          }
-          
-          const fileName = `offer-${Date.now()}.jpg`;
-          const localPath = path.join(uploadsDir, fileName);
-          fs.writeFileSync(localPath, imageBuffer);
-          
-          const baseUrl = process.env.RAILWAY_STATIC_URL || `https://zayedid-production.up.railway.app`;
-          const imageUrl = `${baseUrl}/uploads/${fileName}`;
-          
-          // نضيف العرض
-          const offerId = 'OFFER-' + Date.now();
-          const newOffer = {
-            id: offerId,
-            type: 'image',
-            imageUrl: imageUrl,
-            text: caption || null,
-            createdAt: new Date().toISOString(),
-            createdBy: chatId
-          };
-          
-          offers.push(newOffer);
-          
-          await sendToTelegram(chatId, 
-            `✅ <b>تم نشر العرض المصور!</b>\n` +
-            `🆔 معرف العرض: <code>${offerId}</code>\n` +
-            (caption ? `📝 التعليق: ${caption.substring(0, 50)}${caption.length > 50 ? '...' : ''}` : '')
-          );
+        const uploadsDir = path.join(__dirname, 'uploads');
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir);
         }
+        
+        const fileName = `offer-${Date.now()}.jpg`;
+        const localPath = path.join(uploadsDir, fileName);
+        fs.writeFileSync(localPath, imageBuffer);
+        
+        const baseUrl = process.env.RAILWAY_STATIC_URL || `https://zayedid-production.up.railway.app`;
+        const imageUrl = `${baseUrl}/uploads/${fileName}`;
+        
+        const offerId = 'OFFER-' + Date.now();
+        const newOffer = {
+          id: offerId,
+          type: 'image',
+          imageUrl: imageUrl,
+          text: caption || null,
+          createdAt: new Date().toISOString(),
+          createdBy: chatId
+        };
+        
+        offers.push(newOffer);
+        
+        await sendToTelegram(chatId, 
+          `✅ <b>تم نشر العرض المصور!</b>\n` +
+          `🆔 معرف العرض: <code>${offerId}</code>\n` +
+          (caption ? `📝 التعليق: ${caption.substring(0, 50)}${caption.length > 50 ? '...' : ''}` : '')
+        );
       }
-    }
-  }
-  
-  // معالجة الأزرار (للطلبات)
-  if (update.callback_query) {
-    const callback = update.callback_query;
-    const data = callback.data;
-    const messageId = callback.message.message_id;
-    const chatId = callback.message.chat.id;
-    const driverName = callback.from.first_name || 'مندوب';
-    const driverUsername = callback.from.username || 'غير معروف';
-    
-    const [action, orderId, param] = data.split('_');
-    
-    const order = orders.find(o => o.id === orderId);
-    
-    if (!order) {
-      await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          callback_query_id: callback.id,
-          text: '❌ الطلب غير موجود',
-          show_alert: true
-        })
-      });
-      return res.sendStatus(200);
-    }
-
-    if (action === 'accept') {
-      if (order.acceptedBy) {
-        await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            callback_query_id: callback.id,
-            text: '❌ هذا الطلب تم قبوله بالفعل',
-            show_alert: true
-          })
-        });
-        return res.sendStatus(200);
-      }
-
-      order.acceptedBy = {
-        id: callback.from.id,
-        name: driverName,
-        username: driverUsername,
-      };
-      order.status = 'جديد';
-      
-      let newText = callback.message.text.replace(
-        /🔻 <b>الحالة:<\/b> [^\n]+/, 
-        `🔻 <b>الحالة:</b> جديد`
-      );
-      newText += `\n\n✅ تم قبول الطلب بواسطة @${driverUsername}\n📱 الرجاء إرسال رقم الموبايل للتواصل مع العميل`;
-      
-      const keyboard = [
-        [
-          { text: '📞 إرسال رقم الموبايل', callback_data: `phone_${orderId}` }
-        ]
-      ];
-      
-      // باقي كود الأزرار...
     }
   }
   
@@ -453,4 +631,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   - أرسل صورة → عرض مصور`);
   console.log(`   - /offers → عرض كل العروض`);
   console.log(`   - /delete_offer ID → مسح عرض`);
+  console.log(`📦 نظام الطلبات:`);
+  console.log(`   - أول مندوب يضغط قبول هو المسؤول`);
+  console.log(`   - هو بس اللي يقدر يغير الحالة`);
 });
