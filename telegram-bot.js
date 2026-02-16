@@ -7,7 +7,7 @@ const TELEGRAM_TOKEN = "8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A";
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 const DRIVER_CHANNEL_ID = "1814331589";
 
-// تخزين البيانات
+// تخزين البيانات (في الإنتاج استخدم قاعدة بيانات)
 let customers = {};
 let orders = [];
 
@@ -19,14 +19,19 @@ const sendMessage = async (chatId, text, keyboard = null) => {
       text: text,
       parse_mode: 'HTML'
     };
+    
     if (keyboard) {
-      payload.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
+      payload.reply_markup = JSON.stringify({
+        inline_keyboard: keyboard
+      });
     }
-    const response = await fetch(TELEGRAM_API + '/sendMessage', {
+    
+    const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+    
     return await response.json();
   } catch (error) {
     console.error('خطأ في إرسال رسالة:', error);
@@ -41,48 +46,62 @@ const editMessage = async (chatId, messageId, text, keyboard = null) => {
       text: text,
       parse_mode: 'HTML'
     };
+    
     if (keyboard) {
-      payload.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
+      payload.reply_markup = JSON.stringify({
+        inline_keyboard: keyboard
+      });
     }
-    const response = await fetch(TELEGRAM_API + '/editMessageText', {
+    
+    const response = await fetch(`${TELEGRAM_API}/editMessageText`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+    
     return await response.json();
   } catch (error) {
     console.error('خطأ في تعديل رسالة:', error);
   }
 };
 
+// ==================== الصفحة الرئيسية (للتحقق من أن السيرفر شغال) ====================
+app.get('/', (req, res) => {
+  res.send('✅ بوت Zayed-ID شغال على Railway!');
+});
+
 // ==================== استقبال الطلب من التطبيق ====================
-app.post('/api/new-order', async (req, res) => {
+app.post('/send-order', async (req, res) => {
   console.log('📩 طلب جديد:', req.body);
   
-  const { orderId, phone, address, items, fullText, customerChatId } = req.body;
+  const { phone, address, items, rawText } = req.body;
   
-  customers[phone] = customerChatId;
+  // إنشاء رقم طلب فريد
+  const orderId = 'ORD-' + Math.floor(Math.random() * 1000000);
+  
+  // تخزين العميل (مؤقتاً)
+  customers[phone] = phone;
   
   const newOrder = {
     id: orderId,
     phone,
     address,
-    items,
-    fullText,
+    items: items.join('، '),
+    fullText: rawText,
     date: new Date().toLocaleString('ar-EG'),
     status: 'جديد',
-    customerChatId,
+    customerChatId: phone,
     messageId: null
   };
   
   orders.push(newOrder);
   
-  // رسالة مع أزرار
+  // رسالة مع أزرار تفاعلية
   const message = `🆕 <b>طلب جديد!</b>\n\n` +
                   `🆔 رقم الطلب: <b>${orderId}</b>\n` +
                   `📞 العميل: ${phone}\n` +
                   `📍 العنوان: ${address}\n` +
-                  `📝 المنتجات: ${items}\n` +
+                  `📝 المنتجات: ${items.join('، ')}\n` +
                   `⏰ الوقت: ${newOrder.date}\n\n` +
                   `🔻 الحالة الحالية: <b>جديد</b>`;
   
@@ -97,8 +116,8 @@ app.post('/api/new-order', async (req, res) => {
     ]
   ];
   
-  // إرسال الرسالة لقناة المندوبين
-  const response = await fetch(TELEGRAM_API + '/sendMessage', {
+  // إرسال الرسالة إلى قناة المندوبين مع الأزرار
+  const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -112,35 +131,39 @@ app.post('/api/new-order', async (req, res) => {
   const result = await response.json();
   if (result.ok) {
     newOrder.messageId = result.result.message_id;
+    console.log(`✅ تم إرسال الطلب ${orderId} إلى القناة مع أزرار`);
+  } else {
+    console.error('❌ فشل إرسال الطلب:', result);
   }
   
-  // تأكيد للعميل
-  await sendMessage(customerChatId,
-    `✅ تم استلام طلبك رقم <b>${orderId}</b>\n` +
-    `📦 الحالة: جديد\n` +
-    `⏳ سنقوم بتحديثك عند تغيير الحالة`
-  );
+  // تأكيد للعميل (اختياري)
+  // يمكن إرسال رسالة تأكيد للعميل إذا كان لديه محادثة مع البوت
   
-  res.json({ success: true });
+  res.json({ success: true, orderId });
 });
 
-// ==================== معالجة ضغط الأزرار ====================
+// ==================== معالجة ضغط الأزرار من المندوبين ====================
 app.post('/webhook', async (req, res) => {
   const update = req.body;
   
+  // معالجة الضغط على الأزرار
   if (update.callback_query) {
     const callback = update.callback_query;
     const chatId = callback.message.chat.id;
     const messageId = callback.message.message_id;
     const data = callback.data;
     
-    await fetch(TELEGRAM_API + '/answerCallbackQuery', {
+    // تأكيد استلام الضغط (عشان تختفي علامة التحميل)
+    await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ callback_query_id: callback.id })
     });
     
+    // تحليل البيانات
     const [action, orderId, param] = data.split('_');
+    
+    // العثور على الطلب
     const order = orders.find(o => o.id === orderId);
     if (!order) {
       await sendMessage(chatId, '❌ الطلب غير موجود');
@@ -150,8 +173,11 @@ app.post('/webhook', async (req, res) => {
     if (action === 'status') {
       const oldStatus = order.status;
       const newStatus = param === 'delivering' ? 'جاري التوصيل' : 'تم التوصيل';
+      
+      // تحديث الحالة
       order.status = newStatus;
       
+      // تحديث رسالة المندوبين
       const updatedMessage = callback.message.text.replace(oldStatus, newStatus);
       await editMessage(chatId, messageId, updatedMessage, [
         [
@@ -164,25 +190,27 @@ app.post('/webhook', async (req, res) => {
         ]
       ]);
       
-      const statusIcon = newStatus === 'جاري التوصيل' ? '🚚' : '✅';
-      await sendMessage(order.customerChatId,
-        `${statusIcon} <b>تحديث حالة الطلب #${orderId}</b>\n\n` +
-        `الحالة: <b>${newStatus}</b>\n` +
-        (newStatus === 'جاري التوصيل' ? '🚚 المندوب في الطريق إليك!' : '✅ تم توصيل طلبك بنجاح')
-      );
+      // إرسال تحديث للعميل (لو عرفنا chatId بتاعه)
+      // حالياً بنستخدم رقم التليفون كـ chatId مؤقت
       
+      // إرسال إشعار للقناة
+      const statusIcon = newStatus === 'جاري التوصيل' ? '🚚' : '✅';
       await sendMessage(DRIVER_CHANNEL_ID,
         `${statusIcon} تم تحديث الطلب #${orderId}\n` +
         `الحالة الجديدة: ${newStatus}`
       );
     }
+    
     else if (action === 'call') {
       await sendMessage(chatId, `📞 رقم العميل: ${order.phone}`);
     }
+    
     else if (action === 'address') {
       await sendMessage(chatId, `📍 العنوان بالكامل: ${order.address}\n\n📝 المنتجات: ${order.items}`);
     }
   }
+  
+  // معالجة الرسائل النصية
   else if (update.message) {
     const chatId = update.message.chat.id;
     const text = update.message.text;
@@ -191,32 +219,43 @@ app.post('/webhook', async (req, res) => {
       await sendMessage(chatId,
         `👋 مرحباً بك في نظام إدارة الطلبات Zayed-ID\n\n` +
         `📋 الأوامر المتاحة:\n` +
-        `/orders - عرض كل الطلبات\n` +
-        `/new - عرض الطلبات الجديدة\n` +
-        `/stats - إحصائيات سريعة\n\n` +
+        `/stats - عرض إحصائيات سريعة\n` +
+        `/orders - عرض جميع الطلبات\n\n` +
         `أو استخدم الأزرار في الرسائل`
       );
     }
     
-    const orderMatch = text.match(/(ORD-\d+)/i);
-    if (orderMatch) {
-      const orderId = orderMatch[1];
-      const order = orders.find(o => o.id === orderId);
+    else if (text === '/stats') {
+      const stats = {
+        total: orders.length,
+        new: orders.filter(o => o.status === 'جديد').length,
+        delivering: orders.filter(o => o.status === 'جاري التوصيل').length,
+        done: orders.filter(o => o.status === 'تم التوصيل').length
+      };
       
-      if (order) {
-        const statusIcon = order.status === 'جديد' ? '🆕' :
-                          order.status === 'جاري التوصيل' ? '🚚' : '✅';
-        
-        await sendMessage(chatId,
-          `${statusIcon} <b>تفاصيل الطلب #${orderId}</b>\n\n` +
-          `📦 الحالة: ${order.status}\n` +
-          `📞 رقم التليفون: ${order.phone}\n` +
-          `📍 العنوان: ${order.address}\n` +
-          `📝 المنتجات: ${order.items}\n` +
-          `⏰ تاريخ الطلب: ${order.date}`
-        );
+      await sendMessage(chatId,
+        `📊 <b>إحصائيات الطلبات</b>\n\n` +
+        `📦 إجمالي: ${stats.total}\n` +
+        `🆕 جديد: ${stats.new}\n` +
+        `🚚 جاري التوصيل: ${stats.delivering}\n` +
+        `✅ تم التوصيل: ${stats.done}`
+      );
+    }
+    
+    else if (text === '/orders') {
+      if (orders.length === 0) {
+        await sendMessage(chatId, 'لا توجد طلبات حالياً');
       } else {
-        await sendMessage(chatId, '❌ الطلب غير موجود');
+        let response = '📋 <b>جميع الطلبات:</b>\n\n';
+        orders.slice(-5).reverse().forEach(order => {
+          const statusIcon = order.status === 'جديد' ? '🆕' :
+                            order.status === 'جاري التوصيل' ? '🚚' : '✅';
+          response += `${statusIcon} طلب #${order.id}\n`;
+          response += `📞 ${order.phone}\n`;
+          response += `📍 ${order.address}\n`;
+          response += `──────────────\n`;
+        });
+        await sendMessage(chatId, response);
       }
     }
   }
@@ -228,4 +267,7 @@ app.post('/webhook', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 بوت تليجرام شغال على بورت ${PORT}`);
+  console.log(`🔗 رابط السيرفر: https://zayedid-production.up.railway.app`);
+  console.log(`📱 مسار استقبال الطلبات: /send-order`);
+  console.log(`🤖 مسار الويب هوك: /webhook`);
 });
