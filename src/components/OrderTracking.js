@@ -12,36 +12,52 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ==================== جلب حالة الطلب من تليجرام ====================
-const fetchOrderStatus = async (orderId, phoneNumber) => {
+// ==================== رابط السيرفر ====================
+const SERVER_URL = "https://zayedid-production.up.railway.app";
+
+// ==================== جلب حالة الطلب من السيرفر ====================
+const fetchOrderStatusFromServer = async (orderId) => {
+  try {
+    const response = await fetch(`${SERVER_URL}/order-status/${orderId}`);
+    const data = await response.json();
+    if (data.success) {
+      return data.status;
+    }
+    return null;
+  } catch (error) {
+    console.error('خطأ في جلب الحالة من السيرفر:', error);
+    return null;
+  }
+};
+
+// ==================== جلب حالة الطلب من تليجرام (احتياطي) ====================
+const fetchOrderStatusFromTelegram = async (orderId, phoneNumber) => {
   try {
     const TELEGRAM_BOT_TOKEN = "8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A";
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates`;
-    
+
     const response = await fetch(url);
     const data = await response.json();
-    
+
     if (data.ok && data.result) {
-      // البحث عن رسالة خاصة بهذا الطلب
       const orderMessages = data.result.filter(item => 
-        item.message && 
-        item.message.text && 
+        item.message &&
+        item.message.text &&
         item.message.text.includes(`طلب #${orderId}`)
       );
-      
+
       if (orderMessages.length > 0) {
-        // استخراج آخر حالة
         const lastMessage = orderMessages[orderMessages.length - 1];
         const text = lastMessage.message.text;
-        
+
         if (text.includes('✅ تم التوصيل')) return 'تم التوصيل';
         if (text.includes('🚚 جاري التوصيل')) return 'جاري التوصيل';
-        if (text.includes('🟢 جديد')) return 'جديد';
+        if (text.includes('🆕') || text.includes('جديد')) return 'جديد';
       }
     }
     return null;
   } catch (error) {
-    console.error('خطأ في جلب الحالة:', error);
+    console.error('خطأ في جلب الحالة من تليجرام:', error);
     return null;
   }
 };
@@ -62,11 +78,19 @@ export default function OrderTracking({ visible, onClose, orderId, phoneNumber }
 
   const loadOrderStatus = async () => {
     setLoading(true);
-    const currentStatus = await fetchOrderStatus(orderId, phoneNumber);
+    
+    // جرب تجيب الحالة من السيرفر أولاً
+    let currentStatus = await fetchOrderStatusFromServer(orderId);
+    
+    // لو فشل، جرب من تليجرام
+    if (!currentStatus) {
+      currentStatus = await fetchOrderStatusFromTelegram(orderId, phoneNumber);
+    }
+    
     if (currentStatus) {
       setStatus(currentStatus);
     }
-    
+
     // تحميل تفاصيل الطلب من التخزين المحلي
     try {
       const savedOrders = await AsyncStorage.getItem('user_orders');

@@ -1,4 +1,5 @@
 const express = require('express');
+const fs = require('fs');
 const app = express();
 app.use(express.json({ limit: '50mb' })); // زيادة الحد لاستقبال الملفات الصوتية
 
@@ -78,20 +79,52 @@ app.post('/upload-voice', async (req, res) => {
     
     console.log('📥 تم استقبال ملف صوتي، حجمه:', Math.floor(audio.length / 1024), 'KB');
     
-    // في الإنتاج، احفظ الملف في Cloud Storage (مثل AWS S3 أو Firebase)
-    // وإرجاع الرابط الحقيقي. هنا هنعمل محاكاة:
+    // تحويل Base64 إلى Buffer
+    const audioBuffer = Buffer.from(audio, 'base64');
     
-    const fakeUrl = `https://zayedid-production.up.railway.app/voice-${Date.now()}.ogg`;
+    // إنشاء اسم ملف فريد
+    const fileName = `voice-${Date.now()}.ogg`;
+    const filePath = `/tmp/${fileName}`; // في Railway، /tmp مجلد مؤقت
     
-    console.log('🔗 رابط الملف الصوتي:', fakeUrl);
+    // حفظ الملف مؤقتاً
+    fs.writeFileSync(filePath, audioBuffer);
+    
+    // رابط الملف الصوتي (مؤقت)
+    const fileUrl = `https://zayedid-production.up.railway.app/voices/${fileName}`;
+    
+    console.log('🔗 رابط الملف الصوتي:', fileUrl);
     
     res.json({ 
       success: true, 
-      url: fakeUrl 
+      url: fileUrl 
     });
   } catch (error) {
     console.error('❌ خطأ في رفع الصوت:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== خدمة الملفات الصوتية ====================
+app.get('/voices/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = `/tmp/${filename}`;
+  
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    res.status(404).send('الملف غير موجود');
+  }
+});
+
+// ==================== جلب حالة الطلب ====================
+app.get('/order-status/:orderId', (req, res) => {
+  const { orderId } = req.params;
+  const order = orders.find(o => o.id === orderId);
+  
+  if (order) {
+    res.json({ success: true, status: order.status });
+  } else {
+    res.status(404).json({ success: false, error: 'الطلب غير موجود' });
   }
 });
 
@@ -313,5 +346,7 @@ app.listen(PORT, () => {
   console.log(`🔗 رابط السيرفر: https://zayedid-production.up.railway.app`);
   console.log(`📱 مسار استقبال الطلبات: /send-order`);
   console.log(`🎤 مسار رفع الصوت: /upload-voice`);
+  console.log(`🎧 مسار الملفات الصوتية: /voices/:filename`);
+  console.log(`📊 مسار حالة الطلب: /order-status/:orderId`);
   console.log(`🤖 مسار الويب هوك: /webhook`);
 });
