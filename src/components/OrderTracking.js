@@ -8,109 +8,135 @@ import {
   Image,
   ActivityIndicator,
   ScrollView,
+  Linking,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ==================== رابط السيرفر ====================
 const SERVER_URL = "https://zayedid-production.up.railway.app";
 
-// ==================== جلب حالة الطلب من السيرفر ====================
 const fetchOrderStatusFromServer = async (orderId) => {
   try {
-    const response = await fetch(`${SERVER_URL}/order-status/${orderId}`);
-    const data = await response.json();
-    if (data.success) {
-      return data.status;
-    }
-    return null;
-  } catch (error) {
-    console.error('خطأ في جلب الحالة من السيرفر:', error);
-    return null;
-  }
-};
-
-// ==================== جلب حالة الطلب من تليجرام (احتياطي) ====================
-const fetchOrderStatusFromTelegram = async (orderId, phoneNumber) => {
-  try {
-    const TELEGRAM_BOT_TOKEN = "8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A";
-    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates`;
-
-    const response = await fetch(url);
-    const data = await response.json();
-
-    if (data.ok && data.result) {
-      const orderMessages = data.result.filter(item => 
-        item.message &&
-        item.message.text &&
-        item.message.text.includes(`طلب #${orderId}`)
-      );
-
-      if (orderMessages.length > 0) {
-        const lastMessage = orderMessages[orderMessages.length - 1];
-        const text = lastMessage.message.text;
-
-        if (text.includes('✅ تم التوصيل')) return 'تم التوصيل';
-        if (text.includes('🚚 جاري التوصيل')) return 'جاري التوصيل';
-        if (text.includes('🆕') || text.includes('جديد')) return 'جديد';
+    const response = await fetch(`${SERVER_URL}/active-orders`);
+    const text = await response.text();
+    
+    try {
+      const data = JSON.parse(text);
+      if (data.success && data.orders) {
+        const order = data.orders.find(o => o.id === orderId);
+        if (order) {
+          return {
+            status: order.status,
+            driverPhone: order.driverPhone || null,
+            items: order.items || [],
+            address: order.address || 'غير محدد',
+            // الفاتورة (قيم ثابتة للتجربة - ممكن تجيبها من السيرفر)
+            totalBill: 150,
+            deliveryCost: 20
+          };
+        }
       }
+    } catch (e) {
+      console.log('السيرفر مش شغال حالياً');
     }
     return null;
   } catch (error) {
-    console.error('خطأ في جلب الحالة من تليجرام:', error);
+    console.error('خطأ في جلب الحالة:', error);
     return null;
   }
 };
 
-export default function OrderTracking({ visible, onClose, orderId, phoneNumber }) {
+const fetchOrderStatusFromStorage = async (orderId) => {
+  try {
+    const savedOrders = await AsyncStorage.getItem('user_orders');
+    if (savedOrders) {
+      const orders = JSON.parse(savedOrders);
+      const order = orders.find(o => o.id === orderId);
+      return order ? { 
+        status: order.status,
+        driverPhone: order.driverPhone || null,
+        items: order.items || [],
+        address: order.address || 'غير محدد',
+        totalBill: 150,
+        deliveryCost: 20
+      } : null;
+    }
+  } catch (error) {
+    console.error('خطأ في التخزين المحلي:', error);
+  }
+  return null;
+};
+
+const makePhoneCall = (phoneNumber) => {
+  if (!phoneNumber) {
+    Alert.alert('تنبيه', 'رقم المندوب غير متوفر');
+    return;
+  }
+  
+  const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+  
+  if (cleanNumber.length < 10) {
+    Alert.alert('خطأ', 'رقم المندوب غير صحيح');
+    return;
+  }
+  
+  Linking.openURL(`tel:${cleanNumber}`).catch(() => {
+    Alert.alert('خطأ', 'لا يمكن إجراء المكالمة');
+  });
+};
+
+export default function OrderTracking({ visible, onClose, orderId }) {
   const [status, setStatus] = useState('جديد');
+  const [driverPhone, setDriverPhone] = useState(null);
+  const [items, setItems] = useState([]);
+  const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(true);
-  const [orderDetails, setOrderDetails] = useState(null);
+  const [error, setError] = useState(null);
+  
+  // قيم الفاتورة
+  const deliveryCost = 20;
+  const totalBill = 150;
+  const grandTotal = deliveryCost + totalBill;
 
   useEffect(() => {
     if (visible && orderId) {
       loadOrderStatus();
-      // تحديث تلقائي كل 30 ثانية
-      const interval = setInterval(loadOrderStatus, 30000);
+      const interval = setInterval(loadOrderStatus, 10000);
       return () => clearInterval(interval);
     }
   }, [visible, orderId]);
 
   const loadOrderStatus = async () => {
     setLoading(true);
+    setError(null);
+
+    const serverData = await fetchOrderStatusFromServer(orderId);
     
-    // جرب تجيب الحالة من السيرفر أولاً
-    let currentStatus = await fetchOrderStatusFromServer(orderId);
-    
-    // لو فشل، جرب من تليجرام
-    if (!currentStatus) {
-      currentStatus = await fetchOrderStatusFromTelegram(orderId, phoneNumber);
-    }
-    
-    if (currentStatus) {
-      setStatus(currentStatus);
+    if (serverData) {
+      setStatus(serverData.status);
+      setDriverPhone(serverData.driverPhone);
+      setItems(serverData.items || []);
+      setAddress(serverData.address);
+    } else {
+      const storageData = await fetchOrderStatusFromStorage(orderId);
+      if (storageData) {
+        setStatus(storageData.status);
+        setDriverPhone(storageData.driverPhone);
+        setItems(storageData.items || []);
+        setAddress(storageData.address);
+      } else {
+        setError('لا يمكن جلب الحالة');
+      }
     }
 
-    // تحميل تفاصيل الطلب من التخزين المحلي
-    try {
-      const savedOrders = await AsyncStorage.getItem('user_orders');
-      if (savedOrders) {
-        const orders = JSON.parse(savedOrders);
-        const order = orders.find(o => o.id === orderId);
-        if (order) {
-          setOrderDetails(order);
-        }
-      }
-    } catch (error) {
-      console.error('خطأ في تحميل تفاصيل الطلب:', error);
-    }
-    
     setLoading(false);
   };
 
   const getStatusIcon = () => {
     switch(status) {
       case 'جديد': return 'time-outline';
+      case 'جاري تجهيز الطلب': return 'construct-outline';
       case 'جاري التوصيل': return 'bicycle-outline';
       case 'تم التوصيل': return 'checkmark-done-circle-outline';
       default: return 'help-outline';
@@ -120,6 +146,7 @@ export default function OrderTracking({ visible, onClose, orderId, phoneNumber }
   const getStatusColor = () => {
     switch(status) {
       case 'جديد': return '#F59E0B';
+      case 'جاري تجهيز الطلب': return '#F59E0B';
       case 'جاري التوصيل': return '#3B82F6';
       case 'تم التوصيل': return '#10B981';
       default: return '#6B7280';
@@ -130,6 +157,8 @@ export default function OrderTracking({ visible, onClose, orderId, phoneNumber }
     switch(status) {
       case 'جديد':
         return 'تم استلام طلبك وجاري تجهيزه';
+      case 'جاري تجهيز الطلب':
+        return 'جاري تحضير الطلب';
       case 'جاري التوصيل':
         return 'المندوب في الطريق إليك 🚚';
       case 'تم التوصيل':
@@ -143,7 +172,6 @@ export default function OrderTracking({ visible, onClose, orderId, phoneNumber }
     <Modal visible={visible} transparent animationType="slide">
       <View style={styles.overlay}>
         <View style={styles.content}>
-          {/* الهيدر */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Image
@@ -152,7 +180,7 @@ export default function OrderTracking({ visible, onClose, orderId, phoneNumber }
               />
               <View>
                 <Text style={styles.headerTitle}>تتبع الطلب</Text>
-                <Text style={styles.headerSub}>طلب #{orderId}</Text>
+                <Text style={styles.headerSub}>طلب #{orderId?.slice(-6) || '---'}</Text>
               </View>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -164,6 +192,14 @@ export default function OrderTracking({ visible, onClose, orderId, phoneNumber }
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#F59E0B" />
               <Text style={styles.loadingText}>جاري تحميل الحالة...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={48} color="#EF4444" />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={loadOrderStatus}>
+                <Text style={styles.retryText}>إعادة المحاولة</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <ScrollView style={styles.body}>
@@ -180,6 +216,23 @@ export default function OrderTracking({ visible, onClose, orderId, phoneNumber }
                 </Text>
               </View>
 
+              {/* الفاتورة - تظهر للعميل هنا */}
+              <View style={styles.billCard}>
+                <Text style={styles.billTitle}>💰 الفاتورة</Text>
+                <View style={styles.billRow}>
+                  <Text style={styles.billLabel}>الأسعار:</Text>
+                  <Text style={styles.billValue}>{totalBill} ج</Text>
+                </View>
+                <View style={styles.billRow}>
+                  <Text style={styles.billLabel}>خدمة التوصيل:</Text>
+                  <Text style={styles.billValue}>{deliveryCost} ج</Text>
+                </View>
+                <View style={[styles.billRow, styles.billTotal]}>
+                  <Text style={styles.billTotalLabel}>الإجمالي:</Text>
+                  <Text style={styles.billTotalValue}>{grandTotal} ج</Text>
+                </View>
+              </View>
+
               {/* خط زمني للحالة */}
               <View style={styles.timeline}>
                 <View style={styles.timelineItem}>
@@ -191,7 +244,7 @@ export default function OrderTracking({ visible, onClose, orderId, phoneNumber }
                 </View>
 
                 <View style={styles.timelineItem}>
-                  <View style={[styles.timelineDot, 
+                  <View style={[styles.timelineDot,
                     { backgroundColor: status === 'جاري التوصيل' || status === 'تم التوصيل' ? '#10B981' : '#D1D5DB' }
                   ]} />
                   <View style={styles.timelineContent}>
@@ -203,7 +256,7 @@ export default function OrderTracking({ visible, onClose, orderId, phoneNumber }
                 </View>
 
                 <View style={styles.timelineItem}>
-                  <View style={[styles.timelineDot, 
+                  <View style={[styles.timelineDot,
                     { backgroundColor: status === 'تم التوصيل' ? '#10B981' : '#D1D5DB' }
                   ]} />
                   <View style={styles.timelineContent}>
@@ -216,29 +269,28 @@ export default function OrderTracking({ visible, onClose, orderId, phoneNumber }
               </View>
 
               {/* تفاصيل الطلب */}
-              {orderDetails && (
-                <View style={styles.detailsCard}>
-                  <Text style={styles.detailsTitle}>تفاصيل الطلب</Text>
-                  <View style={styles.detailRow}>
-                    <Ionicons name="call" size={18} color="#6B7280" />
-                    <Text style={styles.detailText}>{orderDetails.phone}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Ionicons name="location" size={18} color="#6B7280" />
-                    <Text style={styles.detailText}>{orderDetails.address}</Text>
-                  </View>
+              <View style={styles.detailsCard}>
+                <Text style={styles.detailsTitle}>تفاصيل الطلب</Text>
+                <View style={styles.detailRow}>
+                  <Ionicons name="location" size={18} color="#6B7280" />
+                  <Text style={styles.detailText}>{address}</Text>
+                </View>
+                {items.length > 0 && (
                   <View style={styles.detailRow}>
                     <Ionicons name="cart" size={18} color="#6B7280" />
-                    <Text style={styles.detailText}>{orderDetails.items?.length || 0} منتج</Text>
+                    <Text style={styles.detailText}>{items.join('، ')}</Text>
                   </View>
-                </View>
-              )}
+                )}
+              </View>
 
-              {/* زر الاتصال بالمندوب (لما يبقى في الطريق) */}
-              {status === 'جاري التوصيل' && (
-                <TouchableOpacity style={styles.contactButton}>
-                  <Ionicons name="call" size={20} color="#FFF" />
-                  <Text style={styles.contactButtonText}>الاتصال بالمندوب</Text>
+              {/* زر الاتصال بالمندوب */}
+              {driverPhone && (
+                <TouchableOpacity style={styles.contactButton} onPress={() => makePhoneCall(driverPhone)}>
+                  <Ionicons name="call" size={24} color="#FFF" />
+                  <View style={styles.contactTextContainer}>
+                    <Text style={styles.contactButtonText}>اتصل بالمندوب</Text>
+                    <Text style={styles.contactButtonSubText}>{driverPhone}</Text>
+                  </View>
                 </TouchableOpacity>
               )}
 
@@ -313,6 +365,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
   },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#EF4444',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryBtn: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   body: {
     flex: 1,
     padding: 20,
@@ -322,7 +398,7 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: '#F9FAFB',
     borderRadius: 16,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   statusIcon: {
     width: 80,
@@ -342,13 +418,58 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
   },
+  // استايلات الفاتورة
+  billCard: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  billTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#92400E',
+    marginBottom: 12,
+  },
+  billRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  billLabel: {
+    fontSize: 14,
+    color: '#4B5563',
+  },
+  billValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  billTotal: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F59E0B',
+  },
+  billTotalLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  billTotalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#F59E0B',
+  },
   timeline: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   timelineItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   timelineDot: {
     width: 16,
@@ -361,10 +482,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   timelineTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   timelineTime: {
     fontSize: 12,
@@ -400,13 +521,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 16,
     borderRadius: 12,
-    gap: 8,
+    gap: 12,
     marginBottom: 12,
+    elevation: 3,
+  },
+  contactTextContainer: {
+    alignItems: 'flex-start',
   },
   contactButtonText: {
     color: '#FFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  contactButtonSubText: {
+    color: '#FFF',
+    fontSize: 12,
+    opacity: 0.9,
   },
   refreshButton: {
     flexDirection: 'row',
