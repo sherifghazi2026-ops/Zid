@@ -40,8 +40,8 @@ const SERVICES = [
   { id: 'marble', name: 'رخام', image: images.marble, color: '#EC4899', type: 'camera' },
 ];
 
-// ==================== رابط البوت API (غير ده كل ما يتغير رابط serveo) ====================
-const BOT_API_URL = 'https://ce07153ba4795e75-196-130-86-171.serveousercontent.com';
+// ==================== رابط البوت على Railway ====================
+const RAILWAY_API_URL = 'https://zayedid-production.up.railway.app';
 
 export default function CustomerScreen({ navigation }) {
   const [selectedService, setSelectedService] = useState(null);
@@ -64,10 +64,10 @@ export default function CustomerScreen({ navigation }) {
     try {
       const location = await getCurrentLocation();
       setUserLocation(location);
-      
+
       const savedPhone = await AsyncStorage.getItem('zayed_phone');
       if (savedPhone) setPhoneNumber(savedPhone);
-      
+
       await loadRecentOrders();
     } catch (error) {
       console.error('خطأ في تحميل البيانات:', error);
@@ -115,23 +115,23 @@ export default function CustomerScreen({ navigation }) {
     setOrderImage(null);
   };
 
-  // ==================== إرسال الطلب للبوت ====================
+  // ==================== إرسال الطلب للسيرفر على Railway ====================
   const sendOrderToBot = async (orderData) => {
     try {
-      console.log('إرسال للبوت:', orderData);
-      const response = await fetch(`${BOT_API_URL}/api/new-order`, {
+      console.log('📤 إرسال للبوت:', orderData);
+      const response = await fetch(`${RAILWAY_API_URL}/send-order`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(orderData),
       });
-      
+
       const data = await response.json();
-      console.log('رد البوت:', data);
+      console.log('📥 رد البوت:', data);
       return data.success;
     } catch (error) {
-      console.error('خطأ في إرسال الطلب للبوت:', error);
+      console.error('❌ خطأ في إرسال الطلب:', error);
       return false;
     }
   };
@@ -144,33 +144,28 @@ export default function CustomerScreen({ navigation }) {
     setLoading(true);
     try {
       const location = await getCurrentLocation();
-      
+
       const orderId = 'ORD-' + Math.floor(Math.random() * 1000000);
-      
-      // تحويل نص الطلب إلى مصفوفة
+
       const itemsArray = orderText ? orderText.split(/[،,]/).map(i => i.trim()).filter(i => i) : ['طلب بدون تفاصيل'];
       const itemsList = itemsArray.join('، ');
-      
+
       const orderData = {
-        orderId,
         phone: phoneNumber || 'غير معروف',
         address: 'جنة 2',
-        items: itemsList,
-        fullText: orderText || 'طلب بدون تفاصيل',
-        customerChatId: phoneNumber,
-        serviceType: selectedService.id,
-        serviceName: selectedService.name,
+        items: itemsArray,
+        rawText: orderText || 'طلب بدون تفاصيل',
       };
-      
+
       const botSent = await sendOrderToBot(orderData);
-      
+
       if (!botSent) {
         Alert.alert('تحذير', 'تم استلام طلبك لكن فشل إرسال الإشعار');
       }
-      
+
       const savedOrders = await AsyncStorage.getItem('user_orders');
       const orders = savedOrders ? JSON.parse(savedOrders) : [];
-      
+
       const newOrder = {
         id: orderId,
         service: selectedService.id,
@@ -182,31 +177,31 @@ export default function CustomerScreen({ navigation }) {
         phone: phoneNumber,
         address: 'جنة 2',
       };
-      
+
       orders.push(newOrder);
       await AsyncStorage.setItem('user_orders', JSON.stringify(orders));
-      
+
       const lastThree = orders.slice(-3).reverse();
       setRecentOrders(lastThree);
-      
+
       Alert.alert(
-        '🎉 تم', 
+        '🎉 تم',
         'طلبك في الطريق',
         [
-          { 
-            text: 'تتبع الطلب', 
+          {
+            text: 'تتبع الطلب',
             onPress: () => {
               setCurrentOrderId(orderId);
               setShowTracking(true);
-            } 
+            }
           },
           { text: 'حسناً', style: 'cancel' }
         ]
       );
-      
+
       handleBackPress();
     } catch (error) {
-      console.error('خطأ في إرسال الطلب:', error);
+      console.error('❌ خطأ في إرسال الطلب:', error);
       Alert.alert('خطأ', 'حصل مشكلة، حاول تاني');
     }
     setLoading(false);
@@ -227,7 +222,7 @@ export default function CustomerScreen({ navigation }) {
 
         <View style={styles.recentOrdersSection}>
           <Text style={styles.recentOrdersTitle}>🕒 طلباتك السابقة</Text>
-          
+
           {loadingOrders ? (
             <View style={styles.loadingRecent}>
               <ActivityIndicator size="small" color="#4F46E5" />
@@ -239,39 +234,39 @@ export default function CustomerScreen({ navigation }) {
                 <TouchableOpacity
                   key={order.id}
                   style={[
-                    styles.recentOrderCard, 
-                    { borderLeftColor: order.service === 'supermarket' ? '#F59E0B' : 
-                                       order.service === 'pharmacy' ? '#F59E0B' : 
-                                       order.service === 'plumbing' ? '#3B82F6' : 
-                                       order.service === 'carpentry' ? '#8B5CF6' : 
+                    styles.recentOrderCard,
+                    { borderLeftColor: order.service === 'supermarket' ? '#F59E0B' :
+                                       order.service === 'pharmacy' ? '#F59E0B' :
+                                       order.service === 'plumbing' ? '#3B82F6' :
+                                       order.service === 'carpentry' ? '#8B5CF6' :
                                        order.service === 'marble' ? '#EC4899' : '#10B981' }
                   ]}
                   onPress={() => trackOrder(order.id)}
                 >
-                  <Ionicons 
+                  <Ionicons
                     name={
                       order.service === 'supermarket' ? 'cart' :
                       order.service === 'pharmacy' ? 'medical' :
                       order.service === 'plumbing' ? 'water' :
                       order.service === 'carpentry' ? 'hammer' :
                       order.service === 'marble' ? 'apps' : 'restaurant'
-                    } 
-                    size={24} 
+                    }
+                    size={24}
                     color={
                       order.service === 'supermarket' ? '#F59E0B' :
                       order.service === 'pharmacy' ? '#F59E0B' :
                       order.service === 'plumbing' ? '#3B82F6' :
                       order.service === 'carpentry' ? '#8B5CF6' :
                       order.service === 'marble' ? '#EC4899' : '#10B981'
-                    } 
+                    }
                   />
                   <View style={styles.recentOrderInfo}>
                     <Text style={styles.recentOrderId}>طلب #{order.id.slice(-6)}</Text>
                     <Text style={styles.recentOrderService}>{order.serviceName}</Text>
                   </View>
-                  <View style={[styles.recentOrderStatus, { 
-                    backgroundColor: order.status === 'جديد' ? '#F59E0B' : 
-                                    order.status === 'جاري التوصيل' ? '#3B82F6' : '#10B981' 
+                  <View style={[styles.recentOrderStatus, {
+                    backgroundColor: order.status === 'جديد' ? '#F59E0B' :
+                                    order.status === 'جاري التوصيل' ? '#3B82F6' : '#10B981'
                   }]}>
                     <Text style={styles.recentOrderStatusText}>{order.status}</Text>
                   </View>
