@@ -299,3 +299,5 @@ app.get('/test-offers', (req, res) => {
     time: new Date().toISOString()
   });
 });
+
+// Force redeploy for offers server
