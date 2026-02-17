@@ -31,9 +31,7 @@ const fetchOrderStatusFromServer = async (orderId) => {
             driverPhone: order.driverPhone || null,
             items: order.items || [],
             address: order.address || 'غير محدد',
-            // الفاتورة (قيم ثابتة للتجربة - ممكن تجيبها من السيرفر)
-            totalBill: 150,
-            deliveryCost: 20
+            totalAmount: order.totalAmount || null
           };
         }
       }
@@ -58,8 +56,7 @@ const fetchOrderStatusFromStorage = async (orderId) => {
         driverPhone: order.driverPhone || null,
         items: order.items || [],
         address: order.address || 'غير محدد',
-        totalBill: 150,
-        deliveryCost: 20
+        totalAmount: order.totalAmount || null
       } : null;
     }
   } catch (error) {
@@ -91,21 +88,30 @@ export default function OrderTracking({ visible, onClose, orderId }) {
   const [driverPhone, setDriverPhone] = useState(null);
   const [items, setItems] = useState([]);
   const [address, setAddress] = useState('');
+  const [totalAmount, setTotalAmount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // قيم الفاتورة
-  const deliveryCost = 20;
-  const totalBill = 150;
-  const grandTotal = deliveryCost + totalBill;
+  const [showThankYou, setShowThankYou] = useState(false);
 
   useEffect(() => {
     if (visible && orderId) {
       loadOrderStatus();
-      const interval = setInterval(loadOrderStatus, 10000);
+      const interval = setInterval(loadOrderStatus, 5000);
       return () => clearInterval(interval);
     }
   }, [visible, orderId]);
+
+  useEffect(() => {
+    // لما يوصل لـ "تم التوصيل"، نظهر رسالة الشكر وبعدها نغلق
+    if (status === 'تم التوصيل' && visible) {
+      setShowThankYou(true);
+      const timer = setTimeout(() => {
+        setShowThankYou(false);
+        onClose();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [status, visible]);
 
   const loadOrderStatus = async () => {
     setLoading(true);
@@ -118,6 +124,7 @@ export default function OrderTracking({ visible, onClose, orderId }) {
       setDriverPhone(serverData.driverPhone);
       setItems(serverData.items || []);
       setAddress(serverData.address);
+      setTotalAmount(serverData.totalAmount);
     } else {
       const storageData = await fetchOrderStatusFromStorage(orderId);
       if (storageData) {
@@ -125,6 +132,7 @@ export default function OrderTracking({ visible, onClose, orderId }) {
         setDriverPhone(storageData.driverPhone);
         setItems(storageData.items || []);
         setAddress(storageData.address);
+        setTotalAmount(storageData.totalAmount);
       } else {
         setError('لا يمكن جلب الحالة');
       }
@@ -136,7 +144,6 @@ export default function OrderTracking({ visible, onClose, orderId }) {
   const getStatusIcon = () => {
     switch(status) {
       case 'جديد': return 'time-outline';
-      case 'جاري تجهيز الطلب': return 'construct-outline';
       case 'جاري التوصيل': return 'bicycle-outline';
       case 'تم التوصيل': return 'checkmark-done-circle-outline';
       default: return 'help-outline';
@@ -146,7 +153,6 @@ export default function OrderTracking({ visible, onClose, orderId }) {
   const getStatusColor = () => {
     switch(status) {
       case 'جديد': return '#F59E0B';
-      case 'جاري تجهيز الطلب': return '#F59E0B';
       case 'جاري التوصيل': return '#3B82F6';
       case 'تم التوصيل': return '#10B981';
       default: return '#6B7280';
@@ -156,9 +162,9 @@ export default function OrderTracking({ visible, onClose, orderId }) {
   const getStatusMessage = () => {
     switch(status) {
       case 'جديد':
-        return 'تم استلام طلبك وجاري تجهيزه';
-      case 'جاري تجهيز الطلب':
-        return 'جاري تحضير الطلب';
+        return totalAmount 
+          ? `تم تجهيز طلبك بقيمة ${totalAmount} ج`
+          : 'سيتم إضافة السعر قريباً';
       case 'جاري التوصيل':
         return 'المندوب في الطريق إليك 🚚';
       case 'تم التوصيل':
@@ -167,6 +173,20 @@ export default function OrderTracking({ visible, onClose, orderId }) {
         return 'جاري تحديث الحالة';
     }
   };
+
+  if (showThankYou) {
+    return (
+      <Modal visible={visible} transparent animationType="fade">
+        <View style={styles.thankYouOverlay}>
+          <View style={styles.thankYouCard}>
+            <Ionicons name="checkmark-circle" size={80} color="#10B981" />
+            <Text style={styles.thankYouTitle}>شكراً لاستخدامك</Text>
+            <Text style={styles.thankYouSubtitle}>ZAYED ID</Text>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -216,30 +236,23 @@ export default function OrderTracking({ visible, onClose, orderId }) {
                 </Text>
               </View>
 
-              {/* الفاتورة - تظهر للعميل هنا */}
-              <View style={styles.billCard}>
-                <Text style={styles.billTitle}>💰 الفاتورة</Text>
-                <View style={styles.billRow}>
-                  <Text style={styles.billLabel}>الأسعار:</Text>
-                  <Text style={styles.billValue}>{totalBill} ج</Text>
+              {/* الفاتورة - تظهر فقط لو السعر موجود */}
+              {totalAmount && (
+                <View style={styles.billCard}>
+                  <Text style={styles.billTitle}>💰 الفاتورة</Text>
+                  <View style={styles.billRow}>
+                    <Text style={styles.billLabel}>إجمالي الفاتورة:</Text>
+                    <Text style={styles.billValue}>{totalAmount} ج</Text>
+                  </View>
                 </View>
-                <View style={styles.billRow}>
-                  <Text style={styles.billLabel}>خدمة التوصيل:</Text>
-                  <Text style={styles.billValue}>{deliveryCost} ج</Text>
-                </View>
-                <View style={[styles.billRow, styles.billTotal]}>
-                  <Text style={styles.billTotalLabel}>الإجمالي:</Text>
-                  <Text style={styles.billTotalValue}>{grandTotal} ج</Text>
-                </View>
-              </View>
+              )}
 
-              {/* خط زمني للحالة */}
+              {/* خط زمني مبسط */}
               <View style={styles.timeline}>
                 <View style={styles.timelineItem}>
                   <View style={[styles.timelineDot, { backgroundColor: status !== 'جديد' ? '#10B981' : '#F59E0B' }]} />
                   <View style={styles.timelineContent}>
                     <Text style={styles.timelineTitle}>تم استلام الطلب</Text>
-                    <Text style={styles.timelineTime}>قيد المعالجة</Text>
                   </View>
                 </View>
 
@@ -249,9 +262,6 @@ export default function OrderTracking({ visible, onClose, orderId }) {
                   ]} />
                   <View style={styles.timelineContent}>
                     <Text style={styles.timelineTitle}>جاري التوصيل</Text>
-                    <Text style={styles.timelineTime}>
-                      {status === 'جاري التوصيل' ? 'المندوب في الطريق' : 'في انتظار التوصيل'}
-                    </Text>
                   </View>
                 </View>
 
@@ -261,25 +271,20 @@ export default function OrderTracking({ visible, onClose, orderId }) {
                   ]} />
                   <View style={styles.timelineContent}>
                     <Text style={styles.timelineTitle}>تم التوصيل</Text>
-                    <Text style={styles.timelineTime}>
-                      {status === 'تم التوصيل' ? 'تم التوصيل بنجاح' : 'في انتظار التوصيل'}
-                    </Text>
                   </View>
                 </View>
               </View>
 
               {/* تفاصيل الطلب */}
               <View style={styles.detailsCard}>
-                <Text style={styles.detailsTitle}>تفاصيل الطلب</Text>
-                <View style={styles.detailRow}>
-                  <Ionicons name="location" size={18} color="#6B7280" />
-                  <Text style={styles.detailText}>{address}</Text>
-                </View>
+                <Text style={styles.detailsTitle}>📍 العنوان</Text>
+                <Text style={styles.detailText}>{address}</Text>
+                
                 {items.length > 0 && (
-                  <View style={styles.detailRow}>
-                    <Ionicons name="cart" size={18} color="#6B7280" />
+                  <>
+                    <Text style={[styles.detailsTitle, { marginTop: 12 }]}>📝 المنتجات</Text>
                     <Text style={styles.detailText}>{items.join('، ')}</Text>
-                  </View>
+                  </>
                 )}
               </View>
 
@@ -297,7 +302,7 @@ export default function OrderTracking({ visible, onClose, orderId }) {
               {/* زر تحديث يدوي */}
               <TouchableOpacity style={styles.refreshButton} onPress={loadOrderStatus}>
                 <Ionicons name="refresh" size={18} color="#F59E0B" />
-                <Text style={styles.refreshButtonText}>تحديث الحالة</Text>
+                <Text style={styles.refreshButtonText}>تحديث</Text>
               </TouchableOpacity>
             </ScrollView>
           )}
@@ -418,7 +423,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
   },
-  // استايلات الفاتورة
   billCard: {
     backgroundColor: '#FEF3C7',
     borderRadius: 12,
@@ -436,60 +440,40 @@ const styles = StyleSheet.create({
   billRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    alignItems: 'center',
   },
   billLabel: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#4B5563',
   },
   billValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  billTotal: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F59E0B',
-  },
-  billTotalLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  billTotalValue: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#F59E0B',
   },
   timeline: {
     marginBottom: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
   },
   timelineItem: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 12,
   },
   timelineDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     marginRight: 12,
-    marginTop: 2,
   },
   timelineContent: {
     flex: 1,
   },
   timelineTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 2,
-  },
-  timelineTime: {
-    fontSize: 12,
-    color: '#9CA3AF',
+    color: '#4B5563',
   },
   detailsCard: {
     backgroundColor: '#F9FAFB',
@@ -501,18 +485,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1F2937',
-    marginBottom: 12,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
     marginBottom: 8,
   },
   detailText: {
     fontSize: 14,
     color: '#4B5563',
-    flex: 1,
+    lineHeight: 20,
   },
   contactButton: {
     backgroundColor: '#3B82F6',
@@ -550,5 +528,29 @@ const styles = StyleSheet.create({
     color: '#F59E0B',
     fontSize: 14,
     fontWeight: '600',
+  },
+  thankYouOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thankYouCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 40,
+    alignItems: 'center',
+    elevation: 10,
+  },
+  thankYouTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 16,
+  },
+  thankYouSubtitle: {
+    fontSize: 18,
+    color: '#F59E0B',
+    marginTop: 4,
   },
 });
