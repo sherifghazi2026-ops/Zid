@@ -5,14 +5,13 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { View, Text } from 'react-native';
 
 // شاشات العميل
 import CustomerScreen from './src/screens/CustomerScreen';
 import RestaurantScreen from './src/screens/RestaurantScreen';
 import GroceryScreen from './src/screens/GroceryScreen';
-
-// شاشات المندوب
-import DriverScreen from './src/screens/DriverScreen';
+import IroningScreen from './src/screens/IroningScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -23,7 +22,21 @@ function CustomerStack() {
       <Stack.Screen name="CustomerMain" component={CustomerScreen} />
       <Stack.Screen name="Restaurant" component={RestaurantScreen} />
       <Stack.Screen name="Grocery" component={GroceryScreen} />
+      <Stack.Screen name="Ironing" component={IroningScreen} />
     </Stack.Navigator>
+  );
+}
+
+// شاشة العروض المؤقتة
+function OffersScreen() {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' }}>
+      <Ionicons name="pricetag-outline" size={80} color="#F59E0B" />
+      <Text style={{ fontSize: 20, fontWeight: 'bold', marginTop: 20, color: '#1F2937' }}>العروض</Text>
+      <Text style={{ fontSize: 14, color: '#6B7280', marginTop: 10, textAlign: 'center', paddingHorizontal: 30 }}>
+        قريباً ... عروض حصرية من ZAYED ID
+      </Text>
+    </View>
   );
 }
 
@@ -35,14 +48,16 @@ export default function App() {
           screenOptions={({ route }) => ({
             tabBarIcon: ({ focused, color, size }) => {
               let iconName;
+              
               if (route.name === 'طلب') {
                 iconName = focused ? 'cart' : 'cart-outline';
-              } else if (route.name === 'مندوب') {
-                iconName = focused ? 'bicycle' : 'bicycle-outline';
+              } else if (route.name === 'عروض') {
+                iconName = focused ? 'pricetag' : 'pricetag-outline';
               }
+
               return <Ionicons name={iconName} size={size} color={color} />;
             },
-            tabBarActiveTintColor: '#4F46E5',
+            tabBarActiveTintColor: '#F59E0B',
             tabBarInactiveTintColor: '#9CA3AF',
             tabBarStyle: {
               backgroundColor: '#FFFFFF',
@@ -60,7 +75,7 @@ export default function App() {
           })}
         >
           <Tab.Screen name="طلب" component={CustomerStack} />
-          <Tab.Screen name="مندوب" component={DriverScreen} />
+          <Tab.Screen name="عروض" component={OffersScreen} />
         </Tab.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

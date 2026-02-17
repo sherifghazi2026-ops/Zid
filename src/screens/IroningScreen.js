@@ -35,7 +35,7 @@ export default function IroningScreen({ navigation }) {
   const [cleanCart, setCleanCart] = useState({});  // تنظيف + كوي
   const [loading, setLoading] = useState(false);
   const [notes, setNotes] = useState('');
-  
+
   // حالات التسجيل الصوتي
   const [isRecording, setIsRecording] = useState(false);
   const [recording, setRecording] = useState(null);
@@ -56,6 +56,10 @@ export default function IroningScreen({ navigation }) {
   const loadSavedData = async () => {
     const savedPhone = await AsyncStorage.getItem('zayed_phone');
     if (savedPhone) setPhoneNumber(savedPhone);
+    
+    // تحميل العنوان المحفوظ
+    const savedAddress = await AsyncStorage.getItem('zayed_address');
+    if (savedAddress) setAddress(savedAddress);
   };
 
   // تحديث عداد كوي فقط
@@ -89,19 +93,19 @@ export default function IroningScreen({ navigation }) {
   // حساب الإجمالي
   const calculateTotal = () => {
     let total = 0;
-    
+
     // كوي فقط
     ITEM_TYPES.forEach(item => {
       const ironQty = ironCart[item.id] || 0;
       total += ironQty * item.ironPrice;
     });
-    
+
     // تنظيف + كوي
     ITEM_TYPES.forEach(item => {
       const cleanQty = cleanCart[item.id] || 0;
       total += cleanQty * item.cleanPrice;
     });
-    
+
     return total;
   };
 
@@ -194,7 +198,7 @@ export default function IroningScreen({ navigation }) {
       });
 
       console.log('📤 رفع ملف صوتي...');
-      
+
       const response = await fetch(`${SERVER_URL}/upload-voice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -203,7 +207,7 @@ export default function IroningScreen({ navigation }) {
 
       const data = await response.json();
       console.log('📥 رد السيرفر:', data);
-      
+
       return data.success ? data.url : null;
     } catch (error) {
       console.error('❌ فشل رفع الصوت:', error);
@@ -227,11 +231,11 @@ export default function IroningScreen({ navigation }) {
 
       // تجهيز تفاصيل الطلب
       let itemsDetail = [];
-      
+
       ITEM_TYPES.forEach(item => {
         const ironQty = ironCart[item.id] || 0;
         const cleanQty = cleanCart[item.id] || 0;
-        
+
         if (ironQty > 0) {
           itemsDetail.push(`${item.name} (كوي فقط) x${ironQty} = ${ironQty * item.ironPrice}ج`);
         }
@@ -262,8 +266,12 @@ export default function IroningScreen({ navigation }) {
       console.log('📥 رد السيرفر:', result);
 
       if (result.success) {
+        // حفظ البيانات بعد نجاح الإرسال
+        await AsyncStorage.setItem('zayed_phone', phoneNumber);
+        await AsyncStorage.setItem('zayed_address', address);
+
         Alert.alert(
-          '✅ تم بنجاح', 
+          '✅ تم بنجاح',
           'تم إرسال طلبك للمحل وتتبعه عبر التليجرام',
           [{ text: 'ممتاز', onPress: () => navigation.goBack() }]
         );
@@ -292,25 +300,24 @@ export default function IroningScreen({ navigation }) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
         {/* User Info Section */}
         <View style={styles.infoCard}>
           <View style={styles.inputRow}>
             <Ionicons name="call" size={20} color="#F59E0B" />
-            <TextInput 
-              style={styles.textInput} 
-              placeholder="رقم الموبايل" 
-              value={phoneNumber} 
+            <TextInput
+              style={styles.textInput}
+              placeholder="رقم الموبايل"
+              value={phoneNumber}
               onChangeText={setPhoneNumber}
               keyboardType="phone-pad"
             />
           </View>
           <View style={[styles.inputRow, { borderTopWidth: 1, borderTopColor: '#F3F4F6' }]}>
             <Ionicons name="location" size={20} color="#F59E0B" />
-            <TextInput 
-              style={styles.textInput} 
-              placeholder="عنوان التوصيل" 
-              value={address} 
+            <TextInput
+              style={styles.textInput}
+              placeholder="عنوان التوصيل"
+              value={address}
               onChangeText={setAddress}
             />
           </View>
@@ -321,7 +328,7 @@ export default function IroningScreen({ navigation }) {
           {ITEM_TYPES.map((item) => {
             const ironQty = ironCart[item.id] || 0;
             const cleanQty = cleanCart[item.id] || 0;
-            
+
             return (
               <View key={item.id} style={styles.itemCard}>
                 <View style={[styles.iconBox, { backgroundColor: item.color + '15' }]}>
@@ -332,7 +339,7 @@ export default function IroningScreen({ navigation }) {
                   )}
                 </View>
                 <Text style={styles.itemName}>{item.name}</Text>
-                
+
                 {/* كوي فقط */}
                 <View style={styles.serviceRow}>
                   <Text style={styles.serviceLabel}>كوي فقط</Text>
@@ -370,17 +377,17 @@ export default function IroningScreen({ navigation }) {
         {/* Voice Recorder Section */}
         <View style={styles.voiceSection}>
           <Text style={styles.voiceTitle}>🎤 مذكرة صوتية (اختياري)</Text>
-          
+
           {!recordedUri ? (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.voiceButton, isRecording && styles.recordingButton]}
               onPress={isRecording ? stopRecording : startRecording}
               disabled={uploadingVoice}
             >
-              <Ionicons 
-                name={isRecording ? "stop" : "mic"} 
-                size={24} 
-                color={isRecording ? "#FFF" : "#F59E0B"} 
+              <Ionicons
+                name={isRecording ? "stop" : "mic"}
+                size={24}
+                color={isRecording ? "#FFF" : "#F59E0B"}
               />
               <Text style={[styles.voiceButtonText, isRecording && styles.recordingText]}>
                 {isRecording ? 'جاري التسجيل... اضغط للإيقاف' : 'اضغط للتسجيل'}
@@ -392,7 +399,7 @@ export default function IroningScreen({ navigation }) {
                 <Ionicons name={isPlaying ? "pause" : "play"} size={24} color="#3B82F6" />
                 <Text style={styles.recordActionText}>{isPlaying ? 'إيقاف' : 'استماع'}</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity style={[styles.recordAction, styles.deleteAction]} onPress={deleteRecording} disabled={uploadingVoice}>
                 <Ionicons name="trash" size={24} color="#EF4444" />
                 <Text style={[styles.recordActionText, styles.deleteText]}>حذف</Text>
@@ -402,8 +409,8 @@ export default function IroningScreen({ navigation }) {
           {uploadingVoice && <Text style={styles.uploadingText}>جاري رفع الصوت...</Text>}
         </View>
 
-        <TextInput 
-          style={styles.notesInput} 
+        <TextInput
+          style={styles.notesInput}
           placeholder="ملاحظات إضافية (اختياري)"
           multiline
           value={notes}
@@ -436,11 +443,11 @@ export default function IroningScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
-  header: { 
-    flexDirection: 'row-reverse', 
-    alignItems: 'center', 
-    padding: 20, 
-    paddingTop: 50, 
+  header: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    padding: 20,
+    paddingTop: 50,
     backgroundColor: '#FFF',
     borderBottomLeftRadius: 25,
     borderBottomRightRadius: 25,
@@ -450,10 +457,10 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#1F2937', textAlign: 'right' },
   headerSub: { fontSize: 13, color: '#6B7280', textAlign: 'right' },
   scrollContent: { padding: 15 },
-  infoCard: { 
-    backgroundColor: '#FFF', 
-    borderRadius: 15, 
-    padding: 5, 
+  infoCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 5,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#E5E7EB'
@@ -461,12 +468,12 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: 'row-reverse', alignItems: 'center', padding: 12 },
   textInput: { flex: 1, textAlign: 'right', marginRight: 10, fontSize: 15 },
   grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-between' },
-  itemCard: { 
-    width: (width - 45) / 2, 
-    backgroundColor: '#FFF', 
-    borderRadius: 20, 
-    padding: 15, 
-    alignItems: 'center', 
+  itemCard: {
+    width: (width - 45) / 2,
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 15,
+    alignItems: 'center',
     marginBottom: 15,
     borderWidth: 1,
     borderColor: '#F3F4F6',
@@ -474,7 +481,7 @@ const styles = StyleSheet.create({
   },
   iconBox: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
   itemName: { fontSize: 16, fontWeight: 'bold', color: '#1F2937', marginBottom: 10 },
-  serviceRow: { 
+  serviceRow: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
@@ -486,19 +493,19 @@ const styles = StyleSheet.create({
   countBtn: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#F59E0B', justifyContent: 'center', alignItems: 'center' },
   countText: { marginHorizontal: 6, fontWeight: 'bold', fontSize: 12, minWidth: 15, textAlign: 'center' },
   itemPrice: { fontSize: 12, fontWeight: '600', color: '#F59E0B', width: 35, textAlign: 'left' },
-  voiceSection: { 
-    backgroundColor: '#FFF', 
-    borderRadius: 15, 
-    padding: 15, 
+  voiceSection: {
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 15,
     marginBottom: 15,
     borderWidth: 1,
     borderColor: '#E5E7EB'
   },
   voiceTitle: { fontSize: 14, fontWeight: '600', color: '#1F2937', marginBottom: 10, textAlign: 'right' },
-  voiceButton: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
+  voiceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#FEF3C7',
     padding: 12,
     borderRadius: 12,
@@ -513,24 +520,24 @@ const styles = StyleSheet.create({
   recordActionText: { fontSize: 14, fontWeight: '600', color: '#4B5563' },
   deleteText: { color: '#EF4444' },
   uploadingText: { textAlign: 'center', color: '#F59E0B', marginTop: 5, fontSize: 12 },
-  notesInput: { 
-    backgroundColor: '#FFF', 
-    borderRadius: 15, 
-    padding: 15, 
-    textAlign: 'right', 
-    borderWidth: 1, 
+  notesInput: {
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 15,
+    textAlign: 'right',
+    borderWidth: 1,
     borderColor: '#E5E7EB',
     minHeight: 80
   },
-  footer: { 
-    position: 'absolute', 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    backgroundColor: '#FFF', 
-    padding: 20, 
-    flexDirection: 'row-reverse', 
-    alignItems: 'center', 
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFF',
+    padding: 20,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
@@ -540,12 +547,12 @@ const styles = StyleSheet.create({
   totalLabel: { fontSize: 12, color: '#6B7280' },
   totalAmount: { fontSize: 22, fontWeight: 'bold', color: '#1F2937' },
   totalItems: { fontSize: 12, color: '#9CA3AF' },
-  sendBtn: { 
-    backgroundColor: '#F59E0B', 
-    flexDirection: 'row', 
-    paddingVertical: 14, 
-    paddingHorizontal: 25, 
-    borderRadius: 15, 
+  sendBtn: {
+    backgroundColor: '#F59E0B',
+    flexDirection: 'row',
+    paddingVertical: 14,
+    paddingHorizontal: 25,
+    borderRadius: 15,
     alignItems: 'center',
     gap: 10
   },
