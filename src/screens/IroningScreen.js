@@ -25,20 +25,12 @@ const ITEM_TYPES = [
     color: '#3B82F6' 
   },
   { 
-    id: 'suit', 
-    name: 'بدلة', 
-    icon: 'shirt-outline', 
-    price: 70,
-    color: '#8B5CF6',
-    style: { transform: [{ scaleX: 1.2 }] } // تكبير أفقي
-  },
-  { 
     id: 'pants', 
     name: 'بنطلون', 
     icon: 'shirt-outline', 
     price: 10,
     color: '#10B981',
-    style: { transform: [{ rotate: '90deg' }] } // تدوير 90 درجة
+    style: { transform: [{ rotate: '90deg' }] } // تدوير 90 درجة عشان يبقى بنطلون
   },
   { 
     id: 'dress', 
@@ -48,12 +40,20 @@ const ITEM_TYPES = [
     color: '#EC4899' 
   },
   { 
+    id: 'suit', 
+    name: 'بدلة', 
+    icon: 'shirt-outline', 
+    price: 70,
+    color: '#8B5CF6',
+    style: { transform: [{ scaleX: 1.3 }, { scaleY: 1.1 }] } // تكبير أفقي عشان يبقى بدلة
+  },
+  { 
     id: 'jacket', 
     name: 'جاكت', 
     icon: 'shirt-outline', 
     price: 30,
     color: '#F59E0B',
-    style: { transform: [{ scaleY: 1.2 }] } // تطويل رأسي
+    style: { transform: [{ scaleY: 1.3 }] } // تطويل رأسي عشان يبقى جاكت
   },
   { 
     id: 'blouse', 
@@ -61,7 +61,14 @@ const ITEM_TYPES = [
     icon: 'shirt-outline', 
     price: 15,
     color: '#EF4444',
-    style: { transform: [{ rotate: '10deg' }] } // إمالة بسيطة
+    style: { transform: [{ rotate: '5deg' }, { scaleX: 0.9 }] } // إمالة بسيطة عشان تبقي بلوزة
+  },
+  { 
+    id: 'other', 
+    name: 'أخرى', 
+    icon: 'apps-outline', 
+    price: 0,
+    color: '#6B7280' 
   },
 ];
 
@@ -96,6 +103,7 @@ export default function IroningScreen({ navigation }) {
       name: currentItem.name,
       icon: currentItem.icon,
       color: currentItem.color,
+      style: currentItem.style,
       quantity: quantity,
       pricePerItem: currentItem.price,
       totalPrice: currentItem.price * quantity
@@ -264,12 +272,14 @@ export default function IroningScreen({ navigation }) {
                 ]}>
                   {item.name}
                 </Text>
-                <Text style={[
-                  styles.itemPrice,
-                  currentItem?.id === item.id && styles.selectedItemPrice,
-                ]}>
-                  {item.price} ج
-                </Text>
+                {item.price > 0 && (
+                  <Text style={[
+                    styles.itemPrice,
+                    currentItem?.id === item.id && styles.selectedItemPrice,
+                  ]}>
+                    {item.price} ج
+                  </Text>
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -314,7 +324,10 @@ export default function IroningScreen({ navigation }) {
             <Text style={styles.sectionTitle}>الأصناف المضافة:</Text>
             {items.map((item) => (
               <View key={item.id} style={styles.listItem}>
-                <View style={styles.listItemIcon}>
+                <View style={[
+                  styles.listItemIcon,
+                  item.style && item.style
+                ]}>
                   <Ionicons name={item.icon} size={24} color={item.color} />
                 </View>
                 <View style={styles.listItemDetails}>
