@@ -18,8 +18,8 @@ const BOTS = {
   }
 };
 
-// معرف القناة - لازم يبدأ بـ -100
-const DRIVER_CHANNEL_ID = "-1001814331589";
+// معرف القناة - غير هذا الرقم بالرقم الصحيح اللي جبته من getUpdates
+const DRIVER_CHANNEL_ID = "-1001814331589"; // ⚠️ غير هذا الرقم
 const ADMIN_IDS = [1814331589];
 
 let orders = [];
@@ -41,6 +41,7 @@ const sendMessage = async (chatId, text, keyboard = null, botType = 'main') => {
     }
     
     console.log(`📤 إرسال رسالة إلى ${chatId} باستخدام البوت ${botType}`);
+    console.log(`📝 نص الرسالة: ${text.substring(0, 100)}...`);
     
     const response = await fetch(`${BOTS[botType].api}/sendMessage`, {
       method: 'POST',
@@ -52,7 +53,7 @@ const sendMessage = async (chatId, text, keyboard = null, botType = 'main') => {
     if (result.ok) {
       console.log('✅ تم الإرسال بنجاح');
     } else {
-      console.error('❌ فشل الإرسال:', result);
+      console.error('❌ فشل الإرسال:', JSON.stringify(result));
     }
     return result;
   } catch (error) {
@@ -60,10 +61,9 @@ const sendMessage = async (chatId, text, keyboard = null, botType = 'main') => {
   }
 };
 
-// دالة إرسال الصوت - محسنة
+// دالة إرسال الصوت
 const sendVoice = async (chatId, voiceUrl, botType = 'main') => {
   try {
-    // التأكد من أن الرابط كامل وصحيح
     let fullUrl = voiceUrl;
     if (!voiceUrl.startsWith('http')) {
       fullUrl = `https://zayedid-production.up.railway.app${voiceUrl}`;
@@ -71,84 +71,27 @@ const sendVoice = async (chatId, voiceUrl, botType = 'main') => {
     
     console.log(`📤 إرسال صوت إلى ${chatId} باستخدام البوت ${botType}: ${fullUrl}`);
     
-    // تجهيز البيانات كـ form-data (telegram يتطلب ذلك للصوت)
-    const formData = new FormData();
-    formData.append('chat_id', chatId);
-    formData.append('voice', fullUrl);
+    // تليجرام يقبل رابط مباشر للصوت
+    const payload = {
+      chat_id: chatId,
+      voice: fullUrl
+    };
     
     const response = await fetch(`${BOTS[botType].api}/sendVoice`, {
       method: 'POST',
-      body: formData
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
     
     const result = await response.json();
     if (result.ok) {
       console.log('✅ تم إرسال الصوت بنجاح');
     } else {
-      console.error('❌ فشل إرسال الصوت:', result);
+      console.error('❌ فشل إرسال الصوت:', JSON.stringify(result));
     }
     return result;
   } catch (error) {
     console.error(`خطأ في إرسال صوت للبوت ${botType}:`, error);
-  }
-};
-
-// دالة إرسال الصوت كملف (طريقة بديلة)
-const sendAudioAsDocument = async (chatId, voiceUrl, botType = 'main') => {
-  try {
-    let fullUrl = voiceUrl;
-    if (!voiceUrl.startsWith('http')) {
-      fullUrl = `https://zayedid-production.up.railway.app${voiceUrl}`;
-    }
-    
-    console.log(`📤 إرسال ملف صوتي كوثيقة إلى ${chatId} باستخدام البوت ${botType}: ${fullUrl}`);
-    
-    const formData = new FormData();
-    formData.append('chat_id', chatId);
-    formData.append('document', fullUrl);
-    formData.append('caption', '🎤 تسجيل صوتي للطلب');
-    
-    const response = await fetch(`${BOTS[botType].api}/sendDocument`, {
-      method: 'POST',
-      body: formData
-    });
-    
-    const result = await response.json();
-    if (result.ok) {
-      console.log('✅ تم إرسال الملف الصوتي كوثيقة بنجاح');
-    } else {
-      console.error('❌ فشل إرسال الملف الصوتي:', result);
-    }
-    return result;
-  } catch (error) {
-    console.error(`خطأ في إرسال ملف صوتي للبوت ${botType}:`, error);
-  }
-};
-
-const editMessage = async (chatId, messageId, text, keyboard = null, botType = 'main') => {
-  try {
-    const payload = {
-      chat_id: chatId,
-      message_id: messageId,
-      text: text,
-      parse_mode: 'HTML'
-    };
-    
-    if (keyboard) {
-      payload.reply_markup = JSON.stringify({ 
-        inline_keyboard: keyboard 
-      });
-    }
-    
-    const response = await fetch(`${BOTS[botType].api}/editMessageText`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    
-    return await response.json();
-  } catch (error) {
-    console.error(`خطأ في تعديل رسالة للبوت ${botType}:`, error);
   }
 };
 
@@ -206,48 +149,24 @@ app.get('/', (req, res) => {
 // ==================== مسار اختبار للبوت ====================
 app.get('/test-bot', async (req, res) => {
   try {
+    console.log('🧪 اختبار إرسال رسالة إلى القناة:', DRIVER_CHANNEL_ID);
+    
     const result = await sendMessage(
       DRIVER_CHANNEL_ID, 
-      '🧪 <b>رسالة اختبار</b>\n\nإذا رأيت هذه الرسالة، فالبوت شغال ✅',
+      '🧪 <b>رسالة اختبار من السيرفر</b>\n\nإذا رأيت هذه الرسالة، فالبوت شغال ✅',
       null,
       'main'
     );
     
-    const result2 = await sendMessage(
-      DRIVER_CHANNEL_ID, 
-      '🧪 <b>رسالة اختبار لبوت المكوجي</b>\n\nإذا رأيت هذه الرسالة، فبوت المكوجي شغال ✅',
-      null,
-      'ironing'
-    );
-    
     res.json({ 
       success: true, 
-      main: result ? '✅' : '❌',
-      ironing: result2 ? '✅' : '❌'
+      result: result,
+      channelId: DRIVER_CHANNEL_ID
     });
   } catch (error) {
+    console.error('❌ خطأ في الاختبار:', error);
     res.status(500).json({ success: false, error: error.message });
   }
-});
-
-// ==================== جلب الطلبات النشطة ====================
-app.get('/active-orders', (req, res) => {
-  const activeOrders = orders.filter(o => o.status !== 'تم التوصيل');
-  
-  res.json({ 
-    success: true, 
-    orders: activeOrders.map(o => ({
-      id: o.id,
-      phone: o.phone,
-      address: o.address,
-      items: o.items || [],
-      status: o.status || 'تم استلام طلبك',
-      serviceName: o.serviceName || 'سوبر ماركت',
-      driverPhone: o.driverPhone || null,
-      totalPrice: o.totalPrice || null,
-      createdAt: o.date
-    }))
-  });
 });
 
 // ==================== استقبال الطلبات ====================
@@ -314,38 +233,115 @@ app.post('/send-order', async (req, res) => {
     message += `\n\n🎤 <b>تسجيل صوتي مرفق مع الطلب</b>`;
   }
   
+  console.log(`📤 محاولة إرسال الطلب إلى القناة ${DRIVER_CHANNEL_ID} باستخدام البوت ${botType}`);
+  
   // إرسال الرسالة النصية أولاً
   const result = await sendMessage(DRIVER_CHANNEL_ID, message, keyboard, botType);
   
   if (result && result.ok) {
     newOrder.messageId = result.result.message_id;
     newOrder.botType = botType;
+    console.log(`✅ تم إرسال الطلب بنجاح، messageId: ${result.result.message_id}`);
     
-    // إذا في ملف صوتي، نرسله بعد الرسالة (مع محاولتين)
+    // إذا في ملف صوتي، نرسله بعد الرسالة
     if (voiceUrl) {
       console.log('🎤 محاولة إرسال الصوت...');
       
-      // تأخير 2 ثانية عشان الرسالة توصل أولاً
+      // تأخير 2 ثانية
       setTimeout(async () => {
-        // المحاولة الأولى: إرسال كـ Voice
-        const voiceResult = await sendVoice(DRIVER_CHANNEL_ID, voiceUrl, botType);
-        
-        // إذا فشلت، نجرب إرسال كـ Document
-        if (!voiceResult || !voiceResult.ok) {
-          console.log('⚠️ فشل إرسال كـ Voice، نجرب كـ Document...');
-          await sendAudioAsDocument(DRIVER_CHANNEL_ID, voiceUrl, botType);
-        }
+        await sendVoice(DRIVER_CHANNEL_ID, voiceUrl, botType);
       }, 2000);
     }
+  } else {
+    console.error('❌ فشل إرسال الطلب:', result);
   }
   
   res.json({ success: true, orderId });
 });
 
-// ==================== ويب هوك (مختصر للاختصار) ====================
+// ==================== ويب هوك ====================
 app.post('/webhook', async (req, res) => {
-  // الكود الكامل للويب هوك موجود في الملف السابق
-  // تم حذفه للاختصار لكنه موجود في الكود الأصلي
+  const update = req.body;
+  console.log('🔄 استقبال Webhook:', JSON.stringify(update).substring(0, 200));
+  
+  // معالجة الأزرار
+  if (update.callback_query) {
+    const callback = update.callback_query;
+    const data = callback.data;
+    const messageId = callback.message.message_id;
+    const chatId = callback.message.chat.id;
+    const messageText = callback.message.text;
+    const driverName = callback.from.first_name || 'مندوب';
+    const driverId = callback.from.id;
+    
+    console.log(`🔄 ضغط على زر: ${data} من ${driverName} (${driverId})`);
+    
+    const parts = data.split('_');
+    const action = parts[0];
+    const orderId = parts[1];
+    
+    const order = orders.find(o => o.id === orderId);
+    
+    if (!order) {
+      await sendMessage(chatId, '❌ الطلب غير موجود', null, 'main');
+      return res.sendStatus(200);
+    }
+
+    const botType = order.botType || 'main';
+
+    if (action === 'accept') {
+      if (!order.acceptedBy) {
+        order.acceptedBy = { id: driverId, name: driverName };
+        order.status = order.serviceName === 'مكوجي' ? 'طلبك تحت التنفيذ' : 'جديد';
+        
+        let newText = messageText.replace(
+          /🔻 <b>الحالة:<\/b> [^\n]+/, 
+          `🔻 <b>الحالة:</b> ${order.status}`
+        );
+        newText += `\n\n✅ تم قبول الطلب بواسطة ${driverName}`;
+        
+        await sendMessage(chatId, newText, null, botType);
+        
+        await sendMessage(chatId, 
+          `📱 مرحباً ${driverName}\n` +
+          `لقد قبلت الطلب ${orderId}\n\n` +
+          `الرجاء إرسال رقم موبايلك للتواصل مع العميل:`,
+          null,
+          botType
+        );
+        
+        driverSessions[driverId] = {
+          orderId: orderId,
+          step: 'waiting_phone',
+          botType: botType
+        };
+      } else {
+        let msg = order.acceptedBy.id === driverId 
+          ? '✅ أنت قبلت هذا الطلب بالفعل'
+          : `❌ هذا الطلب تم قبوله بواسطة ${order.acceptedBy.name}`;
+        
+        await sendMessage(chatId, msg, null, botType);
+      }
+    }
+  }
+  
+  // معالجة الرسائل النصية
+  else if (update.message) {
+    const chatId = update.message.chat.id;
+    const text = update.message.text;
+    
+    if (driverSessions[chatId]) {
+      const session = driverSessions[chatId];
+      const order = orders.find(o => o.id === session.orderId);
+      
+      if (order && session.step === 'waiting_phone') {
+        order.driverPhone = text;
+        await sendMessage(chatId, '✅ تم حفظ الرقم!', null, session.botType);
+        delete driverSessions[chatId];
+      }
+    }
+  }
+  
   res.sendStatus(200);
 });
 
