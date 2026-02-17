@@ -31,6 +31,8 @@ export default function GroceryAIModal({ visible, onClose }) {
   const [recordingInstance, setRecordingInstance] = useState(null);
   const [recordedUri, setRecordedUri] = useState(null);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [sound, setSound] = useState(null);
   const [sending, setSending] = useState(false);
   const timerRef = useRef(null);
 
@@ -48,6 +50,15 @@ export default function GroceryAIModal({ visible, onClose }) {
     };
     if (visible) loadSavedData();
   }, [visible]);
+
+  // تنظيف الصوت عند إغلاق المودال
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
 
   // حفظ رقم التليفون
   const savePhoneNumber = async (value) => {
@@ -79,6 +90,13 @@ export default function GroceryAIModal({ visible, onClose }) {
   // بدء التسجيل الصوتي
   const startRecording = async () => {
     try {
+      // إيقاف أي تشغيل سابق
+      if (sound) {
+        await sound.unloadAsync();
+        setSound(null);
+        setIsPlaying(false);
+      }
+
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('خطأ', 'يجب السماح للتطبيق بتسجيل الصوت');
@@ -121,6 +139,69 @@ export default function GroceryAIModal({ visible, onClose }) {
       console.error(error);
       Alert.alert('خطأ', 'فشل إيقاف التسجيل');
     }
+  };
+
+  // ==================== تشغيل التسجيل الصوتي ====================
+  const playRecording = async () => {
+    if (!recordedUri) return;
+
+    try {
+      // إيقاف أي تشغيل سابق
+      if (sound) {
+        await sound.unloadAsync();
+        setSound(null);
+        setIsPlaying(false);
+      }
+
+      // ضبط وضع الصوت للتشغيل
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      });
+
+      // إنشاء كائن الصوت
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: recordedUri },
+        { shouldPlay: true },
+        onPlaybackStatusUpdate
+      );
+
+      setSound(newSound);
+      setIsPlaying(true);
+    } catch (error) {
+      console.error('خطأ في تشغيل الصوت:', error);
+      Alert.alert('خطأ', 'فشل تشغيل التسجيل');
+    }
+  };
+
+  // تحديث حالة التشغيل
+  const onPlaybackStatusUpdate = (status) => {
+    if (status.didJustFinish) {
+      setIsPlaying(false);
+    }
+  };
+
+  // إيقاف التشغيل
+  const stopPlaying = async () => {
+    if (sound) {
+      await sound.stopAsync();
+      await sound.unloadAsync();
+      setSound(null);
+      setIsPlaying(false);
+    }
+  };
+
+  // حذف التسجيل
+  const deleteRecording = () => {
+    if (sound) {
+      sound.unloadAsync();
+      setSound(null);
+      setIsPlaying(false);
+    }
+    setRecordedUri(null);
+    setRecordingDuration(0);
   };
 
   // ==================== رفع الملف الصوتي وتحويله إلى رابط ====================
@@ -222,7 +303,7 @@ export default function GroceryAIModal({ visible, onClose }) {
         // إعادة تعيين الحقول
         setOrderText('');
         setOrderItems([]);
-        setRecordedUri(null);
+        deleteRecording();
 
         // إغلاق المودال بعد 2 ثانية
         setTimeout(() => {
@@ -327,7 +408,9 @@ export default function GroceryAIModal({ visible, onClose }) {
               {/* زر التسجيل الصوتي (اختياري) */}
               <View style={styles.voiceSection}>
                 <Text style={styles.label}>🎤 تسجيل صوتي (اختياري)</Text>
+                
                 {!recordedUri ? (
+                  // حالة التسجيل أو قبل التسجيل
                   <TouchableOpacity
                     style={[styles.voiceButton, isRecording && styles.recordingActive]}
                     onPress={isRecording ? stopRecording : startRecording}
@@ -342,12 +425,34 @@ export default function GroceryAIModal({ visible, onClose }) {
                     </Text>
                   </TouchableOpacity>
                 ) : (
+                  // حالة بعد التسجيل - مع أزرار الاستماع والحذف
                   <View style={styles.recordedContainer}>
-                    <Ionicons name="checkmark-circle" size={32} color="#10B981" />
-                    <Text style={styles.recordedText}>تم التسجيل ✓</Text>
-                    <TouchableOpacity onPress={() => setRecordedUri(null)}>
-                      <Ionicons name="close-circle" size={32} color="#EF4444" />
-                    </TouchableOpacity>
+                    <View style={styles.recordedInfo}>
+                      <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                      <Text style={styles.recordedText}>تم التسجيل ({recordingDuration}ث)</Text>
+                    </View>
+                    
+                    <View style={styles.recordedActions}>
+                      {/* زر الاستماع */}
+                      <TouchableOpacity
+                        style={[styles.recordedActionButton, styles.playButton]}
+                        onPress={isPlaying ? stopPlaying : playRecording}
+                      >
+                        <Ionicons
+                          name={isPlaying ? "stop" : "play"}
+                          size={24}
+                          color="#FFF"
+                        />
+                      </TouchableOpacity>
+                      
+                      {/* زر إعادة التسجيل */}
+                      <TouchableOpacity
+                        style={[styles.recordedActionButton, styles.reRecordButton]}
+                        onPress={deleteRecording}
+                      >
+                        <Ionicons name="refresh" size={24} color="#FFF" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 )}
               </View>
@@ -451,11 +556,34 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: '#F3F4F6',
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#10B981'
   },
-  recordedText: { fontSize: 16, color: '#10B981', fontWeight: '600' },
+  recordedInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1
+  },
+  recordedText: { fontSize: 14, color: '#10B981', fontWeight: '600' },
+  recordedActions: {
+    flexDirection: 'row',
+    gap: 8
+  },
+  recordedActionButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  playButton: {
+    backgroundColor: '#3B82F6'
+  },
+  reRecordButton: {
+    backgroundColor: '#F59E0B'
+  },
   submitButton: {
     backgroundColor: '#F59E0B',
     borderRadius: 10,
