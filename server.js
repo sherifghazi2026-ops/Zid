@@ -8,16 +8,19 @@ app.use(express.urlencoded({ extended: true }));
 
 // ==================== إعدادات بوت الطلبات ====================
 const TELEGRAM_TOKEN = "8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A";
+const IRONING_BOT_TOKEN = "8216174777:AAERldfUvyWcDsXWPHLrnvz4bmmkcQiTzus";
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
+const IRONING_API = `https://api.telegram.org/bot${IRONING_BOT_TOKEN}`;
 const DRIVER_CHANNEL_ID = "1814331589";
 const ADMIN_IDS = [1814331589];
 
 let orders = [];
-let driverSessions = {}; // لكل مندوب جلسة خاصة فيه
+let driverSessions = {};
 
 // ==================== دوال مساعدة ====================
-const sendToTelegram = async (chatId, message, keyboard = null) => {
+const sendToTelegram = async (chatId, message, keyboard = null, botType = 'main') => {
   try {
+    const api = botType === 'ironing' ? IRONING_API : TELEGRAM_API;
     const payload = {
       chat_id: chatId,
       text: message,
@@ -30,7 +33,7 @@ const sendToTelegram = async (chatId, message, keyboard = null) => {
       });
     }
     
-    const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
+    const response = await fetch(`${api}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -42,8 +45,9 @@ const sendToTelegram = async (chatId, message, keyboard = null) => {
   }
 };
 
-const editTelegramMessage = async (chatId, messageId, newText, keyboard) => {
+const editTelegramMessage = async (chatId, messageId, newText, keyboard, botType = 'main') => {
   try {
+    const api = botType === 'ironing' ? IRONING_API : TELEGRAM_API;
     const payload = {
       chat_id: chatId,
       message_id: messageId,
@@ -57,7 +61,7 @@ const editTelegramMessage = async (chatId, messageId, newText, keyboard) => {
       payload.reply_markup = JSON.stringify({ inline_keyboard: [] });
     }
     
-    await fetch(`${TELEGRAM_API}/editMessageText`, {
+    await fetch(`${api}/editMessageText`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -138,7 +142,7 @@ app.get('/active-orders', (req, res) => {
 app.post('/send-order', async (req, res) => {
   console.log('📩 طلب جديد:', req.body);
   
-  const { phone, address, location, items, serviceName = 'سوبر ماركت', voiceUrl } = req.body;
+  const { phone, address, location, items, serviceName = 'سوبر ماركت', voiceUrl, totalPrice } = req.body;
   const orderId = 'ORD-' + Math.floor(Math.random() * 1000000);
   
   const newOrder = {
@@ -153,7 +157,7 @@ app.post('/send-order', async (req, res) => {
     driverPhone: null,
     itemsPrice: null,
     deliveryPrice: null,
-    totalPrice: null,
+    totalPrice: totalPrice || null,
     messageId: null,
     voiceUrl: voiceUrl || null,
     acceptedBy: null
@@ -167,29 +171,40 @@ app.post('/send-order', async (req, res) => {
     ]
   ];
   
-  const itemsList = Array.isArray(items) ? items.join('، ') : (items || 'طلب بدون تفاصيل');
+  const itemsList = Array.isArray(items) ? items.join('\n') : (items || 'طلب بدون تفاصيل');
+  
+  // اختيار البوت المناسب حسب نوع الخدمة
+  const botType = serviceName === 'مكوجي' ? 'ironing' : 'main';
+  const chatId = serviceName === 'مكوجي' ? DRIVER_CHANNEL_ID : DRIVER_CHANNEL_ID;
+  
   let message = 
-    `🆕 <b>طلب جديد في انتظار مندوب</b>\n` +
+    `🆕 <b>طلب جديد - ${serviceName}</b>\n` +
     `──────────────────\n\n` +
     `👤 <b>معلومات العميل:</b>\n` +
     `📞 ${phone}\n` +
     `📍 ${address || 'غير محدد'}\n` +
     (location ? `📍 مشاركة الموقع متاحة\n` : '') +
-    `🛒 <b>المنتجات المطلوبة:</b>\n` +
+    `📦 <b>تفاصيل الطلب:</b>\n` +
     `──────────────────\n` +
     `${itemsList}\n` +
-    `──────────────────\n` +
-    `🔻 <b>الحالة:</b> في انتظار مندوب\n` +
+    `──────────────────\n`;
+  
+  if (totalPrice) {
+    message += `💰 <b>الإجمالي:</b> ${totalPrice} ج\n`;
+  }
+  
+  message += `🔻 <b>الحالة:</b> في انتظار مندوب\n` +
     `🆔 رقم الطلب: <code>${orderId}</code>`;
   
   if (voiceUrl) {
     message += `\n\n🎤 <b>تسجيل صوتي مرفق مع الطلب</b>`;
   }
   
-  const result = await sendToTelegram(DRIVER_CHANNEL_ID, message, keyboard);
+  const result = await sendToTelegram(chatId, message, keyboard, botType);
   
   if (result && result.ok) {
     newOrder.messageId = result.result.message_id;
+    newOrder.botType = botType;
   }
   
   res.json({ success: true, orderId });
@@ -199,7 +214,6 @@ app.post('/send-order', async (req, res) => {
 app.post('/webhook', async (req, res) => {
   const update = req.body;
   
-  // ===== معالجة الأزرار =====
   if (update.callback_query) {
     const callback = update.callback_query;
     const data = callback.data;
@@ -234,7 +248,6 @@ app.post('/webhook', async (req, res) => {
     // ===== قبول الطلب =====
     if (action === 'accept') {
       if (!order.acceptedBy) {
-        // تسجيل المندوب
         order.acceptedBy = {
           id: driverId,
           name: driverName,
@@ -242,7 +255,6 @@ app.post('/webhook', async (req, res) => {
         };
         order.status = 'جديد';
         
-        // تحديث الرسالة
         let newText = messageText;
         newText = newText.replace(
           /🔻 <b>الحالة:<\/b> في انتظار مندوب/, 
@@ -250,21 +262,22 @@ app.post('/webhook', async (req, res) => {
         );
         newText += `\n\n✅ تم قبول الطلب بواسطة ${driverName}`;
         
-        await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, []);
+        await editTelegramMessage(chatId, messageId, newText, [], order.botType);
         
-        // إنشاء جلسة للمندوب لبدء إدخال البيانات
         driverSessions[driverId] = {
           orderId: orderId,
           step: 'waiting_phone',
           messageId: messageId,
-          currentText: newText
+          currentText: newText,
+          botType: order.botType
         };
         
-        // إرسال أول سؤال
         await sendToTelegram(chatId, 
           `📱 مرحباً ${driverName}\n` +
           `لقد قبلت الطلب ${orderId}\n\n` +
-          `الرجاء إرسال رقم موبايلك للتواصل مع العميل:`
+          `الرجاء إرسال رقم موبايلك للتواصل مع العميل:`,
+          null,
+          order.botType
         );
         
         await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
@@ -294,7 +307,95 @@ app.post('/webhook', async (req, res) => {
       }
     }
     
-    // ===== أزرار الحالة =====
+    // ===== إدخال رقم المندوب =====
+    else if (action === 'phone') {
+      await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          callback_query_id: callback.id,
+          text: '📝 اكتب رقم موبايلك في المحادثة',
+          show_alert: true
+        })
+      });
+      
+      await sendToTelegram(chatId, 
+        `📱 مرحباً ${driverName}\n` +
+        `الرجاء كتابة رقم موبايلك للتواصل مع العميل على الطلب ${orderId}\n` +
+        `(مثال: 01234567890)`,
+        null,
+        order.botType
+      );
+      
+      driverSessions[driverId] = { 
+        orderId, 
+        step: 'waiting_phone',
+        messageId: messageId,
+        currentText: messageText,
+        driverId: driverId,
+        botType: order.botType
+      };
+    }
+    
+    // ===== إدخال سعر الطلبات =====
+    else if (action === 'items_price') {
+      await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          callback_query_id: callback.id,
+          text: '💰 اكتب سعر الطلبات',
+          show_alert: true
+        })
+      });
+      
+      await sendToTelegram(chatId, 
+        `💰 <b>إدخال سعر الطلبات للطلب ${orderId}</b>\n\n` +
+        `الرجاء كتابة سعر المنتجات فقط (مثال: 300)`,
+        null,
+        order.botType
+      );
+      
+      driverSessions[driverId] = { 
+        orderId, 
+        step: 'waiting_items_price',
+        messageId: messageId,
+        currentText: messageText,
+        driverId: driverId,
+        botType: order.botType
+      };
+    }
+    
+    // ===== إدخال خدمة التوصيل =====
+    else if (action === 'delivery_price') {
+      await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          callback_query_id: callback.id,
+          text: '🚚 اكتب سعر التوصيل',
+          show_alert: true
+        })
+      });
+      
+      await sendToTelegram(chatId, 
+        `🚚 <b>إدخال سعر التوصيل للطلب ${orderId}</b>\n\n` +
+        `الرجاء كتابة سعر خدمة التوصيل (مثال: 20)`,
+        null,
+        order.botType
+      );
+      
+      driverSessions[driverId] = { 
+        orderId, 
+        step: 'waiting_delivery_price',
+        messageId: messageId,
+        currentText: messageText,
+        driverId: driverId,
+        botType: order.botType
+      };
+    }
+    
+    // ===== تغيير الحالة =====
     else if (action === 'status') {
       if (!order.acceptedBy || order.acceptedBy.id !== driverId) {
         await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
@@ -336,7 +437,7 @@ app.post('/webhook', async (req, res) => {
       
       newText = newText.replace(/🔻 <b>الحالة:<\/b> [^\n]+/, `🔻 <b>الحالة:</b> ${newStatus}`);
       
-      await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, newKeyboard);
+      await editTelegramMessage(chatId, messageId, newText, newKeyboard, order.botType);
       
       await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
         method: 'POST',
@@ -364,8 +465,11 @@ app.post('/webhook', async (req, res) => {
     
     // ===== عرض العنوان =====
     else if (action === 'address') {
-      const itemsList = Array.isArray(order.items) ? order.items.join('، ') : order.items;
-      let text = `📍 ${order.address}\n🛒 ${itemsList}`;
+      const itemsList = Array.isArray(order.items) ? order.items.join('\n') : order.items;
+      let text = `📍 ${order.address}\n📦 ${itemsList}`;
+      if (order.totalPrice) {
+        text += `\n💰 الإجمالي: ${order.totalPrice} ج`;
+      }
       if (order.location) {
         text += `\n\n🔗 رابط الموقع: ${order.location}`;
       }
@@ -382,7 +486,7 @@ app.post('/webhook', async (req, res) => {
     }
   }
   
-  // ===== معالجة الرسائل النصية (الإجابات) =====
+  // ===== معالجة الرسائل النصية =====
   else if (update.message) {
     const chatId = update.message.chat.id;
     const text = update.message.text;
@@ -390,91 +494,79 @@ app.post('/webhook', async (req, res) => {
     
     console.log(`📨 رسالة جديدة من ${chatId}: ${text}`);
     
-    // التحقق من وجود جلسة نشطة للمندوب
     if (driverSessions[chatId]) {
       const session = driverSessions[chatId];
       const order = orders.find(o => o.id === session.orderId);
       
       if (!order) {
-        await sendToTelegram(chatId, '❌ الطلب غير موجود');
+        await sendToTelegram(chatId, '❌ الطلب غير موجود', null, session.botType);
         delete driverSessions[chatId];
         return res.sendStatus(200);
       }
       
-      // التأكد أن المندوب هو نفسه
       if (order.acceptedBy && order.acceptedBy.id !== chatId) {
-        await sendToTelegram(chatId, '❌ أنت لست المندوب المسؤول');
+        await sendToTelegram(chatId, '❌ أنت لست المندوب المسؤول', null, session.botType);
         delete driverSessions[chatId];
         return res.sendStatus(200);
       }
       
-      // ===== مرحلة إدخال رقم الموبايل =====
       if (session.step === 'waiting_phone') {
-        // حفظ الرقم
         order.driverPhone = text;
         
-        // تحديث الرسالة في القناة
         let newText = session.currentText;
         newText += `\n📱 رقم المندوب: ${text}`;
-        await editTelegramMessage(DRIVER_CHANNEL_ID, session.messageId, newText, []);
+        await editTelegramMessage(chatId, session.messageId, newText, [], session.botType);
         
-        // الانتقال للمرحلة التالية
         session.step = 'waiting_items_price';
         session.currentText = newText;
         
-        // طرح السؤال التالي
         await sendToTelegram(chatId, 
           `✅ تم حفظ الرقم!\n\n` +
-          `💰 الآن أرسل سعر الطلبات (مثال: 300):`
+          `💰 الآن أرسل سعر الطلبات (مثال: 300):`,
+          null,
+          session.botType
         );
       }
       
-      // ===== مرحلة إدخال سعر الطلبات =====
       else if (session.step === 'waiting_items_price') {
         const price = parseInt(text);
         if (isNaN(price)) {
-          await sendToTelegram(chatId, '❌ الرجاء إدخال رقم صحيح');
+          await sendToTelegram(chatId, '❌ الرجاء إدخال رقم صحيح', null, session.botType);
           return res.sendStatus(200);
         }
         
-        // حفظ السعر
         order.itemsPrice = price;
         
-        // تحديث الرسالة في القناة
         let newText = session.currentText;
         newText += `\n💰 سعر الطلبات: ${price} ج`;
-        await editTelegramMessage(DRIVER_CHANNEL_ID, session.messageId, newText, []);
+        await editTelegramMessage(chatId, session.messageId, newText, [], session.botType);
         
-        // الانتقال للمرحلة التالية
         session.step = 'waiting_delivery_price';
         session.currentText = newText;
         
-        // طرح السؤال التالي
         await sendToTelegram(chatId, 
           `✅ تم حفظ سعر الطلبات!\n\n` +
-          `🚚 الآن أرسل سعر التوصيل (مثال: 20):`
+          `🚚 الآن أرسل سعر التوصيل (مثال: 20):`,
+          null,
+          session.botType
         );
       }
       
-      // ===== مرحلة إدخال سعر التوصيل =====
       else if (session.step === 'waiting_delivery_price') {
         const price = parseInt(text);
         if (isNaN(price)) {
-          await sendToTelegram(chatId, '❌ الرجاء إدخال رقم صحيح');
+          await sendToTelegram(chatId, '❌ الرجاء إدخال رقم صحيح', null, session.botType);
           return res.sendStatus(200);
         }
         
-        // حفظ سعر التوصيل والإجمالي
         order.deliveryPrice = price;
         order.totalPrice = (order.itemsPrice || 0) + price;
         order.status = 'جاري تجهيز الطلب';
         
-        // تحديث الرسالة في القناة
         let newText = session.currentText;
         newText += `\n🚚 خدمة التوصيل: ${price} ج`;
         newText += `\n💰 الإجمالي الكلي: ${order.totalPrice} ج`;
         
-        // إضافة أزرار الحالة
         const keyboard = [
           [{ text: '🔵 جاري التوصيل', callback_data: `status_${order.id}_جاري التوصيل` }],
           [{ text: '🟢 تم التوصيل', callback_data: `status_${order.id}_تم التوصيل` }],
@@ -484,21 +576,20 @@ app.post('/webhook', async (req, res) => {
           ]
         ];
         
-        await editTelegramMessage(DRIVER_CHANNEL_ID, session.messageId, newText, keyboard);
+        await editTelegramMessage(chatId, session.messageId, newText, keyboard, session.botType);
         
-        // إنهاء الجلسة
         delete driverSessions[chatId];
         
-        // إرسال رسالة إكمال
         await sendToTelegram(chatId, 
           `✅ <b>تم إكمال جميع البيانات!</b>\n\n` +
           `📊 إجمالي الفاتورة: ${order.totalPrice} ج\n` +
-          `🚚 يمكنك الآن متابعة حالة الطلب من الأزرار.`
+          `🚚 يمكنك الآن متابعة حالة الطلب من الأزرار.`,
+          null,
+          session.botType
         );
       }
     }
     
-    // ===== أوامر الأدمن =====
     else if (isAdmin && text) {
       
       if (text.startsWith('/bill ')) {
@@ -510,7 +601,8 @@ app.post('/webhook', async (req, res) => {
             `🧾 <b>فاتورة الطلب ${orderId}</b>\n\n` +
             `📞 العميل: ${order.phone}\n` +
             `📍 العنوان: ${order.address}\n` +
-            `🛒 المنتجات: ${Array.isArray(order.items) ? order.items.join('، ') : order.items}\n\n` +
+            `📦 الخدمة: ${order.serviceName}\n` +
+            `🛒 التفاصيل: ${Array.isArray(order.items) ? order.items.join('\n') : order.items}\n\n` +
             `💰 سعر الطلبات: ${order.itemsPrice || 0} ج\n` +
             `🚚 خدمة التوصيل: ${order.deliveryPrice || 0} ج\n` +
             `💵 الإجمالي: ${order.totalPrice || 0} ج\n` +
@@ -529,7 +621,8 @@ app.post('/webhook', async (req, res) => {
           orders.slice(-10).reverse().forEach((order, index) => {
             response += `${index + 1}. 🆔 <code>${order.id}</code>\n`;
             response += `   📞 ${order.phone}\n`;
-            response += `   💰 ${order.totalPrice || 0} ج (طلبات: ${order.itemsPrice || 0} + توصيل: ${order.deliveryPrice || 0})\n`;
+            response += `   📦 ${order.serviceName}\n`;
+            response += `   💰 ${order.totalPrice || 0} ج\n`;
             response += `   🔻 ${order.status}\n`;
             response += `   🕐 ${new Date(order.date).toLocaleString('ar-EG')}\n\n`;
           });
@@ -544,7 +637,7 @@ app.post('/webhook', async (req, res) => {
         if (index !== -1) {
           const order = orders[index];
           if (order.messageId) {
-            await editTelegramMessage(DRIVER_CHANNEL_ID, order.messageId, '❌ تم إلغاء الطلب', []);
+            await editTelegramMessage(DRIVER_CHANNEL_ID, order.messageId, '❌ تم إلغاء الطلب', [], order.botType);
           }
           orders.splice(index, 1);
           await sendToTelegram(chatId, `✅ تم مسح الطلب <code>${orderId}</code>`);
@@ -561,10 +654,6 @@ app.post('/webhook', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 بوت الطلبات شغال على بورت ${PORT}`);
-  console.log(`📋 نظام إدخال البيانات بالأسئلة:`);
-  console.log(`   1. قبول الطلب (زر)`);
-  console.log(`   2. إرسال رقم الموبايل (نص)`);
-  console.log(`   3. إرسال سعر الطلبات (نص)`);
-  console.log(`   4. إرسال سعر التوصيل (نص)`);
-  console.log(`   5. أزرار الحالة تظهر تلقائياً`);
+  console.log(`🤖 بوت رئيسي: ${TELEGRAM_TOKEN}`);
+  console.log(`🤖 بوت مكوجي: ${IRONING_BOT_TOKEN}`);
 });
