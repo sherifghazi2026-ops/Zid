@@ -42,22 +42,6 @@ const sendToTelegram = async (chatId, message, keyboard = null) => {
   }
 };
 
-const sendVoiceToTelegram = async (chatId, voiceUrl) => {
-  try {
-    const response = await fetch(`${TELEGRAM_API}/sendVoice`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        voice: voiceUrl
-      })
-    });
-    return await response.json();
-  } catch (error) {
-    console.error('خطأ في إرسال الصوت:', error);
-  }
-};
-
 const editTelegramMessage = async (chatId, messageId, newText, keyboard) => {
   try {
     const payload = {
@@ -206,13 +190,6 @@ app.post('/send-order', async (req, res) => {
   
   if (result && result.ok) {
     newOrder.messageId = result.result.message_id;
-    
-    if (voiceUrl) {
-      const voiceResult = await sendVoiceToTelegram(DRIVER_CHANNEL_ID, voiceUrl);
-      if (voiceResult && voiceResult.ok) {
-        console.log(`✅ تم إرسال التسجيل الصوتي للطلب ${orderId}`);
-      }
-    }
   }
   
   res.json({ success: true, orderId });
@@ -326,7 +303,8 @@ app.post('/webhook', async (req, res) => {
         orderId, 
         step: 'waiting_phone',
         messageId: messageId,
-        currentText: messageText
+        currentText: messageText,
+        driverId: driverId
       };
     }
     
@@ -351,7 +329,8 @@ app.post('/webhook', async (req, res) => {
         orderId, 
         step: 'waiting_items_price',
         messageId: messageId,
-        currentText: messageText
+        currentText: messageText,
+        driverId: driverId
       };
     }
     
@@ -376,7 +355,8 @@ app.post('/webhook', async (req, res) => {
         orderId, 
         step: 'waiting_delivery_price',
         messageId: messageId,
-        currentText: messageText
+        currentText: messageText,
+        driverId: driverId
       };
     }
     
@@ -401,17 +381,7 @@ app.post('/webhook', async (req, res) => {
       let newKeyboard = [];
       let newText = messageText;
       
-      if (newStatus === 'جاري تجهيز الطلب') {
-        newKeyboard = [
-          [{ text: '🔵 جاري التوصيل', callback_data: `status_${orderId}_جاري التوصيل` }],
-          [{ text: '🟢 تم التوصيل', callback_data: `status_${orderId}_تم التوصيل` }],
-          [
-            { text: '📞 اتصال', callback_data: `call_${orderId}` },
-            { text: '📍 العنوان', callback_data: `address_${orderId}` }
-          ]
-        ];
-      }
-      else if (newStatus === 'جاري التوصيل') {
+      if (newStatus === 'جاري التوصيل') {
         newKeyboard = [
           [{ text: '🟢 تم التوصيل', callback_data: `status_${orderId}_تم التوصيل` }],
           [
@@ -485,7 +455,7 @@ app.post('/webhook', async (req, res) => {
     
     // لو المندوب في انتظار إدخال رقمه
     if (pendingOrders[chatId] && pendingOrders[chatId].step === 'waiting_phone') {
-      const { orderId, messageId, currentText } = pendingOrders[chatId];
+      const { orderId, messageId, currentText, driverId } = pendingOrders[chatId];
       const order = orders.find(o => o.id === orderId);
       
       if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
@@ -507,13 +477,20 @@ app.post('/webhook', async (req, res) => {
         
         await sendToTelegram(chatId, '✅ تم حفظ الرقم! الآن أدخل سعر الطلبات');
         
-        delete pendingOrders[chatId];
+        // نضيف البيانات الجديدة لـ pendingOrders للمرحلة الجاية
+        pendingOrders[chatId] = { 
+          orderId, 
+          step: 'waiting_items_price',
+          messageId: messageId,
+          currentText: newText,
+          driverId: driverId
+        };
       }
     }
     
     // لو المندوب في انتظار إدخال سعر الطلبات
     else if (pendingOrders[chatId] && pendingOrders[chatId].step === 'waiting_items_price') {
-      const { orderId, messageId, currentText } = pendingOrders[chatId];
+      const { orderId, messageId, currentText, driverId } = pendingOrders[chatId];
       const order = orders.find(o => o.id === orderId);
       
       if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
@@ -535,7 +512,14 @@ app.post('/webhook', async (req, res) => {
           
           await sendToTelegram(chatId, '✅ تم حفظ سعر الطلبات! الآن أدخل سعر التوصيل');
           
-          delete pendingOrders[chatId];
+          // نضيف البيانات الجديدة لـ pendingOrders للمرحلة الجاية
+          pendingOrders[chatId] = { 
+            orderId, 
+            step: 'waiting_delivery_price',
+            messageId: messageId,
+            currentText: newText,
+            driverId: driverId
+          };
         } else {
           await sendToTelegram(chatId, '❌ الرجاء إدخال رقم صحيح');
         }
@@ -544,7 +528,7 @@ app.post('/webhook', async (req, res) => {
     
     // لو المندوب في انتظار إدخال سعر التوصيل
     else if (pendingOrders[chatId] && pendingOrders[chatId].step === 'waiting_delivery_price') {
-      const { orderId, messageId, currentText } = pendingOrders[chatId];
+      const { orderId, messageId, currentText, driverId } = pendingOrders[chatId];
       const order = orders.find(o => o.id === orderId);
       
       if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
@@ -560,7 +544,6 @@ app.post('/webhook', async (req, res) => {
           
           // أزرار الحالة
           const keyboard = [
-            [{ text: '🟡 جاري تجهيز الطلب', callback_data: `status_${orderId}_جاري تجهيز الطلب` }],
             [{ text: '🔵 جاري التوصيل', callback_data: `status_${orderId}_جاري التوصيل` }],
             [{ text: '🟢 تم التوصيل', callback_data: `status_${orderId}_تم التوصيل` }],
             [
@@ -583,7 +566,6 @@ app.post('/webhook', async (req, res) => {
     // أوامر المسح والعرض للأدمن
     else if (isAdmin && text) {
       
-      // عرض فاتورة محددة
       if (text.startsWith('/bill ')) {
         const orderId = text.replace('/bill ', '').trim();
         const order = orders.find(o => o.id === orderId);
@@ -604,7 +586,6 @@ app.post('/webhook', async (req, res) => {
         }
       }
       
-      // عرض كل الفواتير
       else if (text === '/all_bills') {
         if (orders.length === 0) {
           await sendToTelegram(chatId, '📭 لا توجد طلبات');
@@ -645,7 +626,4 @@ app.post('/webhook', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 بوت الطلبات شغال على بورت ${PORT}`);
-  console.log(`📋 أوامر الأدمن:`);
-  console.log(`   - /bill ORDER_ID: عرض فاتورة محددة`);
-  console.log(`   - /all_bills: عرض كل الفواتير`);
 });
