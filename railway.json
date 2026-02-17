@@ -3,7 +3,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "node server.js",
+    "startCommand": "node telegram-bot.js",
     "healthcheckPath": "/",
     "healthcheckTimeout": 300
   }
