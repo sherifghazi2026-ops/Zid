@@ -51,6 +51,40 @@ const sendToTelegram = async (chatId, message, keyboard = null, botType = 'main'
   }
 };
 
+// دالة إرسال الصوت
+const sendVoiceToTelegram = async (chatId, voiceUrl, botType = 'main') => {
+  try {
+    // نتأكد من أن الرابط كامل
+    let fullUrl = voiceUrl;
+    if (!voiceUrl.startsWith('http')) {
+      fullUrl = `https://zayedid-production.up.railway.app${voiceUrl}`;
+    }
+    
+    console.log(`📤 إرسال صوت للبوت ${botType}: ${fullUrl}`);
+    
+    const payload = {
+      chat_id: chatId,
+      voice: fullUrl
+    };
+    
+    const response = await fetch(`${BOTS[botType].api}/sendVoice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    const result = await response.json();
+    if (result.ok) {
+      console.log('✅ تم إرسال الصوت بنجاح');
+    } else {
+      console.error('❌ فشل إرسال الصوت:', result);
+    }
+    return result;
+  } catch (error) {
+    console.error(`خطأ في إرسال صوت للبوت ${botType}:`, error);
+  }
+};
+
 const editTelegramMessage = async (chatId, messageId, newText, keyboard, botType = 'main') => {
   try {
     const payload = {
@@ -102,7 +136,12 @@ app.post('/upload-voice', async (req, res) => {
     const baseUrl = process.env.RAILWAY_STATIC_URL || `https://zayedid-production.up.railway.app`;
     const fileUrl = `${baseUrl}/uploads/${fileName}`;
     
-    res.json({ success: true, url: fileUrl });
+    console.log('🔗 رابط الملف الصوتي:', fileUrl);
+    
+    res.json({
+      success: true,
+      url: fileUrl
+    });
   } catch (error) {
     console.error('❌ خطأ في رفع الصوت:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -211,11 +250,20 @@ app.post('/send-order', async (req, res) => {
     message += `\n\n🎤 <b>تسجيل صوتي مرفق مع الطلب</b>`;
   }
   
+  // إرسال الرسالة
   const result = await sendToTelegram(DRIVER_CHANNEL_ID, message, keyboard, botType);
   
   if (result && result.ok) {
     newOrder.messageId = result.result.message_id;
     newOrder.botType = botType;
+    
+    // إذا في ملف صوتي، نرسله بعد الرسالة
+    if (voiceUrl) {
+      // ننتظر 1 ثانية عشان الرسالة توصل الأول
+      setTimeout(async () => {
+        await sendVoiceToTelegram(DRIVER_CHANNEL_ID, voiceUrl, botType);
+      }, 1000);
+    }
   }
   
   res.json({ success: true, orderId });
@@ -379,41 +427,10 @@ app.post('/webhook', async (req, res) => {
       let newKeyboard = [];
       let newText = messageText;
       
-      // تحديد الأزرار حسب الحالة الجديدة ونوع الخدمة
       if (order.serviceName === 'مكوجي') {
-        // حالات المكوجي
         if (newStatus === 'طلبك تحت التنفيذ') {
           newKeyboard = [
             [{ text: '🟣 جاري التوصيل', callback_data: `status_${orderId}_جاري التوصيل` }],
-            [{ text: '🟢 تم التوصيل', callback_data: `status_${orderId}_تم التوصيل` }],
-            [
-              { text: '📞 اتصال', callback_data: `call_${orderId}` },
-              { text: '📍 العنوان', callback_data: `address_${orderId}` }
-            ]
-          ];
-        }
-        else if (newStatus === 'جاري التوصيل') {
-          newKeyboard = [
-            [{ text: '🟢 تم التوصيل', callback_data: `status_${orderId}_تم التوصيل` }],
-            [
-              { text: '📞 اتصال', callback_data: `call_${orderId}` },
-              { text: '📍 العنوان', callback_data: `address_${orderId}` }
-            ]
-          ];
-        }
-        else if (newStatus === 'تم التوصيل') {
-          newKeyboard = [
-            [
-              { text: '📞 اتصال', callback_data: `call_${orderId}` },
-              { text: '📍 العنوان', callback_data: `address_${orderId}` }
-            ]
-          ];
-        }
-      } else {
-        // حالات الخدمات العامة
-        if (newStatus === 'جديد') {
-          newKeyboard = [
-            [{ text: '🔵 جاري التوصيل', callback_data: `status_${orderId}_جاري التوصيل` }],
             [{ text: '🟢 تم التوصيل', callback_data: `status_${orderId}_تم التوصيل` }],
             [
               { text: '📞 اتصال', callback_data: `call_${orderId}` },
@@ -522,9 +539,7 @@ app.post('/webhook', async (req, res) => {
         newText += `\n📱 رقم المندوب: ${text}`;
         await editTelegramMessage(chatId, session.messageId, newText, [], session.botType);
         
-        // بعد الرقم، ننتقل للمرحلة التالية حسب نوع الخدمة
         if (order.serviceName === 'مكوجي') {
-          // المكوجي مافيش فاتورة، ننتقل مباشرة للأزرار
           order.status = 'طلبك تحت التنفيذ';
           
           const keyboard = [
@@ -549,7 +564,6 @@ app.post('/webhook', async (req, res) => {
           
           delete driverSessions[chatId];
         } else {
-          // الخدمات العامة - نطلب السعر
           session.step = 'waiting_items_price';
           session.currentText = newText;
           
