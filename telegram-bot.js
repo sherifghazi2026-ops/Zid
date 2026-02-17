@@ -77,6 +77,7 @@ app.get('/routes', (req, res) => {
       '/upload-voice (POST)',
       '/voices/:filename (GET)',
       '/order-status/:orderId (GET)',
+      '/active-orders (GET)',
       '/webhook (GET for check, POST for updates)',
       '/routes (GET)'
     ]
@@ -92,7 +93,7 @@ app.get('/webhook', (req, res) => {
 app.get('/order-status/:orderId', (req, res) => {
   const { orderId } = req.params;
   const order = orders.find(o => o.id === orderId);
-  
+
   if (order) {
     res.json({ success: true, status: order.status, orderId });
   } else {
@@ -100,27 +101,46 @@ app.get('/order-status/:orderId', (req, res) => {
   }
 });
 
+// ==================== جلب الطلبات النشطة ====================
+app.get('/active-orders', (req, res) => {
+  const activeOrders = orders.filter(o => o.status !== 'تم التوصيل');
+  
+  const formattedOrders = activeOrders.map(o => ({
+    id: o.id,
+    phone: o.phone,
+    address: o.address,
+    serviceName: o.serviceName || 'طلب',
+    status: o.status,
+    date: o.date
+  }));
+
+  res.json({ 
+    success: true, 
+    orders: formattedOrders
+  });
+});
+
 // ==================== رفع الملفات الصوتية ====================
 app.post('/upload-voice', async (req, res) => {
   try {
     const { audio } = req.body;
-    
+
     if (!audio) {
       return res.status(400).json({ success: false, error: 'لا يوجد ملف صوتي' });
     }
-    
+
     console.log('📥 تم استقبال ملف صوتي، حجمه:', Math.floor(audio.length / 1024), 'KB');
-    
+
     const audioBuffer = Buffer.from(audio, 'base64');
     const fileName = `voice-${Date.now()}.ogg`;
     const filePath = `/tmp/${fileName}`;
-    
+
     fs.writeFileSync(filePath, audioBuffer);
-    
+
     const fileUrl = `https://zayedid-production.up.railway.app/voices/${fileName}`;
-    
+
     console.log('🔗 رابط الملف الصوتي:', fileUrl);
-    
+
     res.json({ success: true, url: fileUrl });
   } catch (error) {
     console.error('❌ خطأ في رفع الصوت:', error);
@@ -132,7 +152,7 @@ app.post('/upload-voice', async (req, res) => {
 app.get('/voices/:filename', (req, res) => {
   const filename = req.params.filename;
   const filePath = `/tmp/${filename}`;
-  
+
   if (fs.existsSync(filePath)) {
     res.sendFile(filePath);
   } else {
@@ -167,7 +187,7 @@ app.post('/send-order', async (req, res) => {
 
   orders.push(newOrder);
 
-  const message = 
+  const message =
     `🆕 <b>طلب جديد من Zayed-ID</b>\n` +
     `──────────────────\n\n` +
     `👤 <b>معلومات العميل:</b>\n` +
@@ -206,7 +226,7 @@ app.post('/send-order', async (req, res) => {
   if (result.ok) {
     newOrder.messageId = result.result.message_id;
     console.log(`✅ تم إرسال الطلب ${orderId} إلى القناة مع أزرار`);
-    
+
     if (voiceUrl) {
       const voiceResult = await sendVoice(DRIVER_CHANNEL_ID, voiceUrl);
       if (voiceResult.ok) {
@@ -345,6 +365,7 @@ app.listen(PORT, () => {
   console.log(`🎤 مسار رفع الصوت: /upload-voice`);
   console.log(`🎧 مسار الملفات الصوتية: /voices/:filename`);
   console.log(`📊 مسار حالة الطلب: /order-status/:orderId`);
+  console.log(`📋 مسار الطلبات النشطة: /active-orders`);
   console.log(`🔍 مسار فحص المسارات: /routes`);
   console.log(`🤖 مسار الويب هوك: /webhook (GET for check, POST for updates)`);
 });
