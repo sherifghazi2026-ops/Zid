@@ -214,7 +214,7 @@ app.post('/webhook', async (req, res) => {
     const parts = data.split('_');
     const action = parts[0];
     const orderId = parts[1];
-    const param = parts.slice(2).join('_'); // عشان لو في أسماء طويلة زي "جاري التوصيل"
+    const param = parts.slice(2).join('_');
     
     console.log(`📦 التحليل: action=${action}, orderId=${orderId}, param=${param}`);
     
@@ -312,11 +312,27 @@ app.post('/webhook', async (req, res) => {
         currentText: messageText,
         driverId: driverId
       };
+      
+      console.log(`📝 تم بدء انتظار الرقم للطلب ${orderId} من المندوب ${driverId}`);
     }
     
     // ===== إدخال سعر الطلبات =====
     else if (action === 'items_price') {
-      console.log(`💰 طلب إدخال سعر الطلبات للطلب ${orderId}`);
+      console.log(`💰 طلب إدخال سعر الطلبات للطلب ${orderId} من المندوب ${driverId}`);
+      
+      // التحقق من أن المندوب هو نفسه
+      if (order.acceptedBy && order.acceptedBy.id !== driverId) {
+        await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            callback_query_id: callback.id,
+            text: '❌ أنت لست المندوب المسؤول',
+            show_alert: true
+          })
+        });
+        return res.sendStatus(200);
+      }
       
       await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
         method: 'POST',
@@ -340,11 +356,27 @@ app.post('/webhook', async (req, res) => {
         currentText: messageText,
         driverId: driverId
       };
+      
+      console.log(`💰 تم بدء انتظار سعر الطلبات للطلب ${orderId}`);
     }
     
     // ===== إدخال خدمة التوصيل =====
     else if (action === 'delivery_price') {
-      console.log(`🚚 طلب إدخال سعر التوصيل للطلب ${orderId}`);
+      console.log(`🚚 طلب إدخال سعر التوصيل للطلب ${orderId} من المندوب ${driverId}`);
+      
+      // التحقق من أن المندوب هو نفسه
+      if (order.acceptedBy && order.acceptedBy.id !== driverId) {
+        await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            callback_query_id: callback.id,
+            text: '❌ أنت لست المندوب المسؤول',
+            show_alert: true
+          })
+        });
+        return res.sendStatus(200);
+      }
       
       await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
         method: 'POST',
@@ -368,6 +400,8 @@ app.post('/webhook', async (req, res) => {
         currentText: messageText,
         driverId: driverId
       };
+      
+      console.log(`🚚 تم بدء انتظار سعر التوصيل للطلب ${orderId}`);
     }
     
     // ===== تغيير الحالة =====
@@ -470,6 +504,8 @@ app.post('/webhook', async (req, res) => {
       const { orderId, messageId, currentText, driverId } = pendingOrders[chatId];
       const order = orders.find(o => o.id === orderId);
       
+      console.log(`📞 معالجة رقم للمندوب ${driverId} والطلب ${orderId}`);
+      
       if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
         order.driverPhone = text;
         
@@ -497,6 +533,8 @@ app.post('/webhook', async (req, res) => {
           currentText: newText,
           driverId: driverId
         };
+        
+        console.log(`💰 تم الترقية إلى مرحلة انتظار سعر الطلبات للطلب ${orderId}`);
       }
     }
     
@@ -504,6 +542,8 @@ app.post('/webhook', async (req, res) => {
     else if (pendingOrders[chatId] && pendingOrders[chatId].step === 'waiting_items_price') {
       const { orderId, messageId, currentText, driverId } = pendingOrders[chatId];
       const order = orders.find(o => o.id === orderId);
+      
+      console.log(`💰 معالجة سعر الطلبات للمندوب ${driverId} والطلب ${orderId}`);
       
       if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
         const price = parseInt(text);
@@ -532,6 +572,8 @@ app.post('/webhook', async (req, res) => {
             currentText: newText,
             driverId: driverId
           };
+          
+          console.log(`🚚 تم الترقية إلى مرحلة انتظار سعر التوصيل للطلب ${orderId}`);
         } else {
           await sendToTelegram(chatId, '❌ الرجاء إدخال رقم صحيح');
         }
@@ -542,6 +584,8 @@ app.post('/webhook', async (req, res) => {
     else if (pendingOrders[chatId] && pendingOrders[chatId].step === 'waiting_delivery_price') {
       const { orderId, messageId, currentText, driverId } = pendingOrders[chatId];
       const order = orders.find(o => o.id === orderId);
+      
+      console.log(`🚚 معالجة سعر التوصيل للمندوب ${driverId} والطلب ${orderId}`);
       
       if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
         const price = parseInt(text);
@@ -569,6 +613,7 @@ app.post('/webhook', async (req, res) => {
           await sendToTelegram(chatId, '✅ تم حفظ كل البيانات! يمكنك متابعة الطلب');
           
           delete pendingOrders[chatId];
+          console.log(`✅ اكتمل إدخال بيانات الطلب ${orderId}`);
         } else {
           await sendToTelegram(chatId, '❌ الرجاء إدخال رقم صحيح');
         }
