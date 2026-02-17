@@ -31,7 +31,9 @@ const fetchOrderStatusFromServer = async (orderId) => {
             driverPhone: order.driverPhone || null,
             items: order.items || [],
             address: order.address || 'غير محدد',
-            totalAmount: order.totalAmount || null
+            itemsPrice: order.itemsPrice,
+            deliveryPrice: order.deliveryPrice,
+            totalPrice: order.totalPrice
           };
         }
       }
@@ -56,7 +58,9 @@ const fetchOrderStatusFromStorage = async (orderId) => {
         driverPhone: order.driverPhone || null,
         items: order.items || [],
         address: order.address || 'غير محدد',
-        totalAmount: order.totalAmount || null
+        itemsPrice: order.itemsPrice,
+        deliveryPrice: order.deliveryPrice,
+        totalPrice: order.totalPrice
       } : null;
     }
   } catch (error) {
@@ -88,7 +92,9 @@ export default function OrderTracking({ visible, onClose, orderId }) {
   const [driverPhone, setDriverPhone] = useState(null);
   const [items, setItems] = useState([]);
   const [address, setAddress] = useState('');
-  const [totalAmount, setTotalAmount] = useState(null);
+  const [itemsPrice, setItemsPrice] = useState(null);
+  const [deliveryPrice, setDeliveryPrice] = useState(null);
+  const [totalPrice, setTotalPrice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showThankYou, setShowThankYou] = useState(false);
@@ -102,7 +108,6 @@ export default function OrderTracking({ visible, onClose, orderId }) {
   }, [visible, orderId]);
 
   useEffect(() => {
-    // لما يوصل لـ "تم التوصيل"، نظهر رسالة الشكر وبعدها نغلق
     if (status === 'تم التوصيل' && visible) {
       setShowThankYou(true);
       const timer = setTimeout(() => {
@@ -124,7 +129,9 @@ export default function OrderTracking({ visible, onClose, orderId }) {
       setDriverPhone(serverData.driverPhone);
       setItems(serverData.items || []);
       setAddress(serverData.address);
-      setTotalAmount(serverData.totalAmount);
+      setItemsPrice(serverData.itemsPrice);
+      setDeliveryPrice(serverData.deliveryPrice);
+      setTotalPrice(serverData.totalPrice);
     } else {
       const storageData = await fetchOrderStatusFromStorage(orderId);
       if (storageData) {
@@ -132,7 +139,9 @@ export default function OrderTracking({ visible, onClose, orderId }) {
         setDriverPhone(storageData.driverPhone);
         setItems(storageData.items || []);
         setAddress(storageData.address);
-        setTotalAmount(storageData.totalAmount);
+        setItemsPrice(storageData.itemsPrice);
+        setDeliveryPrice(storageData.deliveryPrice);
+        setTotalPrice(storageData.totalPrice);
       } else {
         setError('لا يمكن جلب الحالة');
       }
@@ -144,6 +153,7 @@ export default function OrderTracking({ visible, onClose, orderId }) {
   const getStatusIcon = () => {
     switch(status) {
       case 'جديد': return 'time-outline';
+      case 'جاري تجهيز الطلب': return 'construct-outline';
       case 'جاري التوصيل': return 'bicycle-outline';
       case 'تم التوصيل': return 'checkmark-done-circle-outline';
       default: return 'help-outline';
@@ -153,6 +163,7 @@ export default function OrderTracking({ visible, onClose, orderId }) {
   const getStatusColor = () => {
     switch(status) {
       case 'جديد': return '#F59E0B';
+      case 'جاري تجهيز الطلب': return '#F59E0B';
       case 'جاري التوصيل': return '#3B82F6';
       case 'تم التوصيل': return '#10B981';
       default: return '#6B7280';
@@ -162,9 +173,11 @@ export default function OrderTracking({ visible, onClose, orderId }) {
   const getStatusMessage = () => {
     switch(status) {
       case 'جديد':
-        return totalAmount 
-          ? `تم تجهيز طلبك بقيمة ${totalAmount} ج`
+        return totalPrice 
+          ? `تم تجهيز طلبك بقيمة ${totalPrice} ج`
           : 'سيتم إضافة السعر قريباً';
+      case 'جاري تجهيز الطلب':
+        return 'جاري تحضير الطلب';
       case 'جاري التوصيل':
         return 'المندوب في الطريق إليك 🚚';
       case 'تم التوصيل':
@@ -236,14 +249,31 @@ export default function OrderTracking({ visible, onClose, orderId }) {
                 </Text>
               </View>
 
-              {/* الفاتورة - تظهر فقط لو السعر موجود */}
-              {totalAmount && (
+              {/* الفاتورة المفصلة */}
+              {(itemsPrice !== null || deliveryPrice !== null) && (
                 <View style={styles.billCard}>
-                  <Text style={styles.billTitle}>💰 الفاتورة</Text>
-                  <View style={styles.billRow}>
-                    <Text style={styles.billLabel}>إجمالي الفاتورة:</Text>
-                    <Text style={styles.billValue}>{totalAmount} ج</Text>
-                  </View>
+                  <Text style={styles.billTitle}>🧾 الفاتورة</Text>
+                  
+                  {itemsPrice !== null && (
+                    <View style={styles.billRow}>
+                      <Text style={styles.billLabel}>سعر الطلبات:</Text>
+                      <Text style={styles.billValue}>{itemsPrice} ج</Text>
+                    </View>
+                  )}
+                  
+                  {deliveryPrice !== null && (
+                    <View style={styles.billRow}>
+                      <Text style={styles.billLabel}>خدمة التوصيل:</Text>
+                      <Text style={styles.billValue}>{deliveryPrice} ج</Text>
+                    </View>
+                  )}
+                  
+                  {totalPrice !== null && (
+                    <View style={[styles.billRow, styles.billTotal]}>
+                      <Text style={styles.billTotalLabel}>الإجمالي:</Text>
+                      <Text style={styles.billTotalValue}>{totalPrice} ج</Text>
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -440,13 +470,29 @@ const styles = StyleSheet.create({
   billRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    marginBottom: 8,
   },
   billLabel: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#4B5563',
   },
   billValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  billTotal: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F59E0B',
+  },
+  billTotalLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  billTotalValue: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#F59E0B',

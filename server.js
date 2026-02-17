@@ -116,7 +116,6 @@ app.post('/upload-voice', async (req, res) => {
   }
 });
 
-// ==================== خدمة الملفات الصوتية ====================
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ==================== الصفحة الرئيسية ====================
@@ -143,6 +142,9 @@ app.get('/active-orders', (req, res) => {
       status: o.status || 'جديد',
       serviceName: o.serviceName || 'سوبر ماركت',
       driverPhone: o.driverPhone || null,
+      itemsPrice: o.itemsPrice || null,
+      deliveryPrice: o.deliveryPrice || null,
+      totalPrice: o.totalPrice || null,
       createdAt: o.date
     }))
   });
@@ -165,6 +167,9 @@ app.post('/send-order', async (req, res) => {
     date: new Date().toISOString(),
     status: 'في انتظار مندوب',
     driverPhone: null,
+    itemsPrice: null,
+    deliveryPrice: null,
+    totalPrice: null,
     messageId: null,
     voiceUrl: voiceUrl || null,
     acceptedBy: null
@@ -217,7 +222,6 @@ app.post('/send-order', async (req, res) => {
 app.post('/webhook', async (req, res) => {
   const update = req.body;
   
-  // معالجة الأزرار
   if (update.callback_query) {
     const callback = update.callback_query;
     const data = callback.data;
@@ -265,7 +269,6 @@ app.post('/webhook', async (req, res) => {
         
         newText += `\n\n✅ تم قبول الطلب بواسطة ${driverName}`;
         
-        // أزرار إدخال الرقم
         const keyboard = [
           [
             { text: '📞 إدخال رقم الموبايل', callback_data: `phone_${orderId}` }
@@ -327,6 +330,56 @@ app.post('/webhook', async (req, res) => {
       };
     }
     
+    // ===== إدخال سعر الطلبات =====
+    else if (action === 'items_price') {
+      await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          callback_query_id: callback.id,
+          text: '💰 اكتب سعر الطلبات',
+          show_alert: true
+        })
+      });
+      
+      await sendToTelegram(chatId, 
+        `💰 <b>إدخال سعر الطلبات للطلب ${orderId}</b>\n\n` +
+        `الرجاء كتابة سعر المنتجات فقط (مثال: 300)`
+      );
+      
+      pendingOrders[chatId] = { 
+        orderId, 
+        step: 'waiting_items_price',
+        messageId: messageId,
+        currentText: messageText
+      };
+    }
+    
+    // ===== إدخال خدمة التوصيل =====
+    else if (action === 'delivery_price') {
+      await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          callback_query_id: callback.id,
+          text: '🚚 اكتب سعر التوصيل',
+          show_alert: true
+        })
+      });
+      
+      await sendToTelegram(chatId, 
+        `🚚 <b>إدخال سعر التوصيل للطلب ${orderId}</b>\n\n` +
+        `الرجاء كتابة سعر خدمة التوصيل (مثال: 20)`
+      );
+      
+      pendingOrders[chatId] = { 
+        orderId, 
+        step: 'waiting_delivery_price',
+        messageId: messageId,
+        currentText: messageText
+      };
+    }
+    
     // ===== تغيير الحالة =====
     else if (action === 'status') {
       if (!order.acceptedBy || order.acceptedBy.id !== driverId) {
@@ -345,8 +398,8 @@ app.post('/webhook', async (req, res) => {
       const newStatus = param;
       order.status = newStatus;
       
-      // نحدد الأزرار الجديدة
       let newKeyboard = [];
+      let newText = messageText;
       
       if (newStatus === 'جاري تجهيز الطلب') {
         newKeyboard = [
@@ -376,7 +429,6 @@ app.post('/webhook', async (req, res) => {
         ];
       }
       
-      let newText = messageText;
       newText = newText.replace(/🔻 <b>الحالة:<\/b> [^\n]+/, `🔻 <b>الحالة:</b> ${newStatus}`);
       
       await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, newKeyboard);
@@ -425,7 +477,7 @@ app.post('/webhook', async (req, res) => {
     }
   }
   
-  // ===== معالجة الرسائل النصية (أرقام المندوبين) =====
+  // ===== معالجة الرسائل النصية =====
   else if (update.message) {
     const chatId = update.message.chat.id;
     const text = update.message.text;
@@ -437,37 +489,139 @@ app.post('/webhook', async (req, res) => {
       const order = orders.find(o => o.id === orderId);
       
       if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
-        // حفظ رقم المندوب
         order.driverPhone = text;
         
-        // تحديث الرسالة في القناة
         let newText = currentText;
         newText = newText.includes('📱 رقم المندوب') 
           ? newText.replace(/📱 رقم المندوب: [^\n]+/, `📱 رقم المندوب: ${text}`)
           : newText + `\n📱 رقم المندوب: ${text}`;
         
-        // أزرار الحالة بالترتيب
+        // بعد الرقم، نطلب سعر الطلبات
         const keyboard = [
-          [{ text: '🟡 جاري تجهيز الطلب', callback_data: `status_${orderId}_جاري تجهيز الطلب` }],
-          [{ text: '🔵 جاري التوصيل', callback_data: `status_${orderId}_جاري التوصيل` }],
-          [{ text: '🟢 تم التوصيل', callback_data: `status_${orderId}_تم التوصيل` }],
           [
-            { text: '📞 اتصال', callback_data: `call_${orderId}` },
-            { text: '📍 العنوان', callback_data: `address_${orderId}` }
+            { text: '💰 سعر الطلبات', callback_data: `items_price_${orderId}` }
           ]
         ];
         
         await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, keyboard);
         
-        await sendToTelegram(chatId, '✅ تم حفظ رقمك بنجاح! يمكنك متابعة الطلب');
+        await sendToTelegram(chatId, '✅ تم حفظ الرقم! الآن أدخل سعر الطلبات');
         
         delete pendingOrders[chatId];
       }
     }
     
-    // أوامر المسح للأدمن
+    // لو المندوب في انتظار إدخال سعر الطلبات
+    else if (pendingOrders[chatId] && pendingOrders[chatId].step === 'waiting_items_price') {
+      const { orderId, messageId, currentText } = pendingOrders[chatId];
+      const order = orders.find(o => o.id === orderId);
+      
+      if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
+        const price = parseInt(text);
+        if (!isNaN(price)) {
+          order.itemsPrice = price;
+          
+          let newText = currentText;
+          newText += `\n💰 سعر الطلبات: ${price} ج`;
+          
+          // بعد سعر الطلبات، نطلب سعر التوصيل
+          const keyboard = [
+            [
+              { text: '🚚 خدمة التوصيل', callback_data: `delivery_price_${orderId}` }
+            ]
+          ];
+          
+          await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, keyboard);
+          
+          await sendToTelegram(chatId, '✅ تم حفظ سعر الطلبات! الآن أدخل سعر التوصيل');
+          
+          delete pendingOrders[chatId];
+        } else {
+          await sendToTelegram(chatId, '❌ الرجاء إدخال رقم صحيح');
+        }
+      }
+    }
+    
+    // لو المندوب في انتظار إدخال سعر التوصيل
+    else if (pendingOrders[chatId] && pendingOrders[chatId].step === 'waiting_delivery_price') {
+      const { orderId, messageId, currentText } = pendingOrders[chatId];
+      const order = orders.find(o => o.id === orderId);
+      
+      if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
+        const price = parseInt(text);
+        if (!isNaN(price)) {
+          order.deliveryPrice = price;
+          order.totalPrice = (order.itemsPrice || 0) + price;
+          order.status = 'جاري تجهيز الطلب';
+          
+          let newText = currentText;
+          newText += `\n🚚 خدمة التوصيل: ${price} ج`;
+          newText += `\n💰 الإجمالي الكلي: ${order.totalPrice} ج`;
+          
+          // أزرار الحالة
+          const keyboard = [
+            [{ text: '🟡 جاري تجهيز الطلب', callback_data: `status_${orderId}_جاري تجهيز الطلب` }],
+            [{ text: '🔵 جاري التوصيل', callback_data: `status_${orderId}_جاري التوصيل` }],
+            [{ text: '🟢 تم التوصيل', callback_data: `status_${orderId}_تم التوصيل` }],
+            [
+              { text: '📞 اتصال', callback_data: `call_${orderId}` },
+              { text: '📍 العنوان', callback_data: `address_${orderId}` }
+            ]
+          ];
+          
+          await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, keyboard);
+          
+          await sendToTelegram(chatId, '✅ تم حفظ كل البيانات! يمكنك متابعة الطلب');
+          
+          delete pendingOrders[chatId];
+        } else {
+          await sendToTelegram(chatId, '❌ الرجاء إدخال رقم صحيح');
+        }
+      }
+    }
+    
+    // أوامر المسح والعرض للأدمن
     else if (isAdmin && text) {
-      if (text.startsWith('/delete_order ')) {
+      
+      // عرض فاتورة محددة
+      if (text.startsWith('/bill ')) {
+        const orderId = text.replace('/bill ', '').trim();
+        const order = orders.find(o => o.id === orderId);
+        
+        if (order) {
+          await sendToTelegram(chatId,
+            `🧾 <b>فاتورة الطلب ${orderId}</b>\n\n` +
+            `📞 العميل: ${order.phone}\n` +
+            `📍 العنوان: ${order.address}\n` +
+            `🛒 المنتجات: ${Array.isArray(order.items) ? order.items.join('، ') : order.items}\n\n` +
+            `💰 سعر الطلبات: ${order.itemsPrice || 0} ج\n` +
+            `🚚 خدمة التوصيل: ${order.deliveryPrice || 0} ج\n` +
+            `💵 الإجمالي: ${order.totalPrice || 0} ج\n` +
+            `🕐 الحالة: ${order.status}`
+          );
+        } else {
+          await sendToTelegram(chatId, `❌ الطلب ${orderId} غير موجود`);
+        }
+      }
+      
+      // عرض كل الفواتير
+      else if (text === '/all_bills') {
+        if (orders.length === 0) {
+          await sendToTelegram(chatId, '📭 لا توجد طلبات');
+        } else {
+          let response = '📋 <b>جميع الفواتير:</b>\n\n';
+          orders.slice(-10).reverse().forEach((order, index) => {
+            response += `${index + 1}. 🆔 <code>${order.id}</code>\n`;
+            response += `   📞 ${order.phone}\n`;
+            response += `   💰 ${order.totalPrice || 0} ج (طلبات: ${order.itemsPrice || 0} + توصيل: ${order.deliveryPrice || 0})\n`;
+            response += `   🔻 ${order.status}\n`;
+            response += `   🕐 ${new Date(order.date).toLocaleString('ar-EG')}\n\n`;
+          });
+          await sendToTelegram(chatId, response);
+        }
+      }
+      
+      else if (text.startsWith('/delete_order ')) {
         const orderId = text.replace('/delete_order ', '').trim();
         const index = orders.findIndex(o => o.id === orderId);
         
@@ -488,12 +642,10 @@ app.post('/webhook', async (req, res) => {
   res.sendStatus(200);
 });
 
-// ==================== تشغيل السيرفر ====================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 بوت الطلبات شغال على بورت ${PORT}`);
-  console.log(`📦 نظام الطلبات:`);
-  console.log(`   - أول مندوب يقبل هو المسؤول`);
-  console.log(`   - أزرار الحالة تختفي بعد الضغط`);
-  console.log(`   - أزرار المعلومات ثابتة في الآخر`);
+  console.log(`📋 أوامر الأدمن:`);
+  console.log(`   - /bill ORDER_ID: عرض فاتورة محددة`);
+  console.log(`   - /all_bills: عرض كل الفواتير`);
 });
