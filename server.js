@@ -211,11 +211,17 @@ app.post('/webhook', async (req, res) => {
     
     console.log(`🔄 ضغط على زر: ${data} من ${driverName} (${driverId})`);
     
-    const [action, orderId, param] = data.split('_');
+    const parts = data.split('_');
+    const action = parts[0];
+    const orderId = parts[1];
+    const param = parts.slice(2).join('_'); // عشان لو في أسماء طويلة زي "جاري التوصيل"
+    
+    console.log(`📦 التحليل: action=${action}, orderId=${orderId}, param=${param}`);
     
     const order = orders.find(o => o.id === orderId);
     
     if (!order) {
+      console.log(`❌ الطلب ${orderId} غير موجود في الذاكرة`);
       await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -310,6 +316,8 @@ app.post('/webhook', async (req, res) => {
     
     // ===== إدخال سعر الطلبات =====
     else if (action === 'items_price') {
+      console.log(`💰 طلب إدخال سعر الطلبات للطلب ${orderId}`);
+      
       await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -336,6 +344,8 @@ app.post('/webhook', async (req, res) => {
     
     // ===== إدخال خدمة التوصيل =====
     else if (action === 'delivery_price') {
+      console.log(`🚚 طلب إدخال سعر التوصيل للطلب ${orderId}`);
+      
       await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -452,6 +462,8 @@ app.post('/webhook', async (req, res) => {
     const chatId = update.message.chat.id;
     const text = update.message.text;
     const isAdmin = ADMIN_IDS.includes(chatId);
+    
+    console.log(`📨 رسالة جديدة من ${chatId}: ${text}`);
     
     // لو المندوب في انتظار إدخال رقمه
     if (pendingOrders[chatId] && pendingOrders[chatId].step === 'waiting_phone') {
@@ -626,4 +638,7 @@ app.post('/webhook', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 بوت الطلبات شغال على بورت ${PORT}`);
+  console.log(`📋 أوامر الأدمن:`);
+  console.log(`   - /bill ORDER_ID: عرض فاتورة محددة`);
+  console.log(`   - /all_bills: عرض كل الفواتير`);
 });
