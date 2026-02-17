@@ -15,14 +15,54 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SERVER_URL = 'https://zayedid-production.up.railway.app';
 
-// أنواع القطع والأسعار
+// أنواع القطع مع أيقونات مناسبة
 const ITEM_TYPES = [
-  { id: 'shirt', name: 'قميص', price: 10 },
-  { id: 'pants', name: 'بنطلون', price: 10 },
-  { id: 'blouse', name: 'بلوزة', price: 15 },
-  { id: 'suit', name: 'بدلة', price: 70 },
-  { id: 'jacket', name: 'جاكت', price: 30 },
-  { id: 'dress', name: 'فستان', price: 25 },
+  { 
+    id: 'shirt', 
+    name: 'قميص', 
+    icon: 'shirt-outline',
+    price: 10,
+    color: '#3B82F6' 
+  },
+  { 
+    id: 'suit', 
+    name: 'بدلة', 
+    icon: 'shirt-outline', 
+    price: 70,
+    color: '#8B5CF6',
+    style: { transform: [{ scaleX: 1.2 }] } // تكبير أفقي
+  },
+  { 
+    id: 'pants', 
+    name: 'بنطلون', 
+    icon: 'shirt-outline', 
+    price: 10,
+    color: '#10B981',
+    style: { transform: [{ rotate: '90deg' }] } // تدوير 90 درجة
+  },
+  { 
+    id: 'dress', 
+    name: 'فستان', 
+    icon: 'woman-outline', 
+    price: 25,
+    color: '#EC4899' 
+  },
+  { 
+    id: 'jacket', 
+    name: 'جاكت', 
+    icon: 'shirt-outline', 
+    price: 30,
+    color: '#F59E0B',
+    style: { transform: [{ scaleY: 1.2 }] } // تطويل رأسي
+  },
+  { 
+    id: 'blouse', 
+    name: 'بلوزة', 
+    icon: 'shirt-outline', 
+    price: 15,
+    color: '#EF4444',
+    style: { transform: [{ rotate: '10deg' }] } // إمالة بسيطة
+  },
 ];
 
 export default function IroningScreen({ navigation }) {
@@ -54,6 +94,8 @@ export default function IroningScreen({ navigation }) {
     const newItem = {
       id: Date.now() + Math.random(),
       name: currentItem.name,
+      icon: currentItem.icon,
+      color: currentItem.color,
       quantity: quantity,
       pricePerItem: currentItem.price,
       totalPrice: currentItem.price * quantity
@@ -110,7 +152,7 @@ export default function IroningScreen({ navigation }) {
         phone: phoneNumber,
         address: address,
         items: [orderText],
-        serviceName: 'مكوجي', // مهم: ده بيحدد استخدام بوت المكوجي
+        serviceName: 'مكوجي',
         notes: notes,
         totalPrice: calculateTotal()
       };
@@ -144,6 +186,24 @@ export default function IroningScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  // دالة لعرض الأيقونة مع التنسيقات الخاصة
+  const renderItemIcon = (item, isSelected) => {
+    const color = isSelected ? '#F59E0B' : item.color;
+    
+    return (
+      <View style={[
+        styles.iconContainer,
+        item.style && item.style
+      ]}>
+        <Ionicons 
+          name={item.icon} 
+          size={32} 
+          color={color} 
+        />
+      </View>
+    );
   };
 
   return (
@@ -183,62 +243,69 @@ export default function IroningScreen({ navigation }) {
           />
         </View>
 
-        {/* اختيار الصنف */}
+        {/* اختيار الصنف بأيقونات */}
         <View style={styles.addItemContainer}>
-          <Text style={styles.sectionTitle}>إضافة صنف:</Text>
+          <Text style={styles.sectionTitle}>اختر نوع القطعة:</Text>
           
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.itemsScroll}>
+          <View style={styles.itemsGrid}>
             {ITEM_TYPES.map((item) => (
               <TouchableOpacity
                 key={item.id}
                 style={[
-                  styles.itemButton,
-                  currentItem?.id === item.id && styles.selectedItemButton,
+                  styles.itemCard,
+                  currentItem?.id === item.id && styles.selectedItemCard,
                 ]}
                 onPress={() => setCurrentItem(item)}
               >
+                {renderItemIcon(item, currentItem?.id === item.id)}
                 <Text style={[
-                  styles.itemButtonText,
-                  currentItem?.id === item.id && styles.selectedItemButtonText,
+                  styles.itemName,
+                  currentItem?.id === item.id && styles.selectedItemName,
                 ]}>
                   {item.name}
                 </Text>
-                <Text style={styles.itemPrice}>
+                <Text style={[
+                  styles.itemPrice,
+                  currentItem?.id === item.id && styles.selectedItemPrice,
+                ]}>
                   {item.price} ج
                 </Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </View>
 
-          <View style={styles.quantityRow}>
-            <Text style={styles.quantityLabel}>الكمية:</Text>
-            <View style={styles.quantityControls}>
-              <TouchableOpacity
-                style={styles.quantityBtn}
-                onPress={() => setCurrentQuantity(prev => Math.max(1, parseInt(prev) - 1).toString())}
-              >
-                <Ionicons name="remove" size={20} color="#F59E0B" />
-              </TouchableOpacity>
-              <TextInput
-                style={styles.quantityInput}
-                value={currentQuantity}
-                onChangeText={setCurrentQuantity}
-                keyboardType="numeric"
-                editable={!loading}
-              />
-              <TouchableOpacity
-                style={styles.quantityBtn}
-                onPress={() => setCurrentQuantity(prev => (parseInt(prev) + 1).toString())}
-              >
-                <Ionicons name="add" size={20} color="#F59E0B" />
+          {/* الكمية وزر الإضافة */}
+          {currentItem && (
+            <View style={styles.quantitySection}>
+              <Text style={styles.quantityLabel}>الكمية:</Text>
+              <View style={styles.quantityControls}>
+                <TouchableOpacity
+                  style={styles.quantityBtn}
+                  onPress={() => setCurrentQuantity(prev => Math.max(1, parseInt(prev) - 1).toString())}
+                >
+                  <Ionicons name="remove" size={20} color="#F59E0B" />
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.quantityInput}
+                  value={currentQuantity}
+                  onChangeText={setCurrentQuantity}
+                  keyboardType="numeric"
+                  editable={!loading}
+                />
+                <TouchableOpacity
+                  style={styles.quantityBtn}
+                  onPress={() => setCurrentQuantity(prev => (parseInt(prev) + 1).toString())}
+                >
+                  <Ionicons name="add" size={20} color="#F59E0B" />
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity style={styles.addButton} onPress={addItem}>
+                <Ionicons name="add-circle" size={24} color="#FFF" />
+                <Text style={styles.addButtonText}>إضافة للقائمة</Text>
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity style={styles.addButton} onPress={addItem}>
-              <Ionicons name="add-circle" size={24} color="#F59E0B" />
-              <Text style={styles.addButtonText}>إضافة</Text>
-            </TouchableOpacity>
-          </View>
+          )}
         </View>
 
         {/* قائمة الأصناف المضافة */}
@@ -247,27 +314,27 @@ export default function IroningScreen({ navigation }) {
             <Text style={styles.sectionTitle}>الأصناف المضافة:</Text>
             {items.map((item) => (
               <View key={item.id} style={styles.listItem}>
-                <View style={styles.itemDetails}>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <View style={styles.itemQuantityRow}>
-                    <Text style={styles.itemQuantity}>الكمية:</Text>
-                    <View style={styles.itemQuantityControls}>
-                      <TouchableOpacity
-                        onPress={() => updateQuantity(item.id, item.quantity - 1)}
-                      >
-                        <Ionicons name="remove-circle" size={20} color="#EF4444" />
-                      </TouchableOpacity>
-                      <Text style={styles.itemQuantityValue}>{item.quantity}</Text>
-                      <TouchableOpacity
-                        onPress={() => updateQuantity(item.id, item.quantity + 1)}
-                      >
-                        <Ionicons name="add-circle" size={20} color="#10B981" />
-                      </TouchableOpacity>
-                    </View>
+                <View style={styles.listItemIcon}>
+                  <Ionicons name={item.icon} size={24} color={item.color} />
+                </View>
+                <View style={styles.listItemDetails}>
+                  <Text style={styles.listItemName}>{item.name}</Text>
+                  <View style={styles.listItemQuantity}>
+                    <TouchableOpacity
+                      onPress={() => updateQuantity(item.id, item.quantity - 1)}
+                    >
+                      <Ionicons name="remove-circle" size={20} color="#EF4444" />
+                    </TouchableOpacity>
+                    <Text style={styles.listItemQuantityValue}>{item.quantity}</Text>
+                    <TouchableOpacity
+                      onPress={() => updateQuantity(item.id, item.quantity + 1)}
+                    >
+                      <Ionicons name="add-circle" size={20} color="#10B981" />
+                    </TouchableOpacity>
                   </View>
                 </View>
-                <View style={styles.itemTotal}>
-                  <Text style={styles.itemTotalPrice}>{item.totalPrice} ج</Text>
+                <View style={styles.listItemTotal}>
+                  <Text style={styles.listItemTotalPrice}>{item.totalPrice} ج</Text>
                   <TouchableOpacity onPress={() => removeItem(item.id)}>
                     <Ionicons name="trash-outline" size={20} color="#EF4444" />
                   </TouchableOpacity>
@@ -363,141 +430,151 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1F2937',
-    marginBottom: 10,
+    marginBottom: 15,
   },
   addItemContainer: {
     backgroundColor: '#FFF',
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    padding: 15,
+    padding: 16,
     marginBottom: 20,
   },
-  itemsScroll: {
+  itemsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     marginBottom: 15,
   },
-  itemButton: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    padding: 10,
-    marginRight: 8,
+  itemCard: {
+    width: '31%',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 12,
     alignItems: 'center',
-    minWidth: 70,
-  },
-  selectedItemButton: {
-    backgroundColor: '#FEF3C7',
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#F59E0B',
+    borderColor: '#E5E7EB',
   },
-  itemButtonText: {
+  selectedItemCard: {
+    borderColor: '#F59E0B',
+    borderWidth: 2,
+    backgroundColor: '#FEF3C7',
+  },
+  iconContainer: {
+    marginBottom: 8,
+  },
+  itemName: {
     fontSize: 12,
     color: '#4B5563',
+    marginBottom: 4,
+  },
+  selectedItemName: {
+    color: '#F59E0B',
+    fontWeight: '600',
   },
   itemPrice: {
-    fontSize: 10,
-    color: '#F59E0B',
+    fontSize: 14,
     fontWeight: '600',
-    marginTop: 2,
-  },
-  selectedItemButtonText: {
     color: '#F59E0B',
-    fontWeight: '600',
   },
-  quantityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  selectedItemPrice: {
+    color: '#F59E0B',
+  },
+  quantitySection: {
+    marginTop: 10,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
   },
   quantityLabel: {
     fontSize: 14,
     color: '#4B5563',
+    marginBottom: 10,
   },
   quantityControls: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 15,
   },
   quantityBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
   },
   quantityInput: {
-    width: 40,
+    width: 60,
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
     color: '#1F2937',
+    marginHorizontal: 10,
   },
   addButton: {
+    backgroundColor: '#F59E0B',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 4,
+    justifyContent: 'center',
+    padding: 14,
+    borderRadius: 12,
+    gap: 8,
   },
   addButtonText: {
-    color: '#F59E0B',
-    fontSize: 12,
+    color: '#FFF',
+    fontSize: 16,
     fontWeight: '600',
   },
   itemsListContainer: {
     backgroundColor: '#FFF',
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    padding: 15,
+    padding: 16,
     marginBottom: 20,
   },
   listItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
-  itemDetails: {
-    flex: 1,
+  listItemIcon: {
+    width: 40,
+    alignItems: 'center',
   },
-  itemName: {
+  listItemDetails: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  listItemName: {
     fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
+    marginBottom: 4,
   },
-  itemQuantityRow: {
+  listItemQuantity: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    gap: 8,
   },
-  itemQuantity: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginRight: 8,
-  },
-  itemQuantityControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  itemQuantityValue: {
-    fontSize: 12,
+  listItemQuantityValue: {
+    fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
-    minWidth: 20,
+    minWidth: 30,
     textAlign: 'center',
   },
-  itemTotal: {
+  listItemTotal: {
     alignItems: 'flex-end',
     gap: 4,
   },
-  itemTotalPrice: {
-    fontSize: 14,
+  listItemTotalPrice: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#F59E0B',
   },
@@ -516,7 +593,7 @@ const styles = StyleSheet.create({
     color: '#1F2937',
   },
   totalValue: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#F59E0B',
   },
@@ -543,7 +620,7 @@ const styles = StyleSheet.create({
   },
   sendButtonText: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
   },
   disabled: {
