@@ -13,7 +13,7 @@ const DRIVER_CHANNEL_ID = "1814331589";
 const ADMIN_IDS = [1814331589];
 
 let orders = [];
-let pendingOrders = {};
+let driverSessions = {}; // لكل مندوب جلسة خاصة فيه
 
 // ==================== دوال مساعدة ====================
 const sendToTelegram = async (chatId, message, keyboard = null) => {
@@ -199,6 +199,7 @@ app.post('/send-order', async (req, res) => {
 app.post('/webhook', async (req, res) => {
   const update = req.body;
   
+  // ===== معالجة الأزرار =====
   if (update.callback_query) {
     const callback = update.callback_query;
     const data = callback.data;
@@ -214,14 +215,10 @@ app.post('/webhook', async (req, res) => {
     const parts = data.split('_');
     const action = parts[0];
     const orderId = parts[1];
-    const param = parts.slice(2).join('_');
-    
-    console.log(`📦 التحليل: action=${action}, orderId=${orderId}, param=${param}`);
     
     const order = orders.find(o => o.id === orderId);
     
     if (!order) {
-      console.log(`❌ الطلب ${orderId} غير موجود في الذاكرة`);
       await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -237,6 +234,7 @@ app.post('/webhook', async (req, res) => {
     // ===== قبول الطلب =====
     if (action === 'accept') {
       if (!order.acceptedBy) {
+        // تسجيل المندوب
         order.acceptedBy = {
           id: driverId,
           name: driverName,
@@ -244,28 +242,37 @@ app.post('/webhook', async (req, res) => {
         };
         order.status = 'جديد';
         
+        // تحديث الرسالة
         let newText = messageText;
         newText = newText.replace(
           /🔻 <b>الحالة:<\/b> في انتظار مندوب/, 
           `🔻 <b>الحالة:</b> جديد`
         );
-        
         newText += `\n\n✅ تم قبول الطلب بواسطة ${driverName}`;
         
-        const keyboard = [
-          [
-            { text: '📞 إدخال رقم الموبايل', callback_data: `phone_${orderId}` }
-          ]
-        ];
+        await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, []);
         
-        await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, keyboard);
+        // إنشاء جلسة للمندوب لبدء إدخال البيانات
+        driverSessions[driverId] = {
+          orderId: orderId,
+          step: 'waiting_phone',
+          messageId: messageId,
+          currentText: newText
+        };
+        
+        // إرسال أول سؤال
+        await sendToTelegram(chatId, 
+          `📱 مرحباً ${driverName}\n` +
+          `لقد قبلت الطلب ${orderId}\n\n` +
+          `الرجاء إرسال رقم موبايلك للتواصل مع العميل:`
+        );
         
         await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             callback_query_id: callback.id,
-            text: '✅ تم قبول الطلب! أدخل رقم موبايلك الآن',
+            text: '✅ تم قبول الطلب! أرسل رقم موبايلك الآن',
             show_alert: false
           })
         });
@@ -287,124 +294,7 @@ app.post('/webhook', async (req, res) => {
       }
     }
     
-    // ===== إدخال رقم المندوب =====
-    else if (action === 'phone') {
-      await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          callback_query_id: callback.id,
-          text: '📝 اكتب رقم موبايلك في المحادثة',
-          show_alert: true
-        })
-      });
-      
-      await sendToTelegram(chatId, 
-        `📱 مرحباً ${driverName}\n` +
-        `الرجاء كتابة رقم موبايلك للتواصل مع العميل على الطلب ${orderId}\n` +
-        `(مثال: 01234567890)`
-      );
-      
-      pendingOrders[chatId] = { 
-        orderId, 
-        step: 'waiting_phone',
-        messageId: messageId,
-        currentText: messageText,
-        driverId: driverId
-      };
-      
-      console.log(`📝 تم بدء انتظار الرقم للطلب ${orderId} من المندوب ${driverId}`);
-    }
-    
-    // ===== إدخال سعر الطلبات =====
-    else if (action === 'items_price') {
-      console.log(`💰 طلب إدخال سعر الطلبات للطلب ${orderId} من المندوب ${driverId}`);
-      
-      // التحقق من أن المندوب هو نفسه
-      if (order.acceptedBy && order.acceptedBy.id !== driverId) {
-        await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            callback_query_id: callback.id,
-            text: '❌ أنت لست المندوب المسؤول',
-            show_alert: true
-          })
-        });
-        return res.sendStatus(200);
-      }
-      
-      await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          callback_query_id: callback.id,
-          text: '💰 اكتب سعر الطلبات',
-          show_alert: true
-        })
-      });
-      
-      await sendToTelegram(chatId, 
-        `💰 <b>إدخال سعر الطلبات للطلب ${orderId}</b>\n\n` +
-        `الرجاء كتابة سعر المنتجات فقط (مثال: 300)`
-      );
-      
-      pendingOrders[chatId] = { 
-        orderId, 
-        step: 'waiting_items_price',
-        messageId: messageId,
-        currentText: messageText,
-        driverId: driverId
-      };
-      
-      console.log(`💰 تم بدء انتظار سعر الطلبات للطلب ${orderId}`);
-    }
-    
-    // ===== إدخال خدمة التوصيل =====
-    else if (action === 'delivery_price') {
-      console.log(`🚚 طلب إدخال سعر التوصيل للطلب ${orderId} من المندوب ${driverId}`);
-      
-      // التحقق من أن المندوب هو نفسه
-      if (order.acceptedBy && order.acceptedBy.id !== driverId) {
-        await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            callback_query_id: callback.id,
-            text: '❌ أنت لست المندوب المسؤول',
-            show_alert: true
-          })
-        });
-        return res.sendStatus(200);
-      }
-      
-      await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          callback_query_id: callback.id,
-          text: '🚚 اكتب سعر التوصيل',
-          show_alert: true
-        })
-      });
-      
-      await sendToTelegram(chatId, 
-        `🚚 <b>إدخال سعر التوصيل للطلب ${orderId}</b>\n\n` +
-        `الرجاء كتابة سعر خدمة التوصيل (مثال: 20)`
-      );
-      
-      pendingOrders[chatId] = { 
-        orderId, 
-        step: 'waiting_delivery_price',
-        messageId: messageId,
-        currentText: messageText,
-        driverId: driverId
-      };
-      
-      console.log(`🚚 تم بدء انتظار سعر التوصيل للطلب ${orderId}`);
-    }
-    
-    // ===== تغيير الحالة =====
+    // ===== أزرار الحالة =====
     else if (action === 'status') {
       if (!order.acceptedBy || order.acceptedBy.id !== driverId) {
         await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
@@ -419,6 +309,7 @@ app.post('/webhook', async (req, res) => {
         return res.sendStatus(200);
       }
 
+      const param = parts.slice(2).join('_');
       const newStatus = param;
       order.status = newStatus;
       
@@ -491,7 +382,7 @@ app.post('/webhook', async (req, res) => {
     }
   }
   
-  // ===== معالجة الرسائل النصية =====
+  // ===== معالجة الرسائل النصية (الإجابات) =====
   else if (update.message) {
     const chatId = update.message.chat.id;
     const text = update.message.text;
@@ -499,128 +390,115 @@ app.post('/webhook', async (req, res) => {
     
     console.log(`📨 رسالة جديدة من ${chatId}: ${text}`);
     
-    // لو المندوب في انتظار إدخال رقمه
-    if (pendingOrders[chatId] && pendingOrders[chatId].step === 'waiting_phone') {
-      const { orderId, messageId, currentText, driverId } = pendingOrders[chatId];
-      const order = orders.find(o => o.id === orderId);
+    // التحقق من وجود جلسة نشطة للمندوب
+    if (driverSessions[chatId]) {
+      const session = driverSessions[chatId];
+      const order = orders.find(o => o.id === session.orderId);
       
-      console.log(`📞 معالجة رقم للمندوب ${driverId} والطلب ${orderId}`);
+      if (!order) {
+        await sendToTelegram(chatId, '❌ الطلب غير موجود');
+        delete driverSessions[chatId];
+        return res.sendStatus(200);
+      }
       
-      if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
+      // التأكد أن المندوب هو نفسه
+      if (order.acceptedBy && order.acceptedBy.id !== chatId) {
+        await sendToTelegram(chatId, '❌ أنت لست المندوب المسؤول');
+        delete driverSessions[chatId];
+        return res.sendStatus(200);
+      }
+      
+      // ===== مرحلة إدخال رقم الموبايل =====
+      if (session.step === 'waiting_phone') {
+        // حفظ الرقم
         order.driverPhone = text;
         
-        let newText = currentText;
-        newText = newText.includes('📱 رقم المندوب') 
-          ? newText.replace(/📱 رقم المندوب: [^\n]+/, `📱 رقم المندوب: ${text}`)
-          : newText + `\n📱 رقم المندوب: ${text}`;
+        // تحديث الرسالة في القناة
+        let newText = session.currentText;
+        newText += `\n📱 رقم المندوب: ${text}`;
+        await editTelegramMessage(DRIVER_CHANNEL_ID, session.messageId, newText, []);
         
-        // بعد الرقم، نطلب سعر الطلبات
+        // الانتقال للمرحلة التالية
+        session.step = 'waiting_items_price';
+        session.currentText = newText;
+        
+        // طرح السؤال التالي
+        await sendToTelegram(chatId, 
+          `✅ تم حفظ الرقم!\n\n` +
+          `💰 الآن أرسل سعر الطلبات (مثال: 300):`
+        );
+      }
+      
+      // ===== مرحلة إدخال سعر الطلبات =====
+      else if (session.step === 'waiting_items_price') {
+        const price = parseInt(text);
+        if (isNaN(price)) {
+          await sendToTelegram(chatId, '❌ الرجاء إدخال رقم صحيح');
+          return res.sendStatus(200);
+        }
+        
+        // حفظ السعر
+        order.itemsPrice = price;
+        
+        // تحديث الرسالة في القناة
+        let newText = session.currentText;
+        newText += `\n💰 سعر الطلبات: ${price} ج`;
+        await editTelegramMessage(DRIVER_CHANNEL_ID, session.messageId, newText, []);
+        
+        // الانتقال للمرحلة التالية
+        session.step = 'waiting_delivery_price';
+        session.currentText = newText;
+        
+        // طرح السؤال التالي
+        await sendToTelegram(chatId, 
+          `✅ تم حفظ سعر الطلبات!\n\n` +
+          `🚚 الآن أرسل سعر التوصيل (مثال: 20):`
+        );
+      }
+      
+      // ===== مرحلة إدخال سعر التوصيل =====
+      else if (session.step === 'waiting_delivery_price') {
+        const price = parseInt(text);
+        if (isNaN(price)) {
+          await sendToTelegram(chatId, '❌ الرجاء إدخال رقم صحيح');
+          return res.sendStatus(200);
+        }
+        
+        // حفظ سعر التوصيل والإجمالي
+        order.deliveryPrice = price;
+        order.totalPrice = (order.itemsPrice || 0) + price;
+        order.status = 'جاري تجهيز الطلب';
+        
+        // تحديث الرسالة في القناة
+        let newText = session.currentText;
+        newText += `\n🚚 خدمة التوصيل: ${price} ج`;
+        newText += `\n💰 الإجمالي الكلي: ${order.totalPrice} ج`;
+        
+        // إضافة أزرار الحالة
         const keyboard = [
+          [{ text: '🔵 جاري التوصيل', callback_data: `status_${order.id}_جاري التوصيل` }],
+          [{ text: '🟢 تم التوصيل', callback_data: `status_${order.id}_تم التوصيل` }],
           [
-            { text: '💰 سعر الطلبات', callback_data: `items_price_${orderId}` }
+            { text: '📞 اتصال', callback_data: `call_${order.id}` },
+            { text: '📍 العنوان', callback_data: `address_${order.id}` }
           ]
         ];
         
-        await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, keyboard);
+        await editTelegramMessage(DRIVER_CHANNEL_ID, session.messageId, newText, keyboard);
         
-        await sendToTelegram(chatId, '✅ تم حفظ الرقم! الآن أدخل سعر الطلبات');
+        // إنهاء الجلسة
+        delete driverSessions[chatId];
         
-        // نضيف البيانات الجديدة لـ pendingOrders للمرحلة الجاية
-        pendingOrders[chatId] = { 
-          orderId, 
-          step: 'waiting_items_price',
-          messageId: messageId,
-          currentText: newText,
-          driverId: driverId
-        };
-        
-        console.log(`💰 تم الترقية إلى مرحلة انتظار سعر الطلبات للطلب ${orderId}`);
+        // إرسال رسالة إكمال
+        await sendToTelegram(chatId, 
+          `✅ <b>تم إكمال جميع البيانات!</b>\n\n` +
+          `📊 إجمالي الفاتورة: ${order.totalPrice} ج\n` +
+          `🚚 يمكنك الآن متابعة حالة الطلب من الأزرار.`
+        );
       }
     }
     
-    // لو المندوب في انتظار إدخال سعر الطلبات
-    else if (pendingOrders[chatId] && pendingOrders[chatId].step === 'waiting_items_price') {
-      const { orderId, messageId, currentText, driverId } = pendingOrders[chatId];
-      const order = orders.find(o => o.id === orderId);
-      
-      console.log(`💰 معالجة سعر الطلبات للمندوب ${driverId} والطلب ${orderId}`);
-      
-      if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
-        const price = parseInt(text);
-        if (!isNaN(price)) {
-          order.itemsPrice = price;
-          
-          let newText = currentText;
-          newText += `\n💰 سعر الطلبات: ${price} ج`;
-          
-          // بعد سعر الطلبات، نطلب سعر التوصيل
-          const keyboard = [
-            [
-              { text: '🚚 خدمة التوصيل', callback_data: `delivery_price_${orderId}` }
-            ]
-          ];
-          
-          await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, keyboard);
-          
-          await sendToTelegram(chatId, '✅ تم حفظ سعر الطلبات! الآن أدخل سعر التوصيل');
-          
-          // نضيف البيانات الجديدة لـ pendingOrders للمرحلة الجاية
-          pendingOrders[chatId] = { 
-            orderId, 
-            step: 'waiting_delivery_price',
-            messageId: messageId,
-            currentText: newText,
-            driverId: driverId
-          };
-          
-          console.log(`🚚 تم الترقية إلى مرحلة انتظار سعر التوصيل للطلب ${orderId}`);
-        } else {
-          await sendToTelegram(chatId, '❌ الرجاء إدخال رقم صحيح');
-        }
-      }
-    }
-    
-    // لو المندوب في انتظار إدخال سعر التوصيل
-    else if (pendingOrders[chatId] && pendingOrders[chatId].step === 'waiting_delivery_price') {
-      const { orderId, messageId, currentText, driverId } = pendingOrders[chatId];
-      const order = orders.find(o => o.id === orderId);
-      
-      console.log(`🚚 معالجة سعر التوصيل للمندوب ${driverId} والطلب ${orderId}`);
-      
-      if (order && order.acceptedBy && order.acceptedBy.id === update.message.from.id) {
-        const price = parseInt(text);
-        if (!isNaN(price)) {
-          order.deliveryPrice = price;
-          order.totalPrice = (order.itemsPrice || 0) + price;
-          order.status = 'جاري تجهيز الطلب';
-          
-          let newText = currentText;
-          newText += `\n🚚 خدمة التوصيل: ${price} ج`;
-          newText += `\n💰 الإجمالي الكلي: ${order.totalPrice} ج`;
-          
-          // أزرار الحالة
-          const keyboard = [
-            [{ text: '🔵 جاري التوصيل', callback_data: `status_${orderId}_جاري التوصيل` }],
-            [{ text: '🟢 تم التوصيل', callback_data: `status_${orderId}_تم التوصيل` }],
-            [
-              { text: '📞 اتصال', callback_data: `call_${orderId}` },
-              { text: '📍 العنوان', callback_data: `address_${orderId}` }
-            ]
-          ];
-          
-          await editTelegramMessage(DRIVER_CHANNEL_ID, messageId, newText, keyboard);
-          
-          await sendToTelegram(chatId, '✅ تم حفظ كل البيانات! يمكنك متابعة الطلب');
-          
-          delete pendingOrders[chatId];
-          console.log(`✅ اكتمل إدخال بيانات الطلب ${orderId}`);
-        } else {
-          await sendToTelegram(chatId, '❌ الرجاء إدخال رقم صحيح');
-        }
-      }
-    }
-    
-    // أوامر المسح والعرض للأدمن
+    // ===== أوامر الأدمن =====
     else if (isAdmin && text) {
       
       if (text.startsWith('/bill ')) {
@@ -683,7 +561,10 @@ app.post('/webhook', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 بوت الطلبات شغال على بورت ${PORT}`);
-  console.log(`📋 أوامر الأدمن:`);
-  console.log(`   - /bill ORDER_ID: عرض فاتورة محددة`);
-  console.log(`   - /all_bills: عرض كل الفواتير`);
+  console.log(`📋 نظام إدخال البيانات بالأسئلة:`);
+  console.log(`   1. قبول الطلب (زر)`);
+  console.log(`   2. إرسال رقم الموبايل (نص)`);
+  console.log(`   3. إرسال سعر الطلبات (نص)`);
+  console.log(`   4. إرسال سعر التوصيل (نص)`);
+  console.log(`   5. أزرار الحالة تظهر تلقائياً`);
 });
