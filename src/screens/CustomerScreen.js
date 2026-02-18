@@ -30,13 +30,10 @@ const images = {
 };
 
 const SERVICES = [
-  // الأقسام المفعلة (Active)
   { id: 'supermarket', name: 'سوبر ماركت', image: images.supermarket, screen: 'Grocery', active: true },
   { id: 'restaurant', name: 'مطاعم', image: images.restaurant, screen: 'Restaurant', active: true },
   { id: 'ironing', name: 'مكوجي', image: images.ironing, screen: 'Ironing', active: true },
   { id: 'kitchen', name: 'مطابخ', image: images.kitchen, screen: 'Kitchen', active: true },
-  
-  // الأقسام غير المفعلة (قريباً)
   { id: 'pharmacy', name: 'صيدليات', image: images.pharmacy, screen: 'Grocery', active: false },
   { id: 'plumbing', name: 'سباكة', image: images.plumbing, screen: 'Grocery', active: false },
   { id: 'carpentry', name: 'نجارة', image: images.carpentry, screen: 'Grocery', active: false },
@@ -81,21 +78,27 @@ export default function CustomerScreen({ navigation }) {
   }, [navigation]);
 
   const getStatusColor = (status) => {
-    switch(status) {
-      case 'جديد': return '#F59E0B';
-      case 'جاري التوصيل': return '#3B82F6';
-      case 'تم التوصيل': return '#10B981';
-      default: return '#6B7280';
-    }
+    if (status.includes('تم استلام')) return '#F59E0B';
+    if (status.includes('جاري تجهيز')) return '#3B82F6';
+    if (status.includes('جاري التوصيل')) return '#8B5CF6';
+    if (status.includes('تم التوصيل')) return '#10B981';
+    return '#6B7280';
   };
 
   const getStatusIcon = (status) => {
-    switch(status) {
-      case 'جديد': return 'time-outline';
-      case 'جاري التوصيل': return 'bicycle-outline';
-      case 'تم التوصيل': return 'checkmark-circle-outline';
-      default: return 'help-outline';
-    }
+    if (status.includes('تم استلام')) return 'time-outline';
+    if (status.includes('جاري تجهيز')) return 'construct-outline';
+    if (status.includes('جاري التوصيل')) return 'bicycle-outline';
+    if (status.includes('تم التوصيل')) return 'checkmark-circle-outline';
+    return 'help-outline';
+  };
+
+  const getStatusText = (status) => {
+    if (status.includes('تم استلام')) return 'تم استلام طلبك';
+    if (status.includes('جاري تجهيز')) return 'جاري التحضير';
+    if (status.includes('جاري التوصيل')) return 'جاري التوصيل';
+    if (status.includes('تم التوصيل')) return 'تم التوصيل';
+    return status;
   };
 
   return (
@@ -135,7 +138,7 @@ export default function CustomerScreen({ navigation }) {
                     <Text style={styles.orderServiceText}>{order.serviceName || 'طلب'}</Text>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
-                    <Text style={styles.statusBadgeText}>{order.status}</Text>
+                    <Text style={styles.statusBadgeText}>{getStatusText(order.status)}</Text>
                   </View>
                 </TouchableOpacity>
               ))

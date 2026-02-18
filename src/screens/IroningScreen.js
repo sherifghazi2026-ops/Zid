@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,7 +9,7 @@ import {
   ScrollView,
   Dimensions,
   ActivityIndicator,
-  Alert
+  Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -31,38 +31,26 @@ const ITEM_TYPES = [
 export default function IroningScreen({ navigation }) {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [address, setAddress] = useState('جنة 2');
-  const [ironCart, setIronCart] = useState({});    // كوي فقط
-  const [cleanCart, setCleanCart] = useState({});  // تنظيف + كوي
+  const [ironCart, setIronCart] = useState({});
+  const [cleanCart, setCleanCart] = useState({});
   const [loading, setLoading] = useState(false);
   const [notes, setNotes] = useState('');
-
-  // حالات التسجيل الصوتي
   const [isRecording, setIsRecording] = useState(false);
   const [recording, setRecording] = useState(null);
   const [recordedUri, setRecordedUri] = useState(null);
-  const [sound, setSound] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [uploadingVoice, setUploadingVoice] = useState(false);
 
   useEffect(() => {
     loadSavedData();
-    return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
   }, []);
 
   const loadSavedData = async () => {
     const savedPhone = await AsyncStorage.getItem('zayed_phone');
     if (savedPhone) setPhoneNumber(savedPhone);
-    
-    // تحميل العنوان المحفوظ
     const savedAddress = await AsyncStorage.getItem('zayed_address');
     if (savedAddress) setAddress(savedAddress);
   };
 
-  // تحديث عداد كوي فقط
   const updateIronCart = (id, delta) => {
     setIronCart(prev => {
       const currentQty = prev[id] || 0;
@@ -76,7 +64,6 @@ export default function IroningScreen({ navigation }) {
     });
   };
 
-  // تحديث عداد تنظيف + كوي
   const updateCleanCart = (id, delta) => {
     setCleanCart(prev => {
       const currentQty = prev[id] || 0;
@@ -90,26 +77,17 @@ export default function IroningScreen({ navigation }) {
     });
   };
 
-  // حساب الإجمالي
   const calculateTotal = () => {
     let total = 0;
-
-    // كوي فقط
     ITEM_TYPES.forEach(item => {
       const ironQty = ironCart[item.id] || 0;
-      total += ironQty * item.ironPrice;
-    });
-
-    // تنظيف + كوي
-    ITEM_TYPES.forEach(item => {
       const cleanQty = cleanCart[item.id] || 0;
+      total += ironQty * item.ironPrice;
       total += cleanQty * item.cleanPrice;
     });
-
     return total;
   };
 
-  // حساب إجمالي عدد القطع
   const totalItems = () => {
     let total = 0;
     ITEM_TYPES.forEach(item => {
@@ -118,7 +96,6 @@ export default function IroningScreen({ navigation }) {
     return total;
   };
 
-  // ==================== دوال التسجيل الصوتي ====================
   const startRecording = async () => {
     try {
       const permission = await Audio.requestPermissionsAsync();
@@ -144,7 +121,6 @@ export default function IroningScreen({ navigation }) {
 
   const stopRecording = async () => {
     if (!recording) return;
-
     setIsRecording(false);
     try {
       await recording.stopAndUnloadAsync();
@@ -157,47 +133,12 @@ export default function IroningScreen({ navigation }) {
     }
   };
 
-  const playRecording = async () => {
-    if (!recordedUri) return;
-
-    try {
-      if (sound) {
-        await sound.unloadAsync();
-      }
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: recordedUri },
-        { shouldPlay: true }
-      );
-      setSound(newSound);
-      setIsPlaying(true);
-      newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) {
-          setIsPlaying(false);
-        }
-      });
-    } catch (error) {
-      Alert.alert('خطأ', 'فشل تشغيل التسجيل');
-    }
-  };
-
-  const deleteRecording = () => {
-    setRecordedUri(null);
-    if (sound) {
-      sound.unloadAsync();
-      setSound(null);
-    }
-    setIsPlaying(false);
-  };
-
-  // رفع الملف الصوتي للسيرفر
   const uploadVoice = async (uri) => {
     try {
       setUploadingVoice(true);
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-
-      console.log('📤 رفع ملف صوتي...');
 
       const response = await fetch(`${SERVER_URL}/upload-voice`, {
         method: 'POST',
@@ -206,8 +147,6 @@ export default function IroningScreen({ navigation }) {
       });
 
       const data = await response.json();
-      console.log('📥 رد السيرفر:', data);
-
       return data.success ? data.url : null;
     } catch (error) {
       console.error('❌ فشل رفع الصوت:', error);
@@ -223,38 +162,30 @@ export default function IroningScreen({ navigation }) {
 
     setLoading(true);
     try {
-      // رفع الصوت لو موجود
       let voiceUrl = null;
       if (recordedUri) {
         voiceUrl = await uploadVoice(recordedUri);
       }
 
-      // تجهيز تفاصيل الطلب
       let itemsDetail = [];
-
       ITEM_TYPES.forEach(item => {
         const ironQty = ironCart[item.id] || 0;
         const cleanQty = cleanCart[item.id] || 0;
-
-        if (ironQty > 0) {
-          itemsDetail.push(`${item.name} (كوي فقط) x${ironQty} = ${ironQty * item.ironPrice}ج`);
-        }
-        if (cleanQty > 0) {
-          itemsDetail.push(`${item.name} (غسيل وكوي) x${cleanQty} = ${cleanQty * item.cleanPrice}ج`);
-        }
+        if (ironQty > 0) itemsDetail.push(`${item.name} (كوي فقط) x${ironQty}`);
+        if (cleanQty > 0) itemsDetail.push(`${item.name} (غسيل وكوي) x${cleanQty}`);
       });
 
       const orderData = {
         phone: phoneNumber,
         address: address,
-        serviceName: 'مكوجي',
         items: itemsDetail,
-        totalPrice: calculateTotal(),
-        notes: notes,
-        voiceUrl: voiceUrl
+        rawText: notes,
+        voiceUrl: voiceUrl,
+        serviceName: 'مكوجي',
+        totalPrice: calculateTotal()
       };
 
-      console.log('📤 إرسال الطلب:', orderData);
+      console.log('📤 إرسال طلب مكوجي:', orderData);
 
       const response = await fetch(`${SERVER_URL}/send-order`, {
         method: 'POST',
@@ -263,16 +194,14 @@ export default function IroningScreen({ navigation }) {
       });
 
       const result = await response.json();
-      console.log('📥 رد السيرفر:', result);
 
       if (result.success) {
-        // حفظ البيانات بعد نجاح الإرسال
         await AsyncStorage.setItem('zayed_phone', phoneNumber);
         await AsyncStorage.setItem('zayed_address', address);
 
         Alert.alert(
           '✅ تم بنجاح',
-          'تم إرسال طلبك للمحل وتتبعه عبر التليجرام',
+          'تم إرسال طلبك، سيتم التواصل معك قريباً',
           [{ text: 'ممتاز', onPress: () => navigation.goBack() }]
         );
       } else {
@@ -288,7 +217,6 @@ export default function IroningScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-forward" size={28} color="#1F2937" />
@@ -300,7 +228,6 @@ export default function IroningScreen({ navigation }) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* User Info Section */}
         <View style={styles.infoCard}>
           <View style={styles.inputRow}>
             <Ionicons name="call" size={20} color="#F59E0B" />
@@ -323,7 +250,6 @@ export default function IroningScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Items Grid مع عدادين لكل صنف */}
         <View style={styles.grid}>
           {ITEM_TYPES.map((item) => {
             const ironQty = ironCart[item.id] || 0;
@@ -340,7 +266,6 @@ export default function IroningScreen({ navigation }) {
                 </View>
                 <Text style={styles.itemName}>{item.name}</Text>
 
-                {/* كوي فقط */}
                 <View style={styles.serviceRow}>
                   <Text style={styles.serviceLabel}>كوي فقط</Text>
                   <View style={styles.counter}>
@@ -355,7 +280,6 @@ export default function IroningScreen({ navigation }) {
                   <Text style={styles.itemPrice}>{item.ironPrice}ج</Text>
                 </View>
 
-                {/* تنظيف + كوي */}
                 <View style={[styles.serviceRow, { marginTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: 8 }]}>
                   <Text style={styles.serviceLabel}>غسيل وكوي</Text>
                   <View style={styles.counter}>
@@ -374,7 +298,6 @@ export default function IroningScreen({ navigation }) {
           })}
         </View>
 
-        {/* Voice Recorder Section */}
         <View style={styles.voiceSection}>
           <Text style={styles.voiceTitle}>🎤 مذكرة صوتية (اختياري)</Text>
 
@@ -395,12 +318,11 @@ export default function IroningScreen({ navigation }) {
             </TouchableOpacity>
           ) : (
             <View style={styles.recordedControls}>
-              <TouchableOpacity style={styles.recordAction} onPress={playRecording} disabled={uploadingVoice}>
-                <Ionicons name={isPlaying ? "pause" : "play"} size={24} color="#3B82F6" />
-                <Text style={styles.recordActionText}>{isPlaying ? 'إيقاف' : 'استماع'}</Text>
+              <TouchableOpacity style={styles.recordAction} onPress={() => {}} disabled={uploadingVoice}>
+                <Ionicons name="play" size={24} color="#3B82F6" />
+                <Text style={styles.recordActionText}>استماع</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity style={[styles.recordAction, styles.deleteAction]} onPress={deleteRecording} disabled={uploadingVoice}>
+              <TouchableOpacity style={[styles.recordAction, styles.deleteAction]} onPress={() => setRecordedUri(null)} disabled={uploadingVoice}>
                 <Ionicons name="trash" size={24} color="#EF4444" />
                 <Text style={[styles.recordActionText, styles.deleteText]}>حذف</Text>
               </TouchableOpacity>
@@ -419,7 +341,6 @@ export default function IroningScreen({ navigation }) {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Fixed Bottom Footer */}
       {totalItems() > 0 && (
         <View style={styles.footer}>
           <View style={styles.totalInfo}>
