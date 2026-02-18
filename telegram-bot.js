@@ -20,7 +20,7 @@ const DRIVER_CHANNEL_ID = "1814331589";
 // تخزين البيانات
 let customers = {};
 let orders = [];
-let pendingOrders = {}; // للطلبات المعلقة بانتظار رقم التليفون
+let pendingOrders = {};
 
 // ==================== دوال مساعدة ====================
 const sendMessage = async (chatId, text, keyboard = null, botType = 'main') => {
@@ -178,12 +178,10 @@ app.post('/send-order', async (req, res) => {
 
   const { phone, address, items, rawText, voiceUrl, serviceName = 'سوبر ماركت', totalPrice } = req.body;
 
-  // اختيار البوت المناسب
   const botType = serviceName === 'مكوجي' ? 'ironing' : 'main';
   
   const orderId = serviceName === 'مكوجي' ? 'IRN-' + Math.floor(Math.random() * 1000000) : 'ORD-' + Math.floor(Math.random() * 1000000);
 
-  // حالة الطلب حسب نوع الخدمة
   let initialStatus = 'تم استلام طلبك';
   if (serviceName === 'سوبر ماركت') initialStatus = 'جاري تجهيز الطلب';
 
@@ -204,7 +202,6 @@ app.post('/send-order', async (req, res) => {
 
   orders.push(newOrder);
 
-  // رسالة للمندوبين مع أزرار القبول فقط
   const message =
     `🆕 <b>طلب جديد - ${serviceName}</b>\n` +
     `──────────────────\n\n` +
@@ -219,7 +216,6 @@ app.post('/send-order', async (req, res) => {
     `🔻 <b>الحالة:</b> ${initialStatus}\n` +
     `🆔 رقم الطلب: <code>${orderId}</code>`;
 
-  // أزرار القبول فقط (بدون أزرار تغيير الحالة)
   const keyboard = [
     [
       { text: '✅ قبول الطلب', callback_data: `accept_${orderId}` }
@@ -257,7 +253,7 @@ app.post('/webhook', async (req, res) => {
       body: JSON.stringify({ callback_query_id: callback.id })
     });
 
-    const [action, orderId] = data.split('_');
+    const [action, orderId, param] = data.split('_');
 
     const order = orders.find(o => o.id === orderId);
     if (!order) {
@@ -265,15 +261,11 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // قبول الطلب
     if (action === 'accept') {
-      // تخزين الطلب مؤقتاً لاستكمال البيانات
       pendingOrders[orderId] = order;
       
-      // حذف أزرار القبول
       await editMessage(chatId, messageId, callback.message.text, [], order.botType);
       
-      // طلب رقم التليفون من المندوب
       await sendMessage(chatId, 
         `📞 تم قبول الطلب #${orderId}\n\n` +
         `الرجاء إرسال رقم التليفون للتواصل مع العميل:`,
@@ -282,39 +274,40 @@ app.post('/webhook', async (req, res) => {
       );
     }
 
-    // تحديث الحالة بعد إدخال رقم التليفون
     else if (action === 'status') {
-      const [_, orderId, newStatus] = data.split('_');
-      const order = orders.find(o => o.id === orderId);
+      const newStatus = param === 'delivering' ? 'جاري التوصيل' : 'تم التوصيل';
       
-      if (order) {
-        order.status = newStatus === 'delivering' ? 'جاري التوصيل' : 'تم التوصيل';
-        
-        // تحديث الرسالة
-        const updatedMessage = callback.message.text.replace(/🔻 <b>الحالة:<\/b> .+/, `🔻 <b>الحالة:</b> ${order.status}`);
-        await editMessage(chatId, messageId, updatedMessage, [
-          [
-            { text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` },
-            { text: '✅ تم التوصيل', callback_data: `status_${orderId}_done` }
-          ]
-        ], order.botType);
-      }
+      order.status = newStatus;
+      
+      const updatedMessage = callback.message.text.replace(/🔻 <b>الحالة:<\/b> .+/, `🔻 <b>الحالة:</b> ${newStatus}`);
+      
+      const statusIcon = newStatus === 'جاري التوصيل' ? '🚚' : '✅';
+      
+      await editMessage(chatId, messageId, updatedMessage, [
+        [
+          { text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` },
+          { text: '✅ تم التوصيل', callback_data: `status_${orderId}_done` }
+        ]
+      ], order.botType);
+      
+      await sendMessage(DRIVER_CHANNEL_ID,
+        `${statusIcon} <b>تحديث الطلب #${orderId}</b>\n` +
+        `الحالة الجديدة: ${newStatus}`,
+        null,
+        order.botType
+      );
     }
   }
 
-  // معالجة الرسائل النصية (رقم التليفون بعد القبول)
   else if (update.message) {
     const chatId = update.message.chat.id;
     const text = update.message.text;
 
-    // البحث عن طلب معلق لهذا المندوب
     const pendingOrder = Object.values(pendingOrders).find(o => o.phone === text);
     
     if (pendingOrder && text.match(/^01[0-9]{9}$/)) {
-      // تحديث الطلب برقم التليفون
       pendingOrder.driverPhone = text;
       
-      // إرسال طلب السعر
       await sendMessage(chatId,
         `💰 تم تسجيل رقم التليفون\n\n` +
         `الرجاء إدخال السعر الإجمالي للطلب:`,
@@ -322,23 +315,26 @@ app.post('/webhook', async (req, res) => {
         pendingOrder.botType
       );
       
-      // تخزين مؤقت للمرحلة التالية
       pendingOrders[`price_${pendingOrder.id}`] = pendingOrder;
       delete pendingOrders[pendingOrder.id];
     }
     
-    // استقبال السعر
     else if (text.match(/^\d+$/)) {
       const priceOrder = Object.values(pendingOrders).find(o => o.id && o.id.includes('price_'));
       if (priceOrder) {
         priceOrder.totalPrice = parseInt(text);
         
-        // إرسال تأكيد للمندوب
+        const orderIndex = orders.findIndex(o => o.id === priceOrder.id);
+        if (orderIndex !== -1) {
+          orders[orderIndex].driverPhone = priceOrder.driverPhone;
+          orders[orderIndex].totalPrice = priceOrder.totalPrice;
+        }
+        
         await sendMessage(chatId,
           `✅ تم تأكيد الطلب\n\n` +
-          `💰 السعر الإجمالي: ${priceOrder.totalPrice} ج\n` +
-          `🚚 تكلفة التوصيل: 0 ج\n\n` +
-          `الآن يمكنك تحديث الحالة باستخدام الأزرار:`,
+          `📞 رقم العميل: ${priceOrder.driverPhone}\n` +
+          `💰 السعر الإجمالي: ${priceOrder.totalPrice} ج\n\n` +
+          `🔻 يمكنك الآن تحديث حالة التتبع:`,
           [
             [
               { text: '🚚 جاري التوصيل', callback_data: `status_${priceOrder.id}_delivering` },
