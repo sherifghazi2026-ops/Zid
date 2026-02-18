@@ -12,6 +12,10 @@ const BOTS = {
   ironing: {
     token: "8216174777:AAERldfUvyWcDsXWPHLrnvz4bmmkcQiTzus",
     api: "https://api.telegram.org/bot8216174777:AAERldfUvyWcDsXWPHLrnvz4bmmkcQiTzus"
+  },
+  offers: {
+    token: "8367864849:AAEgn5GdgBZZgVH0RP3h_QfqLEOdEkRGLS4",
+    api: "https://api.telegram.org/bot8367864849:AAEgn5GdgBZZgVH0RP3h_QfqLEOdEkRGLS4"
   }
 };
 
@@ -20,7 +24,7 @@ const DRIVER_CHANNEL_ID = "1814331589";
 // تخزين البيانات
 let customers = {};
 let orders = [];
-let pendingOrders = {};
+let offers = [];
 
 // ==================== دوال مساعدة ====================
 const sendMessage = async (chatId, text, keyboard = null, botType = 'main') => {
@@ -80,6 +84,26 @@ const editMessage = async (chatId, messageId, text, keyboard = null, botType = '
   }
 };
 
+// ==================== إرسال تحديث للعميل ====================
+const notifyCustomer = async (order, newStatus) => {
+  try {
+    const statusMessages = {
+      'جاري التوصيل': '🚚 المندوب في الطريق إليك!',
+      'تم التوصيل': '✅ تم توصيل طلبك بنجاح'
+    };
+
+    const message = 
+      `🔔 <b>تحديث حالة الطلب #${order.id}</b>\n\n` +
+      `الحالة: <b>${newStatus}</b>\n` +
+      `${statusMessages[newStatus] || ''}\n\n` +
+      `📞 للاستفسار: ${order.driverPhone || 'قريباً'}`;
+
+    await sendMessage(order.phone, message, null, order.botType);
+  } catch (error) {
+    console.error('خطأ في إشعار العميل:', error);
+  }
+};
+
 // ==================== فحص جميع المسارات ====================
 app.get('/routes', (req, res) => {
   res.json({
@@ -91,6 +115,8 @@ app.get('/routes', (req, res) => {
       '/order-status/:orderId (GET)',
       '/active-orders (GET)',
       '/webhook (POST)',
+      '/webhook-offers (POST)',
+      '/api/offers (GET)',
       '/routes (GET)'
     ]
   });
@@ -169,8 +195,145 @@ app.get('/voices/:filename', (req, res) => {
 
 // ==================== الصفحة الرئيسية ====================
 app.get('/', (req, res) => {
-  res.send('✅ بوت Zayed-ID شغال على Railway!');
+  res.json({
+    status: '✅ بوت Zayed-ID شغال على Railway!',
+    bots: Object.keys(BOTS),
+    ordersCount: orders.length,
+    offersCount: offers.length
+  });
 });
+
+// ==================== مسارات بوت العروض ====================
+app.get('/api/offers', (req, res) => {
+  const sortedOffers = [...offers].sort((a, b) => 
+    new Date(b.createdAt) - new Date(a.createdAt)
+  );
+  
+  res.json({
+    success: true,
+    offers: sortedOffers
+  });
+});
+
+app.post('/webhook-offers', async (req, res) => {
+  const update = req.body;
+
+  if (update.message) {
+    const chatId = update.message.chat.id;
+    const text = update.message.text;
+    const isAdmin = chatId === 1814331589;
+
+    if (!isAdmin) {
+      return res.sendStatus(200);
+    }
+
+    if (text && !text.startsWith('/')) {
+      const offerId = 'OFFER-' + Date.now();
+      const newOffer = {
+        id: offerId,
+        type: 'text',
+        text: text,
+        createdAt: new Date().toISOString(),
+        createdBy: chatId
+      };
+
+      offers.push(newOffer);
+
+      await sendMessage(chatId,
+        `✅ <b>تم نشر العرض بنجاح!</b>\n` +
+        `🆔 معرف العرض: <code>${offerId}</code>\n` +
+        `📝 النص: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`,
+        null,
+        'offers'
+      );
+    }
+
+    else if (text) {
+      if (text === '/offers') {
+        if (offers.length === 0) {
+          await sendMessage(chatId, '📭 لا توجد عروض حالياً', null, 'offers');
+        } else {
+          let response = '📋 <b>العروض الحالية:</b>\n\n';
+          offers.slice(-10).reverse().forEach((offer, index) => {
+            response += `${index + 1}. 🆔 <code>${offer.id}</code>\n`;
+            response += `   📝 ${offer.text.substring(0, 50)}${offer.text.length > 50 ? '...' : ''}\n`;
+            response += `   🕐 ${new Date(offer.createdAt).toLocaleString('ar-EG')}\n\n`;
+          });
+          await sendMessage(chatId, response, null, 'offers');
+        }
+      }
+
+      else if (text.startsWith('/delete_offer ')) {
+        const offerId = text.replace('/delete_offer ', '').trim();
+        const index = offers.findIndex(o => o.id === offerId);
+
+        if (index !== -1) {
+          offers.splice(index, 1);
+          await sendMessage(chatId, `✅ تم مسح العرض <code>${offerId}</code>`, null, 'offers');
+        } else {
+          await sendMessage(chatId, `❌ العرض <code>${offerId}</code> غير موجود`, null, 'offers');
+        }
+      }
+
+      else if (text === '/clear_all') {
+        offers = [];
+        await sendMessage(chatId, '✅ تم مسح جميع العروض', null, 'offers');
+      }
+    }
+
+    if (update.message.photo) {
+      const photo = update.message.photo.pop();
+      const fileId = photo.file_id;
+      const caption = update.message.caption || '';
+
+      const fileResponse = await fetch(`${BOTS.offers.api}/getFile?file_id=${fileId}`);
+      const fileData = await fileResponse.json();
+
+      if (fileData.ok) {
+        const filePath = fileData.result.file_path;
+        const fileUrl = `https://api.telegram.org/file/bot${BOTS.offers.token}/${filePath}`;
+
+        const imageResponse = await fetch(fileUrl);
+        const imageBuffer = await imageResponse.buffer();
+
+        const uploadsDir = '/tmp/offer-uploads';
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+
+        const fileName = `offer-${Date.now()}.jpg`;
+        const localPath = `${uploadsDir}/${fileName}`;
+        fs.writeFileSync(localPath, imageBuffer);
+
+        const imageUrl = `https://zayedid-production.up.railway.app/offer-uploads/${fileName}`;
+
+        const offerId = 'OFFER-' + Date.now();
+        const newOffer = {
+          id: offerId,
+          type: 'image',
+          imageUrl: imageUrl,
+          text: caption || null,
+          createdAt: new Date().toISOString(),
+          createdBy: chatId
+        };
+
+        offers.push(newOffer);
+
+        await sendMessage(chatId,
+          `✅ <b>تم نشر العرض المصور!</b>\n` +
+          `🆔 معرف العرض: <code>${offerId}</code>\n` +
+          (caption ? `📝 التعليق: ${caption.substring(0, 50)}${caption.length > 50 ? '...' : ''}` : ''),
+          null,
+          'offers'
+        );
+      }
+    }
+  }
+
+  res.sendStatus(200);
+});
+
+app.use('/offer-uploads', express.static('/tmp/offer-uploads'));
 
 // ==================== استقبال الطلب من التطبيق ====================
 app.post('/send-order', async (req, res) => {
@@ -197,7 +360,8 @@ app.post('/send-order', async (req, res) => {
     messageId: null,
     botType,
     serviceName,
-    totalPrice: totalPrice || 0
+    totalPrice: totalPrice || 0,
+    driverPhone: null
   };
 
   orders.push(newOrder);
@@ -261,91 +425,63 @@ app.post('/webhook', async (req, res) => {
       return res.sendStatus(200);
     }
 
+    // قبول الطلب - مباشرة تظهر أزرار التتبع
     if (action === 'accept') {
-      pendingOrders[orderId] = order;
-      
+      // تحديث رسالة القبول
       await editMessage(chatId, messageId, callback.message.text, [], order.botType);
       
-      await sendMessage(chatId, 
-        `📞 تم قبول الطلب #${orderId}\n\n` +
-        `الرجاء إرسال رقم التليفون للتواصل مع العميل:`,
-        null,
+      // إرسال أزرار التتبع مباشرة
+      await sendMessage(chatId,
+        `✅ تم قبول الطلب #${orderId}\n\n` +
+        `🔻 يمكنك الآن تحديث حالة التتبع:`,
+        [
+          [
+            { text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` },
+            { text: '✅ تم التوصيل', callback_data: `status_${orderId}_done` }
+          ]
+        ],
         order.botType
       );
     }
 
+    // تحديث حالة التتبع
     else if (action === 'status') {
       const newStatus = param === 'delivering' ? 'جاري التوصيل' : 'تم التوصيل';
       
+      const oldStatus = order.status;
       order.status = newStatus;
       
-      const updatedMessage = callback.message.text.replace(/🔻 <b>الحالة:<\/b> .+/, `🔻 <b>الحالة:</b> ${newStatus}`);
+      // تحديث رسالة المندوبين
+      const updatedMessage = callback.message.text.replace(oldStatus, newStatus);
       
-      const statusIcon = newStatus === 'جاري التوصيل' ? '🚚' : '✅';
-      
-      await editMessage(chatId, messageId, updatedMessage, [
-        [
+      // تحديد الأزرار حسب الحالة الجديدة
+      let buttons = [];
+      if (newStatus === 'جاري التوصيل') {
+        buttons = [[
           { text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` },
           { text: '✅ تم التوصيل', callback_data: `status_${orderId}_done` }
-        ]
-      ], order.botType);
+        ]];
+      } else if (newStatus === 'تم التوصيل') {
+        buttons = [[
+          { text: '✅ تم التوصيل', callback_data: `status_${orderId}_done` }
+        ]];
+      }
       
+      await editMessage(chatId, messageId, updatedMessage, buttons, order.botType);
+      
+      // إشعار بالقناة الرئيسية
+      const statusIcon = newStatus === 'جاري التوصيل' ? '🚚' : '✅';
       await sendMessage(DRIVER_CHANNEL_ID,
         `${statusIcon} <b>تحديث الطلب #${orderId}</b>\n` +
-        `الحالة الجديدة: ${newStatus}`,
+        `الحالة الجديدة: ${newStatus}\n` +
+        `📞 العميل: ${order.phone}\n` +
+        `📍 العنوان: ${order.address}`,
         null,
         order.botType
       );
-    }
-  }
-
-  else if (update.message) {
-    const chatId = update.message.chat.id;
-    const text = update.message.text;
-
-    const pendingOrder = Object.values(pendingOrders).find(o => o.phone === text);
-    
-    if (pendingOrder && text.match(/^01[0-9]{9}$/)) {
-      pendingOrder.driverPhone = text;
       
-      await sendMessage(chatId,
-        `💰 تم تسجيل رقم التليفون\n\n` +
-        `الرجاء إدخال السعر الإجمالي للطلب:`,
-        null,
-        pendingOrder.botType
-      );
-      
-      pendingOrders[`price_${pendingOrder.id}`] = pendingOrder;
-      delete pendingOrders[pendingOrder.id];
-    }
-    
-    else if (text.match(/^\d+$/)) {
-      const priceOrder = Object.values(pendingOrders).find(o => o.id && o.id.includes('price_'));
-      if (priceOrder) {
-        priceOrder.totalPrice = parseInt(text);
-        
-        const orderIndex = orders.findIndex(o => o.id === priceOrder.id);
-        if (orderIndex !== -1) {
-          orders[orderIndex].driverPhone = priceOrder.driverPhone;
-          orders[orderIndex].totalPrice = priceOrder.totalPrice;
-        }
-        
-        await sendMessage(chatId,
-          `✅ تم تأكيد الطلب\n\n` +
-          `📞 رقم العميل: ${priceOrder.driverPhone}\n` +
-          `💰 السعر الإجمالي: ${priceOrder.totalPrice} ج\n\n` +
-          `🔻 يمكنك الآن تحديث حالة التتبع:`,
-          [
-            [
-              { text: '🚚 جاري التوصيل', callback_data: `status_${priceOrder.id}_delivering` },
-              { text: '✅ تم التوصيل', callback_data: `status_${priceOrder.id}_done` }
-            ]
-          ],
-          priceOrder.botType
-        );
-        
-        delete pendingOrders[`price_${priceOrder.id}`];
-      }
+      // إرسال تحديث للعميل
+      await notifyCustomer(order, newStatus);
     }
   }
 
@@ -355,8 +491,11 @@ app.post('/webhook', async (req, res) => {
 // ==================== تشغيل السيرفر ====================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 بوت تليجرام شغال على بورت ${PORT}`);
+  console.log(`🚀 بوت Zayed-ID شغال على بورت ${PORT}`);
   console.log(`🔗 رابط السيرفر: https://zayedid-production.up.railway.app`);
   console.log(`🤖 البوت الرئيسي: 8216105936`);
   console.log(`🤖 بوت المكوجي: 8216174777`);
+  console.log(`🤖 بوت العروض: 8367864849`);
+  console.log(`📢 قناة المندوبين: ${DRIVER_CHANNEL_ID}`);
+  console.log(`✅ نظام التتبع: مباشرة بعد القبول`);
 });
