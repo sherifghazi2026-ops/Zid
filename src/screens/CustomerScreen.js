@@ -30,11 +30,14 @@ const images = {
 };
 
 const SERVICES = [
+  // الأقسام المفعلة (تفتح)
   { id: 'supermarket', name: 'سوبر ماركت', image: images.supermarket, screen: 'Grocery', active: true },
   { id: 'restaurant', name: 'مطاعم', image: images.restaurant, screen: 'Restaurant', active: true },
   { id: 'ironing', name: 'مكوجي', image: images.ironing, screen: 'Ironing', active: true },
   { id: 'kitchen', name: 'مطابخ', image: images.kitchen, screen: 'Kitchen', active: true },
-  { id: 'pharmacy', name: 'صيدليات', image: images.pharmacy, screen: 'Grocery', active: false },
+  
+  // الأقسام غير المفعلة (تظهر بشكل طبيعي لكن عند الضغط عليها تظهر رسالة قريباً)
+  { id: 'pharmacy', name: 'صيدليات', image: images.pharmacy, screen: 'Grocery', active: true }, // فعلناها
   { id: 'plumbing', name: 'سباكة', image: images.plumbing, screen: 'Grocery', active: false },
   { id: 'carpentry', name: 'نجارة', image: images.carpentry, screen: 'Grocery', active: false },
   { id: 'marble', name: 'رخام', image: images.marble, screen: 'Grocery', active: false },
@@ -79,26 +82,16 @@ export default function CustomerScreen({ navigation }) {
 
   const getStatusColor = (status) => {
     if (status.includes('تم استلام')) return '#F59E0B';
-    if (status.includes('جاري تجهيز')) return '#3B82F6';
-    if (status.includes('جاري التوصيل')) return '#8B5CF6';
-    if (status.includes('تم التوصيل')) return '#10B981';
+    if (status.includes('جاري التوصيل')) return '#3B82F6';
+    if (status.includes('تم التسليم')) return '#10B981';
     return '#6B7280';
   };
 
   const getStatusIcon = (status) => {
     if (status.includes('تم استلام')) return 'time-outline';
-    if (status.includes('جاري تجهيز')) return 'construct-outline';
     if (status.includes('جاري التوصيل')) return 'bicycle-outline';
-    if (status.includes('تم التوصيل')) return 'checkmark-circle-outline';
+    if (status.includes('تم التسليم')) return 'checkmark-circle-outline';
     return 'help-outline';
-  };
-
-  const getStatusText = (status) => {
-    if (status.includes('تم استلام')) return 'تم استلام طلبك';
-    if (status.includes('جاري تجهيز')) return 'جاري التحضير';
-    if (status.includes('جاري التوصيل')) return 'جاري التوصيل';
-    if (status.includes('تم التوصيل')) return 'تم التوصيل';
-    return status;
   };
 
   return (
@@ -138,7 +131,7 @@ export default function CustomerScreen({ navigation }) {
                     <Text style={styles.orderServiceText}>{order.serviceName || 'طلب'}</Text>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
-                    <Text style={styles.statusBadgeText}>{getStatusText(order.status)}</Text>
+                    <Text style={styles.statusBadgeText}>{order.status}</Text>
                   </View>
                 </TouchableOpacity>
               ))
@@ -151,16 +144,12 @@ export default function CustomerScreen({ navigation }) {
         {SERVICES.map((service) => (
           <TouchableOpacity
             key={service.id}
-            style={[
-              styles.card,
-              { width: CARD_SIZE },
-              !service.active && styles.inactiveCard
-            ]}
+            style={[styles.card, { width: CARD_SIZE }]}
             onPress={() => {
               if (service.active) {
                 navigation.navigate(service.screen);
               } else {
-                Alert.alert('قريباً', 'هذه الخدمة ستكون متاحة قريباً');
+                Alert.alert('🔜 قريباً', 'هذه الخدمة ستكون متاحة قريباً');
               }
             }}
             activeOpacity={0.8}
@@ -168,11 +157,6 @@ export default function CustomerScreen({ navigation }) {
             <Image source={service.image} style={styles.cardImage} />
             <View style={styles.overlay}>
               <Text style={styles.cardTitle}>{service.name}</Text>
-              {!service.active && (
-                <View style={styles.comingSoonBadge}>
-                  <Text style={styles.comingSoonText}>قريباً</Text>
-                </View>
-              )}
             </View>
           </TouchableOpacity>
         ))}
@@ -238,7 +222,6 @@ const styles = StyleSheet.create({
   statusBadgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', padding: 16 },
   card: { height: 180, marginBottom: 16, borderRadius: 25, overflow: 'hidden', elevation: 5 },
-  inactiveCard: { opacity: 0.6 },
   cardImage: { width: '100%', height: '100%' },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -246,17 +229,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cardTitle: { color: '#FFF', fontSize: 22, fontWeight: 'bold', marginBottom: 5 },
-  comingSoonBadge: {
-    backgroundColor: 'rgba(239, 68, 68, 0.8)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginTop: 5,
-  },
-  comingSoonText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
+  cardTitle: { color: '#FFF', fontSize: 22, fontWeight: 'bold' },
 });
