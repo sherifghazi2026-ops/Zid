@@ -17,22 +17,31 @@ import OrderTracking from '../components/OrderTracking';
 const { width } = Dimensions.get('window');
 const CARD_SIZE = (width - 60) / 2;
 
+// أيقونة التطبيق فقط (بدون خلفية)
+const appIcon = require('../../assets/icons/Zidicon.png');
+
+// جميع أيقونات الخدمات
 const images = {
+  // الأنظمة الحالية
   supermarket: require('../../assets/icons/supermarket-8k.png'),
   restaurant: require('../../assets/icons/restaurant-8k.png'),
-  pharmacy: require('../../assets/icons/pharmacy-8k.png'),
   ironing: require('../../assets/icons/ironing-8k.png'),
+  
+  // الخدمات الموجودة سابقاً
+  pharmacy: require('../../assets/icons/pharmacy-8k.png'),
   plumbing: require('../../assets/icons/plumbing-8k.png'),
   kitchen: require('../../assets/icons/Kitchen.png'),
   carpentry: require('../../assets/icons/carpentry-8k.png'),
   marble: require('../../assets/icons/marble-8k.png'),
-  winch: require('../../assets/icons/winch-8k.png'), // افتراضي - سيضيف المستخدم
-  electrician: require('../../assets/icons/electrician-8k.png'), // افتراضي
-  moving: require('../../assets/icons/moving-8k.png'), // افتراضي
+  
+  // الخدمات الجديدة
+  winch: require('../../assets/icons/winch-8k.png'),
+  electrician: require('../../assets/icons/electrician-8k.png'),
+  moving: require('../../assets/icons/moving-8k.png'),
 };
 
 const SERVICES = [
-  // الأنظمة الحالية
+  // الأنظمة الحالية (لا تغيير)
   { id: 'supermarket', name: 'سوبر ماركت', image: images.supermarket, screen: 'Grocery' },
   { id: 'restaurant', name: 'مطاعم', image: images.restaurant, screen: 'Restaurant' },
   { id: 'ironing', name: 'مكوجي', image: images.ironing, screen: 'Ironing' },
@@ -101,9 +110,15 @@ export default function CustomerScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* الهيدر الأصلي بدون صورة خلفية */}
       <View style={styles.header}>
-        <Text style={styles.title}>ZAYED ID</Text>
-        <Text style={styles.subtitle}>دوس على الخدمة اللي عايزها</Text>
+        <View style={styles.headerContent}>
+          <Image source={appIcon} style={styles.headerIcon} />
+          <View>
+            <Text style={styles.title}>ZAYED ID</Text>
+            <Text style={styles.subtitle}>دوس على الخدمة اللي عايزها</Text>
+          </View>
+        </View>
       </View>
 
       {activeOrders.length > 0 && (
@@ -173,14 +188,35 @@ export default function CustomerScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   header: {
-    padding: 25,
-    paddingTop: 60,
     backgroundColor: '#4F46E5',
+    paddingTop: 60,
+    paddingBottom: 20,
     borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30
+    borderBottomRightRadius: 30,
   },
-  title: { fontSize: 32, fontWeight: '800', color: '#FFF' },
-  subtitle: { fontSize: 16, color: 'rgba(255,255,255,0.8)', marginTop: 5 },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    gap: 15,
+  },
+  headerIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.9)',
+  },
   ordersSection: { padding: 20 },
   sectionHeader: {
     flexDirection: 'row',
