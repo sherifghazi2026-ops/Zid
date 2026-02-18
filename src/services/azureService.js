@@ -6,15 +6,36 @@ const azureService = {
   askAI: async (userMessage) => {
     try {
       console.log("🚀 Sending to Azure AI...");
+      const url = `${ENDPOINT}openai/deployments/${DEPLOYMENT_NAME}/chat/completions?api-version=2024-05-01-preview`;
       
-      // رد تجريبي مؤقت (بدون استدعاء حقيقي لـ Azure)
-      return { 
-        success: true, 
-        text: "مطبخ الشيف زايد تحت أمرك! هناخد طلبك دلوقتي. عايز إيه النهاردة؟" 
-      };
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'api-key': API_KEY 
+        },
+        body: JSON.stringify({
+          messages: [
+            { 
+              role: "system", 
+              content: `أنت مساعد ذكي لتطبيق Zayed-ID للمطاعم في الشيخ زايد. رد بالعامية المصرية.` 
+            },
+            { role: "user", content: userMessage }
+          ]
+        })
+      });
       
+      const data = await response.json();
+      console.log("Azure response status:", response.status);
+      
+      if (response.ok && data.choices && data.choices.length > 0) {
+        return { success: true, text: data.choices[0].message.content };
+      } else {
+        console.error("Azure error:", data);
+        return { success: false, text: "عذراً، لم أستطع الرد الآن." };
+      }
     } catch (e) {
-      console.error("Error:", e);
+      console.error("Fetch error:", e);
       return { success: false, text: "في مشكلة في الشبكة، جرب تاني." };
     }
   }

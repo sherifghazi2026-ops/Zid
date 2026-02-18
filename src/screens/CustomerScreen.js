@@ -9,7 +9,6 @@ import {
   Dimensions,
   Image,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,20 +26,26 @@ const images = {
   kitchen: require('../../assets/icons/Kitchen.png'),
   carpentry: require('../../assets/icons/carpentry-8k.png'),
   marble: require('../../assets/icons/marble-8k.png'),
+  winch: require('../../assets/icons/winch-8k.png'), // افتراضي - سيضيف المستخدم
+  electrician: require('../../assets/icons/electrician-8k.png'), // افتراضي
+  moving: require('../../assets/icons/moving-8k.png'), // افتراضي
 };
 
 const SERVICES = [
-  // الأقسام المفعلة (تفتح)
-  { id: 'supermarket', name: 'سوبر ماركت', image: images.supermarket, screen: 'Grocery', active: true },
-  { id: 'restaurant', name: 'مطاعم', image: images.restaurant, screen: 'Restaurant', active: true },
-  { id: 'ironing', name: 'مكوجي', image: images.ironing, screen: 'Ironing', active: true },
-  { id: 'kitchen', name: 'مطابخ', image: images.kitchen, screen: 'Kitchen', active: true },
+  // الأنظمة الحالية
+  { id: 'supermarket', name: 'سوبر ماركت', image: images.supermarket, screen: 'Grocery' },
+  { id: 'restaurant', name: 'مطاعم', image: images.restaurant, screen: 'Restaurant' },
+  { id: 'ironing', name: 'مكوجي', image: images.ironing, screen: 'Ironing' },
   
-  // الأقسام غير المفعلة (تظهر بشكل طبيعي لكن عند الضغط عليها تظهر رسالة قريباً)
-  { id: 'pharmacy', name: 'صيدليات', image: images.pharmacy, screen: 'Grocery', active: true }, // فعلناها
-  { id: 'plumbing', name: 'سباكة', image: images.plumbing, screen: 'Grocery', active: false },
-  { id: 'carpentry', name: 'نجارة', image: images.carpentry, screen: 'Grocery', active: false },
-  { id: 'marble', name: 'رخام', image: images.marble, screen: 'Grocery', active: false },
+  // الخدمات الجديدة
+  { id: 'pharmacy', name: 'صيدليات', image: images.pharmacy, screen: 'Pharmacy' },
+  { id: 'kitchen', name: 'مطابخ', image: images.kitchen, screen: 'Kitchen' },
+  { id: 'plumbing', name: 'سباكة', image: images.plumbing, screen: 'Plumbing' },
+  { id: 'carpentry', name: 'نجارة', image: images.carpentry, screen: 'Carpentry' },
+  { id: 'marble', name: 'رخام', image: images.marble, screen: 'Marble' },
+  { id: 'winch', name: 'ونش', image: images.winch, screen: 'Winch' },
+  { id: 'electrician', name: 'كهربائي', image: images.electrician, screen: 'Electrician' },
+  { id: 'moving', name: 'نقل اثاث', image: images.moving, screen: 'Moving' },
 ];
 
 const RAILWAY_API_URL = 'https://zayedid-production.up.railway.app';
@@ -81,16 +86,16 @@ export default function CustomerScreen({ navigation }) {
   }, [navigation]);
 
   const getStatusColor = (status) => {
+    if (status.includes('في الطريق')) return '#3B82F6';
+    if (status.includes('تم التنفيذ')) return '#10B981';
     if (status.includes('تم استلام')) return '#F59E0B';
-    if (status.includes('جاري التوصيل')) return '#3B82F6';
-    if (status.includes('تم التسليم')) return '#10B981';
     return '#6B7280';
   };
 
   const getStatusIcon = (status) => {
+    if (status.includes('في الطريق')) return 'bicycle-outline';
+    if (status.includes('تم التنفيذ')) return 'checkmark-circle-outline';
     if (status.includes('تم استلام')) return 'time-outline';
-    if (status.includes('جاري التوصيل')) return 'bicycle-outline';
-    if (status.includes('تم التسليم')) return 'checkmark-circle-outline';
     return 'help-outline';
   };
 
@@ -145,13 +150,7 @@ export default function CustomerScreen({ navigation }) {
           <TouchableOpacity
             key={service.id}
             style={[styles.card, { width: CARD_SIZE }]}
-            onPress={() => {
-              if (service.active) {
-                navigation.navigate(service.screen);
-              } else {
-                Alert.alert('🔜 قريباً', 'هذه الخدمة ستكون متاحة قريباً');
-              }
-            }}
+            onPress={() => navigation.navigate(service.screen)}
             activeOpacity={0.8}
           >
             <Image source={service.image} style={styles.cardImage} />
@@ -227,7 +226,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.2)',
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'center'
   },
   cardTitle: { color: '#FFF', fontSize: 22, fontWeight: 'bold' },
 });

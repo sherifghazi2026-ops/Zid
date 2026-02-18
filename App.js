@@ -12,6 +12,9 @@ import CustomerScreen from './src/screens/CustomerScreen';
 import RestaurantScreen from './src/screens/RestaurantScreen';
 import GroceryScreen from './src/screens/GroceryScreen';
 import IroningScreen from './src/screens/IroningScreen';
+import KitchenScreen from './src/screens/KitchenScreen';
+import PharmacyScreen from './src/screens/PharmacyScreen';
+import ServiceScreen from './src/screens/ServiceScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -20,14 +23,28 @@ function CustomerStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="CustomerMain" component={CustomerScreen} />
+      
+      {/* الأنظمة الحالية (لا تغيير) */}
       <Stack.Screen name="Restaurant" component={RestaurantScreen} />
       <Stack.Screen name="Grocery" component={GroceryScreen} />
       <Stack.Screen name="Ironing" component={IroningScreen} />
+      
+      {/* الخدمات الجديدة */}
+      <Stack.Screen name="Kitchen" component={KitchenScreen} />
+      <Stack.Screen name="Pharmacy" component={PharmacyScreen} />
+      
+      {/* الخدمات العامة */}
+      <Stack.Screen name="Winch" component={ServiceScreen} initialParams={{ serviceType: 'winch' }} />
+      <Stack.Screen name="Electrician" component={ServiceScreen} initialParams={{ serviceType: 'electrician' }} />
+      <Stack.Screen name="Moving" component={ServiceScreen} initialParams={{ serviceType: 'moving' }} />
+      <Stack.Screen name="Marble" component={ServiceScreen} initialParams={{ serviceType: 'marble' }} />
+      <Stack.Screen name="Plumbing" component={ServiceScreen} initialParams={{ serviceType: 'plumbing' }} />
+      <Stack.Screen name="Carpentry" component={ServiceScreen} initialParams={{ serviceType: 'carpentry' }} />
     </Stack.Navigator>
   );
 }
 
-// شاشة العروض المؤقتة
+// شاشة العروض
 function OffersScreen() {
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' }}>
@@ -48,7 +65,7 @@ export default function App() {
           screenOptions={({ route }) => ({
             tabBarIcon: ({ focused, color, size }) => {
               let iconName;
-              
+
               if (route.name === 'طلب') {
                 iconName = focused ? 'cart' : 'cart-outline';
               } else if (route.name === 'عروض') {
