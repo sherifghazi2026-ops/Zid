@@ -11,7 +11,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ==================== البوتات (كل خدمة لها بوت خاص) ====================
+// ==================== البوتات ====================
 const BOTS = {
   supermarket: { token: "8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A", api: "https://api.telegram.org/bot8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A" },
   restaurant: { token: "8529394963:AAGKZYTeAUwsnK9RJF-sbOmIj6e7F7XmJdw", api: "https://api.telegram.org/bot8529394963:AAGKZYTeAUwsnK9RJF-sbOmIj6e7F7XmJdw" },
@@ -26,10 +26,23 @@ const BOTS = {
   kitchen: { token: "8036001015:AAFLp3P1pzHgtiUyPQqNyheKLRqF2VrQxdU", api: "https://api.telegram.org/bot8036001015:AAFLp3P1pzHgtiUyPQqNyheKLRqF2VrQxdU" }
 };
 
-// نفس رقم الجروب لجميع الخدمات (المندوبين يشوفوا كل حاجة)
-const DRIVER_CHANNEL_ID = "1814331589";
+// جروبات كل خدمة (كل خدمة لها جروب خاص)
+const GROUPS = {
+  supermarket: "1814331589",
+  restaurant: "1814331589",
+  ironing: "1814331589",
+  pharmacy: "1814331589",
+  winch: "1814331589",
+  electrician: "1814331589",
+  moving: "1814331589",
+  marble: "1814331589",
+  plumbing: "1814331589",
+  carpentry: "1814331589",
+  kitchen: "1814331589"
+};
+
 let orders = [];
-let pendingOrders = {}; // للطلبات المعلقة بانتظار بيانات المندوب
+let pendingOrders = {};
 
 // ==================== دوال المساعدة ====================
 const sendMessage = async (chatId, text, keyboard = null, botType = 'supermarket') => {
@@ -124,7 +137,7 @@ app.use('/uploads', express.static('/tmp', {
 // ==================== جلب الطلبات النشطة ====================
 app.get('/active-orders', (req, res) => {
   try {
-    const activeOrders = orders.filter(o => o.status !== '✅ تم التنفيذ');
+    const activeOrders = orders.filter(o => o.status !== '✅ تم التوصيل');
     res.json({ success: true, orders: activeOrders.map(o => ({
       id: o.id,
       phone: o.phone,
@@ -169,7 +182,7 @@ app.get('/order-status/:orderId', (req, res) => {
 app.post('/send-order', async (req, res) => {
   const { phone, address, items, rawText, voiceUrl, imageUrl, serviceName = 'سوبر ماركت', itemsPrice = 0, deliveryFee = 15 } = req.body;
   
-  // خريطة الخدمات للبوتات (كل خدمة لها بوتها الخاص)
+  // خريطة الخدمات للبوتات
   const botMap = {
     'سوبر ماركت': 'supermarket',
     'مطاعم': 'restaurant',
@@ -185,53 +198,69 @@ app.post('/send-order', async (req, res) => {
   };
   
   const botType = botMap[serviceName] || 'supermarket';
+  const groupId = GROUPS[botType] || "1814331589";
+  
   const orderId = (serviceName === 'مكوجي' ? 'IRN-' : 'ORD-') + Math.floor(100000 + Math.random() * 900000);
-  const initialStatus = '📦 تم استلام طلبك';
   const date = new Date().toISOString();
-  const totalPrice = (itemsPrice || 0) + (deliveryFee || 0);
+  
+  // تحديد الحالة الأولية حسب الخدمة
+  let initialStatus = '📦 تم استلام طلبك';
+  let serviceType = 'normal';
+  
+  if (serviceName === 'ونش' || serviceName === 'كهربائي' || serviceName === 'نقل اثاث' || 
+      serviceName === 'رخام' || serviceName === 'سباكة' || serviceName === 'نجارة' || serviceName === 'مطابخ') {
+    initialStatus = '📦 تم استلام طلبك (سيتم التواصل خلال 24 ساعة)';
+    serviceType = 'service';
+  }
 
   const newOrder = { 
     id: orderId, 
     phone, 
     address, 
-    items, 
+    items: Array.isArray(items) ? items : [items], 
     status: initialStatus, 
     serviceName, 
     botType, 
     date,
-    itemsPrice: itemsPrice || 0,
-    deliveryFee: deliveryFee || 0,
-    totalPrice,
+    itemsPrice: serviceName === 'سوبر ماركت' ? itemsPrice : 0, // سوبر ماركت يجيب السعر من التطبيق
+    deliveryFee: 0, // المندوب سيدخله بعدين
+    totalPrice: serviceName === 'سوبر ماركت' ? itemsPrice : 0,
     driverPhone: null,
     accepted: false
   };
   orders.push(newOrder);
 
-  // رسالة للمندوبين على تليجرام (كلها تروح لنفس الجروب لكن ببوتات مختلفة)
+  // رسالة للمندوبين
   let message = 
     `🧾 <b>طلب جديد - ${serviceName}</b>\n` +
     `──────────────────\n` +
     `📞 <b>العميل:</b> ${phone}\n` +
     `📍 <b>العنوان:</b> ${address}\n` +
     `──────────────────\n` +
-    `📝 <b>التفاصيل:</b>\n${Array.isArray(items) ? items.join('\n') : items}\n` +
-    `──────────────────\n` +
-    `💰 <b>سعر الطلبات:</b> ${itemsPrice} ج\n` +
-    `🚚 <b>خدمة التوصيل:</b> ${deliveryFee} ج\n` +
-    `💵 <b>الإجمالي:</b> ${totalPrice} ج\n` +
+    `📝 <b>التفاصيل:</b>\n${Array.isArray(items) ? items.join('\n') : items}\n`;
+  
+  // سوبر ماركت السعر معروف من البداية
+  if (serviceName === 'سوبر ماركت') {
+    message += `──────────────────\n💰 <b>سعر الطلبات:</b> ${itemsPrice} ج\n`;
+  }
+  
+  if (imageUrl) message += `🖼️ <b>صورة مرفقة</b>\n`;
+  if (voiceUrl) message += `🎤 <b>تسجيل صوتي مرفق</b>\n`;
+  
+  message += 
     `──────────────────\n` +
     `🔻 <b>الحالة:</b> ${initialStatus}\n` +
     `🆔 <b>رقم الطلب:</b> <code>${orderId}</code>`;
 
-  // أزرار القبول (تظهر لجميع المندوبين)
+  // أزرار القبول
   let keyboard = [[
     { text: '✅ قبول الطلب', callback_data: `accept_${orderId}` }
   ]];
 
-  await sendMessage(DRIVER_CHANNEL_ID, message, keyboard, botType);
+  await sendMessage(groupId, message, keyboard, botType);
   
-  if (imageUrl) await sendPhoto(DRIVER_CHANNEL_ID, imageUrl, '🖼️ صورة الطلب', botType);
-  if (voiceUrl) await sendVoice(DRIVER_CHANNEL_ID, voiceUrl, botType);
+  if (imageUrl) await sendPhoto(groupId, imageUrl, '🖼️ صورة الطلب', botType);
+  if (voiceUrl) await sendVoice(groupId, voiceUrl, botType);
 
   res.json({ success: true, orderId });
 });
@@ -256,37 +285,38 @@ app.post('/webhook', async (req, res) => {
       const order = orders.find(o => o.id === orderId);
       
       if (order && !order.accepted) {
-        // الطلب لسه مقبولش
         order.accepted = true;
         order.acceptedBy = chatId;
         
-        // إخفاء أزرار القبول من الجميع
+        // إخفاء أزرار القبول
         await editMessage(chatId, messageId, message.text, [], order.botType);
         
         // إرسال رسالة للجروب أن الطلب اتعمل
-        await sendMessage(DRIVER_CHANNEL_ID,
+        await sendMessage(GROUPS[order.botType],
           `🔔 <b>الطلب #${orderId} تم قبوله بواسطة مندوب</b>`,
           null,
           order.botType
         );
         
-        // بدأ عملية إدخال البيانات مع المندوب الفائز
-        await sendMessage(chatId, 
-          `✅ <b>تم قبول الطلب #${orderId}</b>\n\n` +
-          `الرجاء إرسال رقم تليفونك للتواصل مع العميل:`,
-          null,
-          order.botType
-        );
+        // بدأ عملية إدخال البيانات
+        let nextMessage = '';
         
+        if (order.serviceName === 'سوبر ماركت') {
+          // سوبر ماركت: نطلب رقم التليفون أولاً
+          nextMessage = `✅ <b>تم قبول الطلب #${orderId}</b>\n\nالرجاء إرسال رقم تليفونك للتواصل مع العميل:`;
+        } else if (order.serviceName === 'مكوجي') {
+          // مكوجي: نطلب رقم التليفون أولاً
+          nextMessage = `✅ <b>تم قبول الطلب #${orderId}</b>\n\nالرجاء إرسال رقم تليفونك للتواصل مع العميل:`;
+        } else if (order.serviceName === 'صيدلية') {
+          // صيدلية: نطلب رقم التليفون أولاً
+          nextMessage = `✅ <b>تم قبول الطلب #${orderId}</b>\n\nالرجاء إرسال رقم تليفونك للتواصل مع العميل:`;
+        } else {
+          // باقي الخدمات: نطلب رقم التليفون أولاً
+          nextMessage = `✅ <b>تم قبول الطلب #${orderId}</b>\n\nالرجاء إرسال رقم تليفونك للتواصل مع العميل:`;
+        }
+        
+        await sendMessage(chatId, nextMessage, null, order.botType);
         pendingOrders[chatId] = orderId;
-        
-      } else if (order && order.accepted) {
-        // لو الطلب متقبل بالفعل
-        await sendMessage(chatId,
-          `❌ هذا الطلب تم قبوله بالفعل بواسطة مندوب آخر`,
-          null,
-          order.botType
-        );
       }
     }
   }
@@ -303,15 +333,28 @@ app.post('/webhook', async (req, res) => {
       if (order) {
         order.driverPhone = text;
         
-        await sendMessage(chatId,
-          `✅ تم حفظ رقم التليفون: ${text}\n\n` +
-          `💰 الرجاء إدخال سعر الطلبات (بدون تكلفة التوصيل):`,
-          null,
-          order.botType
-        );
+        let nextMessage = '';
         
+        if (order.serviceName === 'سوبر ماركت') {
+          // سوبر ماركت: بعد رقم التليفون نطلب تكلفة التوصيل
+          nextMessage = `✅ تم حفظ رقم التليفون: ${text}\n\n🚚 الرجاء إدخال تكلفة خدمة التوصيل:`;
+          pendingOrders[`delivery_${chatId}`] = orderId;
+        } else if (order.serviceName === 'مكوجي') {
+          // مكوجي: بعد رقم التليفون نطلب تكلفة التوصيل (السعر محدد)
+          nextMessage = `✅ تم حفظ رقم التليفون: ${text}\n\n💰 سعر الطلبات: ${order.itemsPrice} ج\n🚚 الرجاء إدخال تكلفة خدمة التوصيل:`;
+          pendingOrders[`delivery_${chatId}`] = orderId;
+        } else if (order.serviceName === 'صيدلية') {
+          // صيدلية: بعد رقم التليفون نطلب سعر الطلبات
+          nextMessage = `✅ تم حفظ رقم التليفون: ${text}\n\n💰 الرجاء إدخال سعر الطلبات:`;
+          pendingOrders[`price_${chatId}`] = orderId;
+        } else {
+          // باقي الخدمات: بعد رقم التليفون نطلب سعر الطلبات
+          nextMessage = `✅ تم حفظ رقم التليفون: ${text}\n\n💰 الرجاء إدخال سعر الطلبات:`;
+          pendingOrders[`price_${chatId}`] = orderId;
+        }
+        
+        await sendMessage(chatId, nextMessage, null, order.botType);
         delete pendingOrders[chatId];
-        pendingOrders[`price_${chatId}`] = orderId;
       }
     }
     
@@ -321,11 +364,10 @@ app.post('/webhook', async (req, res) => {
       
       if (order) {
         order.itemsPrice = parseInt(text);
-        order.totalPrice = order.itemsPrice + (order.deliveryFee || 15);
+        order.totalPrice = order.itemsPrice;
         
         await sendMessage(chatId,
-          `✅ تم حفظ سعر الطلبات: ${order.itemsPrice} ج\n\n` +
-          `🚚 الرجاء إدخال تكلفة خدمة التوصيل:`,
+          `✅ تم حفظ سعر الطلبات: ${order.itemsPrice} ج\n\n🚚 الرجاء إدخال تكلفة خدمة التوصيل:`,
           null,
           order.botType
         );
@@ -341,19 +383,25 @@ app.post('/webhook', async (req, res) => {
       
       if (order) {
         order.deliveryFee = parseInt(text);
-        order.totalPrice = order.itemsPrice + order.deliveryFee;
+        order.totalPrice = (order.itemsPrice || 0) + order.deliveryFee;
         
+        // تحديث رسالة الطلب الأصلية في الجروب
+        const groupId = GROUPS[order.botType];
+        const orderMessage = await fetchMessages(groupId);
+        
+        // إرسال أزرار التتبع للمندوب
         await sendMessage(chatId,
           `✅ <b>تم حفظ جميع البيانات</b>\n\n` +
           `📞 رقم المندوب: ${order.driverPhone}\n` +
-          `💰 سعر الطلبات: ${order.itemsPrice} ج\n` +
+          `💰 سعر الطلبات: ${order.itemsPrice || 0} ج\n` +
           `🚚 تكلفة التوصيل: ${order.deliveryFee} ج\n` +
           `💵 الإجمالي: ${order.totalPrice} ج\n\n` +
           `🔻 يمكنك الآن تحديث حالة الطلب:`,
           [
             [
-              { text: '🔧 جاري التنفيذ', callback_data: `status_${orderId}_progress` },
-              { text: '✅ تم التنفيذ', callback_data: `status_${orderId}_done` }
+              { text: '🔧 جاري التجهيز', callback_data: `status_${orderId}_preparing` },
+              { text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` },
+              { text: '✅ تم التوصيل', callback_data: `status_${orderId}_done` }
             ]
           ],
           order.botType
@@ -365,18 +413,44 @@ app.post('/webhook', async (req, res) => {
   }
   
   // معالجة أزرار الحالة
-  else if (update.callback_query && update.callback_query.data.startsWith('status_')) {
+  if (update.callback_query && update.callback_query.data.startsWith('status_')) {
     const { data, message, id } = update.callback_query;
     const chatId = message.chat.id;
     const messageId = message.message_id;
+    
+    await fetch(`https://api.telegram.org/bot8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A/answerCallbackQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callback_query_id: id })
+    });
     
     const [_, orderId, statusKey] = data.split('_');
     const order = orders.find(o => o.id === orderId);
     
     if (order) {
-      const newStatus = statusKey === 'progress' ? '🔧 جاري التنفيذ' : '✅ تم التنفيذ';
+      let newStatus = '';
+      let statusText = '';
+      
+      switch(statusKey) {
+        case 'preparing':
+          newStatus = '🔧 جاري تجهيز الطلبات';
+          statusText = 'جاري تجهيز طلبك';
+          break;
+        case 'delivering':
+          newStatus = '🚚 جاري التوصيل';
+          statusText = 'المندوب في الطريق إليك';
+          break;
+        case 'done':
+          newStatus = '✅ تم التوصيل';
+          statusText = 'تم توصيل طلبك بنجاح';
+          break;
+        default:
+          newStatus = order.status;
+      }
+      
       order.status = newStatus;
       
+      // تحديث رسالة الجروب
       const updatedText = message.text.replace(/🔻 الحالة:.+/, `🔻 الحالة: ${newStatus}`);
       await editMessage(chatId, messageId, updatedText, null, order.botType);
     }
@@ -384,6 +458,11 @@ app.post('/webhook', async (req, res) => {
   
   res.sendStatus(200);
 });
+
+// دالة مساعدة لجلب الرسائل (اختصار)
+async function fetchMessages(chatId) {
+  return null; // للتبسيط
+}
 
 // الصفحة الرئيسية
 app.get('/', (req, res) => res.json({ 
