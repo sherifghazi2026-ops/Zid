@@ -6,17 +6,16 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// إجبار الرد على أن يكون JSON دائماً
+// إجبار الرد على JSON
 app.use((req, res, next) => {
   res.setHeader('Content-Type', 'application/json');
   next();
 });
 
-// ==================== إعدادات البوتات ====================
+// ==================== البوتات ====================
 const BOTS = {
   main: { token: "8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A", api: "https://api.telegram.org/bot8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A" },
   ironing: { token: "8216174777:AAERldfUvyWcDsXWPHLrnvz4bmmkcQiTzus", api: "https://api.telegram.org/bot8216174777:AAERldfUvyWcDsXWPHLrnvz4bmmkcQiTzus" },
-  offers: { token: "8367864849:AAEgn5GdgBZZgVH0RP3h_QfqLEOdEkRGLS4", api: "https://api.telegram.org/bot8367864849:AAEgn5GdgBZZgVH0RP3h_QfqLEOdEkRGLS4" },
   pharmacy: { token: "8557544201:AAEJLfUMQ1jdbQewFURGuKbQCKEiS5TgYfY", api: "https://api.telegram.org/bot8557544201:AAEJLfUMQ1jdbQewFURGuKbQCKEiS5TgYfY" },
   winch: { token: "8543383060:AAFuFvm31hgVKe_DdifO_zQ1BilhYiyrf2s", api: "https://api.telegram.org/bot8543383060:AAFuFvm31hgVKe_DdifO_zQ1BilhYiyrf2s" },
   electrician: { token: "8037007700:AAF-f9jKDPBrL6FiAaZRWsKRjoGu9eRMBj4", api: "https://api.telegram.org/bot8037007700:AAF-f9jKDPBrL6FiAaZRWsKRjoGu9eRMBj4" },
@@ -75,46 +74,63 @@ const editMessage = async (chatId, messageId, text, keyboard = null, botType = '
   } catch (e) { console.error("Edit Error:", e); }
 };
 
-// ==================== رفع الملفات الصوتية ====================
-app.post('/upload-voice', async (req, res) => {
+// ==================== رفع الصور ====================
+app.post('/upload-image', async (req, res) => {
   try {
-    const { audio } = req.body;
-    if (!audio) {
-      return res.status(400).json({ success: false, error: 'لا يوجد ملف صوتي' });
-    }
-
-    console.log('📥 تم استقبال ملف صوتي');
-
-    const audioBuffer = Buffer.from(audio, 'base64');
-    const fileName = `voice-${Date.now()}.ogg`;
+    const { image } = req.body;
+    if (!image) return res.status(400).json({ success: false, error: 'لا يوجد صورة' });
+    
+    const imageBuffer = Buffer.from(image, 'base64');
+    const fileName = `image-${Date.now()}.jpg`;
     const filePath = `/tmp/${fileName}`;
-
-    fs.writeFileSync(filePath, audioBuffer);
-
+    fs.writeFileSync(filePath, imageBuffer);
+    
     const fileUrl = `https://zayedid-production.up.railway.app/uploads/${fileName}`;
-
-    console.log('🔗 رابط الملف الصوتي:', fileUrl);
-
     res.json({ success: true, url: fileUrl });
   } catch (error) {
-    console.error('❌ خطأ في رفع الصوت:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ==================== خدمة الملفات المرفوعة ====================
+// ==================== رفع الصوت ====================
+app.post('/upload-voice', async (req, res) => {
+  try {
+    const { audio } = req.body;
+    if (!audio) return res.status(400).json({ success: false, error: 'لا يوجد ملف صوتي' });
+    
+    const audioBuffer = Buffer.from(audio, 'base64');
+    const fileName = `voice-${Date.now()}.ogg`;
+    const filePath = `/tmp/${fileName}`;
+    fs.writeFileSync(filePath, audioBuffer);
+    
+    const fileUrl = `https://zayedid-production.up.railway.app/uploads/${fileName}`;
+    res.json({ success: true, url: fileUrl });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==================== خدمة الملفات ====================
 app.use('/uploads', express.static('/tmp'));
 
-// ==================== المسارات ====================
+// ==================== جلب الطلبات النشطة (للتطبيق) ====================
 app.get('/active-orders', (req, res) => {
   try {
-    const active = orders.filter(o => o.status !== '✅ تم التنفيذ بنجاح');
-    res.json({ success: true, orders: active });
+    const activeOrders = orders.filter(o => o.status !== '✅ تم التنفيذ');
+    res.json({ success: true, orders: activeOrders.map(o => ({
+      id: o.id,
+      phone: o.phone,
+      address: o.address,
+      serviceName: o.serviceName,
+      status: o.status,
+      date: o.date
+    })) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
+// ==================== حالة طلب معين (للتطبيق) ====================
 app.get('/order-status/:orderId', (req, res) => {
   try {
     const order = orders.find(o => o.id === req.params.orderId);
@@ -128,76 +144,49 @@ app.get('/order-status/:orderId', (req, res) => {
   }
 });
 
+// ==================== استقبال الطلب من التطبيق ====================
 app.post('/send-order', async (req, res) => {
   const { phone, address, items, rawText, voiceUrl, imageUrl, serviceName = 'سوبر ماركت', isServiceRequest } = req.body;
   
   const botMap = {
-    'مكوجي': 'ironing',
-    'صيدلية': 'pharmacy',
-    'ونش': 'winch',
-    'كهربائي': 'electrician',
-    'نقل اثاث': 'moving',
-    'رخام': 'marble',
-    'سباكة': 'plumbing',
-    'نجارة': 'carpentry',
-    'مطابخ': 'kitchen'
+    'مكوجي': 'ironing', 'صيدلية': 'pharmacy', 'ونش': 'winch', 'كهربائي': 'electrician',
+    'نقل اثاث': 'moving', 'رخام': 'marble', 'سباكة': 'plumbing', 'نجارة': 'carpentry', 'مطابخ': 'kitchen'
   };
   const botType = botMap[serviceName] || 'main';
   
   const orderId = (serviceName === 'مكوجي' ? 'IRN-' : 'ORD-') + Math.floor(100000 + Math.random() * 900000);
+  const initialStatus = 'تم استلام طلبك';
+  const date = new Date().toISOString();
 
-  const initialStatus = isServiceRequest ? '📦 تم استلام طلبك (سيتم التواصل خلال 24 ساعة)' : '📦 تم استلام طلبك';
-
-  const newOrder = {
-    id: orderId,
-    phone,
-    address,
-    items: Array.isArray(items) ? items.join('، ') : items,
-    status: initialStatus,
-    serviceName,
-    botType
-  };
+  const newOrder = { id: orderId, phone, address, items, status: initialStatus, serviceName, botType, date };
   orders.push(newOrder);
 
+  // رسالة للمندوبين على تليجرام
   let message = 
-    `🧾 <b>فاتورة طلب جديد - ${serviceName}</b>\n` +
-    `──────────────────\n` +
-    `👤 <b>العميل:</b> <code>${phone}</code>\n` +
-    `📍 <b>العنوان:</b> ${address}\n` +
-    `──────────────────\n` +
-    `📝 <b>التفاصيل:</b>\n${Array.isArray(items) ? items.join('\n') : items}\n` +
-    `──────────────────\n` +
-    `🔻 <b>الحالة:</b> ${initialStatus}\n` +
-    `🆔 رقم الطلب: <code>${orderId}</code>`;
+    `🧾 طلب جديد - ${serviceName}\n` +
+    `──────────────\n` +
+    `📞 العميل: ${phone}\n` +
+    `📍 العنوان: ${address}\n` +
+    `──────────────\n` +
+    `📝 التفاصيل:\n${Array.isArray(items) ? items.join('\n') : items}\n` +
+    `──────────────\n` +
+    `🔻 الحالة: ${initialStatus}\n` +
+    `🆔 رقم الطلب: ${orderId}`;
 
-  let keyboard = null;
-  if (!isServiceRequest) {
-    keyboard = [
-      [{ text: `📞 اتصل بالعميل`, url: `tel:${phone}` }],
-      [
-        { text: '🔧 الفني في الطريق', callback_data: `track_${orderId}_tech` },
-        { text: '✅ تم التنفيذ', callback_data: `track_${orderId}_done` }
-      ]
-    ];
-  }
+  let keyboard = [[
+    { text: '🔧 جاري التنفيذ', callback_data: `status_${orderId}_progress` },
+    { text: '✅ تم التنفيذ', callback_data: `status_${orderId}_done` }
+  ]];
 
   await sendMessage(DRIVER_CHANNEL_ID, message, keyboard, botType);
   
-  if (imageUrl) {
-    setTimeout(async () => {
-      await sendPhoto(DRIVER_CHANNEL_ID, imageUrl, '🖼️ صورة الروشتة', botType);
-    }, 2000);
-  }
-  
-  if (voiceUrl) {
-    setTimeout(async () => {
-      await sendVoice(DRIVER_CHANNEL_ID, voiceUrl, botType);
-    }, 3000);
-  }
+  if (imageUrl) await sendPhoto(DRIVER_CHANNEL_ID, imageUrl, 'صورة الطلب', botType);
+  if (voiceUrl) await sendVoice(DRIVER_CHANNEL_ID, voiceUrl, botType);
 
   res.json({ success: true, orderId });
 });
 
+// ==================== تحديث الحالة من تليجرام ====================
 app.post('/webhook', async (req, res) => {
   const update = req.body;
   if (update.callback_query) {
@@ -209,52 +198,23 @@ app.post('/webhook', async (req, res) => {
       body: JSON.stringify({ callback_query_id: id })
     });
 
-    if (data.startsWith('track_')) {
+    if (data.startsWith('status_')) {
       const [_, orderId, statusKey] = data.split('_');
       const order = orders.find(o => o.id === orderId);
       if (order) {
-        const statusText = statusKey === 'tech' ? '🔧 الفني في الطريق' : '✅ تم التنفيذ بنجاح';
-        order.status = statusText;
+        const newStatus = statusKey === 'progress' ? '🔧 جاري التنفيذ' : '✅ تم التنفيذ';
+        order.status = newStatus;
         
-        const updatedText = message.text.split('🔻')[0] + `🔻 <b>الحالة:</b> ${statusText}`;
-        
-        let newKeyboard = null;
-        if (statusKey === 'tech') {
-          newKeyboard = [[
-            { text: '✅ تم التنفيذ', callback_data: `track_${orderId}_done` }
-          ]];
-        }
-        
-        await editMessage(message.chat.id, message.message_id, updatedText, newKeyboard, order.botType);
-        
-        await sendMessage(DRIVER_CHANNEL_ID, 
-          `🔔 تحديث: الطلب <code>${orderId}</code> أصبح: ${statusText}`,
-          null,
-          order.botType
-        );
+        // تحديث رسالة المندوبين
+        const updatedText = message.text.replace(/🔻 الحالة:.+/, `🔻 الحالة: ${newStatus}`);
+        await editMessage(message.chat.id, message.message_id, updatedText, null, order.botType);
       }
     }
   }
   res.sendStatus(200);
 });
 
-// معالج الأخطاء
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ success: false, error: 'حدث خطأ في السيرفر' });
-});
-
-app.get('/', (req, res) => res.json({ 
-  status: "✅ Zayed-ID Bot System Running",
-  ordersCount: orders.length,
-  bots: Object.keys(BOTS)
-}));
+app.get('/', (req, res) => res.json({ status: "✅ شغال", ordersCount: orders.length }));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 سيرفر Zayed-ID شغال على بورت ${PORT}`);
-  console.log(`🔗 رابط السيرفر: https://zayedid-production.up.railway.app`);
-  console.log(`📢 قناة المندوبين: ${DRIVER_CHANNEL_ID}`);
-  console.log(`🎤 مسار رفع الصوت: /upload-voice`);
-  console.log(`✅ جميع البوتات مضمنة`);
-});
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 شغال على بورت ${PORT}`));
