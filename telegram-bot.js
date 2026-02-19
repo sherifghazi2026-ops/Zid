@@ -14,7 +14,11 @@ app.use((req, res, next) => {
 
 // ==================== البوتات ====================
 const BOTS = {
-  main: { token: "8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A", api: "https://api.telegram.org/bot8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A" },
+  // بوتات جديدة
+  supermarket: { token: "8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A", api: "https://api.telegram.org/bot8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A" },
+  restaurant: { token: "8529394963:AAGKZYTeAUwsnK9RJF-sbOmIj6e7F7XmJdw", api: "https://api.telegram.org/bot8529394963:AAGKZYTeAUwsnK9RJF-sbOmIj6e7F7XmJdw" },
+  
+  // البوتات القديمة
   ironing: { token: "8216174777:AAERldfUvyWcDsXWPHLrnvz4bmmkcQiTzus", api: "https://api.telegram.org/bot8216174777:AAERldfUvyWcDsXWPHLrnvz4bmmkcQiTzus" },
   pharmacy: { token: "8557544201:AAEJLfUMQ1jdbQewFURGuKbQCKEiS5TgYfY", api: "https://api.telegram.org/bot8557544201:AAEJLfUMQ1jdbQewFURGuKbQCKEiS5TgYfY" },
   winch: { token: "8543383060:AAFuFvm31hgVKe_DdifO_zQ1BilhYiyrf2s", api: "https://api.telegram.org/bot8543383060:AAFuFvm31hgVKe_DdifO_zQ1BilhYiyrf2s" },
@@ -30,7 +34,7 @@ const DRIVER_CHANNEL_ID = "1814331589";
 let orders = [];
 
 // ==================== دوال المساعدة ====================
-const sendMessage = async (chatId, text, keyboard = null, botType = 'main') => {
+const sendMessage = async (chatId, text, keyboard = null, botType = 'supermarket') => {
   try {
     const payload = { chat_id: chatId, text: text, parse_mode: 'HTML' };
     if (keyboard) payload.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
@@ -42,7 +46,7 @@ const sendMessage = async (chatId, text, keyboard = null, botType = 'main') => {
   } catch (e) { console.error("Send Error:", e); }
 };
 
-const sendVoice = async (chatId, voiceUrl, botType = 'main') => {
+const sendVoice = async (chatId, voiceUrl, botType = 'supermarket') => {
   try {
     await fetch(`${BOTS[botType].api}/sendVoice`, {
       method: 'POST',
@@ -52,7 +56,7 @@ const sendVoice = async (chatId, voiceUrl, botType = 'main') => {
   } catch (e) { console.error("Voice Error:", e); }
 };
 
-const sendPhoto = async (chatId, photoUrl, caption = '', botType = 'main') => {
+const sendPhoto = async (chatId, photoUrl, caption = '', botType = 'supermarket') => {
   try {
     await fetch(`${BOTS[botType].api}/sendPhoto`, {
       method: 'POST',
@@ -62,7 +66,7 @@ const sendPhoto = async (chatId, photoUrl, caption = '', botType = 'main') => {
   } catch (e) { console.error("Photo Error:", e); }
 };
 
-const editMessage = async (chatId, messageId, text, keyboard = null, botType = 'main') => {
+const editMessage = async (chatId, messageId, text, keyboard = null, botType = 'supermarket') => {
   try {
     const payload = { chat_id: chatId, message_id: messageId, text: text, parse_mode: 'HTML' };
     if (keyboard) payload.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
@@ -148,11 +152,22 @@ app.get('/order-status/:orderId', (req, res) => {
 app.post('/send-order', async (req, res) => {
   const { phone, address, items, rawText, voiceUrl, imageUrl, serviceName = 'سوبر ماركت', isServiceRequest } = req.body;
   
+  // خريطة الخدمات للبوتات
   const botMap = {
-    'مكوجي': 'ironing', 'صيدلية': 'pharmacy', 'ونش': 'winch', 'كهربائي': 'electrician',
-    'نقل اثاث': 'moving', 'رخام': 'marble', 'سباكة': 'plumbing', 'نجارة': 'carpentry', 'مطابخ': 'kitchen'
+    'سوبر ماركت': 'supermarket',
+    'مطاعم': 'restaurant',
+    'مكوجي': 'ironing',
+    'صيدلية': 'pharmacy',
+    'ونش': 'winch',
+    'كهربائي': 'electrician',
+    'نقل اثاث': 'moving',
+    'رخام': 'marble',
+    'سباكة': 'plumbing',
+    'نجارة': 'carpentry',
+    'مطابخ': 'kitchen'
   };
-  const botType = botMap[serviceName] || 'main';
+  
+  const botType = botMap[serviceName] || 'supermarket'; // افتراضي سوبر ماركت لو مش موجود
   
   const orderId = (serviceName === 'مكوجي' ? 'IRN-' : 'ORD-') + Math.floor(100000 + Math.random() * 900000);
   const initialStatus = 'تم استلام طلبك';
@@ -214,7 +229,7 @@ app.post('/webhook', async (req, res) => {
   res.sendStatus(200);
 });
 
-app.get('/', (req, res) => res.json({ status: "✅ شغال", ordersCount: orders.length }));
+app.get('/', (req, res) => res.json({ status: "✅ شغال", ordersCount: orders.length, bots: Object.keys(BOTS) }));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => console.log(`🚀 شغال على بورت ${PORT}`));
