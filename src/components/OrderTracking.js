@@ -207,9 +207,14 @@ export default function OrderTracking({ visible, onClose, orderId }) {
                 {order.items && order.items.length > 0 && (
                   <>
                     <Text style={[styles.detailsTitle, { marginTop: 12 }]}>📝 التفاصيل</Text>
-                    {order.items.map((item, index) => (
-                      <Text key={index} style={styles.detailText}>• {item}</Text>
-                    ))}
+{order.items && Array.isArray(order.items) 
+  ? order.items.map((item, index) => (
+      <Text key={index} style={styles.detailText}>• {item}</Text>
+    ))
+  : order.items && typeof order.items === 'string'
+    ? <Text style={styles.detailText}>• {order.items}</Text>
+    : null
+}
                   </>
                 )}
               </View>
