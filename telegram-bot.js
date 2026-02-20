@@ -11,7 +11,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ==================== البوتات (كل خدمة لها بوت خاص) ====================
+// ==================== البوتات (11 بوت) ====================
 const BOTS = {
   supermarket: { token: "8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A", api: "https://api.telegram.org/bot8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A" },
   restaurant: { token: "8529394963:AAGKZYTeAUwsnK9RJF-sbOmIj6e7F7XmJdw", api: "https://api.telegram.org/bot8529394963:AAGKZYTeAUwsnK9RJF-sbOmIj6e7F7XmJdw" },
@@ -26,7 +26,6 @@ const BOTS = {
   kitchen: { token: "8036001015:AAFLp3P1pzHgtiUyPQqNyheKLRqF2VrQxdU", api: "https://api.telegram.org/bot8036001015:AAFLp3P1pzHgtiUyPQqNyheKLRqF2VrQxdU" }
 };
 
-// نفس رقم الجروب لجميع الخدمات (المندوبين يشوفوا كل حاجة)
 const DRIVER_CHANNEL_ID = "1814331589";
 let orders = [];
 let pendingOrders = {};
@@ -112,12 +111,10 @@ app.post('/upload-voice', async (req, res) => {
   }
 });
 
-// ==================== خدمة الملفات ====================
+// خدمة الملفات
 app.use('/uploads', express.static('/tmp', {
   setHeaders: (res, path) => {
-    if (path.endsWith('.ogg')) {
-      res.setHeader('Content-Type', 'audio/ogg');
-    }
+    if (path.endsWith('.ogg')) res.setHeader('Content-Type', 'audio/ogg');
   }
 }));
 
@@ -125,18 +122,21 @@ app.use('/uploads', express.static('/tmp', {
 app.get('/active-orders', (req, res) => {
   try {
     const activeOrders = orders.filter(o => o.status !== '✅ تم التسليم');
-    res.json({ success: true, orders: activeOrders.map(o => ({
-      id: o.id,
-      phone: o.phone,
-      address: o.address,
-      serviceName: o.serviceName,
-      status: o.status,
-      date: o.date,
-      driverPhone: o.driverPhone || null,
-      itemsPrice: o.itemsPrice || 0,
-      deliveryFee: o.deliveryFee || 0,
-      totalPrice: o.totalPrice || 0
-    })) });
+    res.json({ 
+      success: true, 
+      orders: activeOrders.map(o => ({
+        id: o.id,
+        phone: o.phone,
+        address: o.address,
+        serviceName: o.serviceName,
+        status: o.status,
+        date: o.date,
+        driverPhone: o.driverPhone || null,
+        itemsPrice: o.itemsPrice || 0,
+        deliveryFee: o.deliveryFee || 0,
+        totalPrice: o.totalPrice || 0
+      })) 
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -177,6 +177,11 @@ app.post('/send-order', async (req, res) => {
     uploadedImages = [imageUrl];
   }
 
+  // منع الصور للونش
+  if (serviceName === 'ونش') {
+    uploadedImages = [];
+  }
+
   const botMap = {
     'سوبر ماركت': 'supermarket',
     'مطاعم': 'restaurant',
@@ -197,14 +202,30 @@ app.post('/send-order', async (req, res) => {
   const orderId = (serviceName === 'مكوجي' ? 'IRN-' : 'ORD-') + Math.floor(100000 + Math.random() * 900000);
   const date = new Date().toISOString();
 
-  let initialStatus = '📦 تم استلام طلبك';
-  const service24h = ['ونش', 'كهربائي', 'نقل اثاث', 'رخام', 'سباكة', 'نجارة', 'مطابخ'];
-  if (service24h.includes(serviceName)) {
+  // ==================== الخدمات الفنية (ونش، كهرباء، سباكة، نجارة، نقل أثاث، رخام، مطابخ) ====================
+  const technicalServices = ['ونش', 'كهربائي', 'سباكة', 'نجارة', 'نقل اثاث', 'رخام', 'مطابخ'];
+  const isTechnical = technicalServices.includes(serviceName);
+
+  // ==================== الخدمات (صيدلية، سوبر ماركت) ====================
+  const productServices = ['سوبر ماركت', 'صيدلية'];
+  const isProduct = productServices.includes(serviceName);
+
+  // ==================== المكوجي ====================
+  const isIroning = serviceName === 'مكوجي';
+
+  // تحديد الحالة الأولية حسب نوع الخدمة
+  let initialStatus = '';
+  if (isTechnical) {
     initialStatus = '📦 تم استلام طلبك (سيتم التواصل خلال 24 ساعة)';
+  } else if (isIroning) {
+    initialStatus = '👕 تم استلام الملابس';
+  } else if (isProduct) {
+    initialStatus = '🛒 جاري تجهيز الطلبية';
+  } else {
+    initialStatus = '📦 تم استلام طلبك';
   }
 
-  const totalPrice = (itemsPrice || 0) + (deliveryFee || 0);
-
+  // إنشاء الطلب
   const newOrder = {
     id: orderId,
     phone,
@@ -214,9 +235,9 @@ app.post('/send-order', async (req, res) => {
     serviceName,
     botType,
     date,
-    itemsPrice: serviceName === 'مكوجي' ? 0 : itemsPrice,
+    itemsPrice: 0,
     deliveryFee: 0,
-    totalPrice: serviceName === 'مكوجي' ? 0 : itemsPrice,
+    totalPrice: 0,
     driverPhone: null,
     accepted: false,
     images: uploadedImages,
@@ -225,36 +246,80 @@ app.post('/send-order', async (req, res) => {
   };
   orders.push(newOrder);
 
-  let message =
-    `🧾 <b>طلب جديد - ${serviceName}</b>\n` +
-    `──────────────────\n` +
-    `📞 <b>العميل:</b> ${phone}\n` +
-    `📍 <b>العنوان:</b> ${address}\n`;
+  // بناء رسالة الطلب حسب نوع الخدمة
+  let message = '';
 
-  if (location) {
-    message += `📍 <b>الموقع:</b> ${location}\n`;
+  if (isTechnical) {
+    // رسالة الخدمات الفنية
+    message = 
+      `🛻 <b>طلب خدمة فنية - ${serviceName}</b>\n` +
+      `════════════════════════\n` +
+      `👤 <b>العميل:</b> ${phone}\n` +
+      `📍 <b>العنوان:</b> ${address}\n`;
+
+    if (serviceName === 'ونش' && location) {
+      message += `📍 <b>الموقع:</b> <a href="https://maps.google.com/?q=${location}">اضغط للعرض</a>\n`;
+    }
+
+    message += 
+      `════════════════════════\n` +
+      `📝 <b>وصف المشكلة:</b>\n${rawText || 'بدون وصف'}\n`;
+
+    if (uploadedImages.length > 0) {
+      message += `\n🖼️ <b>عدد الصور المرفقة:</b> ${uploadedImages.length}\n`;
+    }
+    if (voiceUrl) message += `🎤 <b>تسجيل صوتي مرفق</b>\n`;
+
+    message += 
+      `════════════════════════\n` +
+      `💰 <b>التسعير:</b> يحدد السعر بعد المعاينة والفحص\n` +
+      `════════════════════════\n` +
+      `🔻 <b>الحالة:</b> ${initialStatus}\n` +
+      `🆔 <b>رقم الطلب:</b> <code>${orderId}</code>`;
+
+  } else if (isIroning) {
+    // رسالة المكوجي
+    message = 
+      `👕 <b>طلب مكوجي</b>\n` +
+      `════════════════════════\n` +
+      `👤 <b>العميل:</b> ${phone}\n` +
+      `📍 <b>العنوان:</b> ${address}\n` +
+      `════════════════════════\n` +
+      `📝 <b>تفاصيل الملابس:</b>\n${Array.isArray(items) ? items.join('\n') : items}\n`;
+
+    if (voiceUrl) message += `🎤 <b>تسجيل صوتي مرفق</b>\n`;
+
+    message += 
+      `════════════════════════\n` +
+      `💰 <b>سعر الغسيل:</b> يحدد حسب عدد القطع عند الاستلام\n` +
+      `🚚 <b>رسوم التوصيل:</b> ${deliveryFee} ج\n` +
+      `════════════════════════\n` +
+      `🔻 <b>الحالة:</b> ${initialStatus}\n` +
+      `🆔 <b>رقم الطلب:</b> <code>${orderId}</code>`;
+
+  } else if (isProduct) {
+    // رسالة المنتجات (سوبر ماركت، صيدلية)
+    message = 
+      `🛒 <b>طلب - ${serviceName}</b>\n` +
+      `════════════════════════\n` +
+      `👤 <b>العميل:</b> ${phone}\n` +
+      `📍 <b>العنوان:</b> ${address}\n` +
+      `════════════════════════\n` +
+      `📝 <b>المنتجات:</b>\n${Array.isArray(items) ? items.join('\n') : items}\n`;
+
+    if (uploadedImages.length > 0) {
+      message += `\n🖼️ <b>عدد الصور المرفقة:</b> ${uploadedImages.length}\n`;
+    }
+    if (voiceUrl) message += `🎤 <b>تسجيل صوتي مرفق</b>\n`;
+
+    message += 
+      `════════════════════════\n` +
+      `💰 <b>سعر المنتجات:</b> يحدد لاحقاً\n` +
+      `🚚 <b>خدمة التوصيل:</b> يحدد لاحقاً\n` +
+      `════════════════════════\n` +
+      `🔻 <b>الحالة:</b> ${initialStatus}\n` +
+      `🆔 <b>رقم الطلب:</b> <code>${orderId}</code>`;
   }
-
-  message += `──────────────────\n` +
-    `📝 <b>التفاصيل:</b>\n${Array.isArray(items) ? items.join('\n') : (rawText || items)}\n`;
-
-  if (serviceName === 'مكوجي') {
-    message += `──────────────────\n💰 <b>سعر الطلبات:</b> يحدد لاحقاً\n`;
-  } else {
-    message += `──────────────────\n💰 <b>سعر الطلبات:</b> ${itemsPrice} ج\n`;
-    message += `🚚 <b>خدمة التوصيل:</b> ${deliveryFee} ج\n`;
-    message += `💵 <b>الإجمالي:</b> ${totalPrice} ج\n`;
-  }
-
-  if (uploadedImages.length > 0) {
-    message += `🖼️ <b>عدد الصور المرفقة:</b> ${uploadedImages.length}\n`;
-  }
-  if (voiceUrl) message += `🎤 <b>تسجيل صوتي مرفق</b>\n`;
-
-  message +=
-    `──────────────────\n` +
-    `🔻 <b>الحالة:</b> ${initialStatus}\n` +
-    `🆔 <b>رقم الطلب:</b> <code>${orderId}</code>`;
 
   // أزرار القبول
   let keyboard = [[
@@ -315,6 +380,78 @@ app.post('/webhook', async (req, res) => {
         pendingOrders[chatId] = orderId;
       }
     }
+
+    else if (data.startsWith('status_')) {
+      const [_, orderId, statusKey] = data.split('_');
+      const order = orders.find(o => o.id === orderId);
+
+      if (order) {
+        let newStatus = '';
+        let buttons = [];
+
+        // تحديد الحالة حسب نوع الخدمة
+        if (order.serviceName === 'مكوجي') {
+          if (statusKey === 'collecting') newStatus = '🚚 جاري مندوبنا لاستلام الملابس';
+          else if (statusKey === 'washing') newStatus = '🧼 جاري الغسيل والكي';
+          else if (statusKey === 'ready') newStatus = '✅ تم التجهيز وجاري التوصيل';
+          else if (statusKey === 'done') newStatus = '🎉 تم التسليم';
+
+          if (statusKey === 'collecting') {
+            buttons = [
+              [{ text: '🧼 جاري الغسيل', callback_data: `status_${orderId}_washing` }],
+              [{ text: '✅ تم التجهيز', callback_data: `status_${orderId}_ready` }],
+              [{ text: '🎉 تم التسليم', callback_data: `status_${orderId}_done` }]
+            ];
+          } else if (statusKey === 'washing') {
+            buttons = [
+              [{ text: '✅ تم التجهيز', callback_data: `status_${orderId}_ready` }],
+              [{ text: '🎉 تم التسليم', callback_data: `status_${orderId}_done` }]
+            ];
+          } else if (statusKey === 'ready') {
+            buttons = [
+              [{ text: '🎉 تم التسليم', callback_data: `status_${orderId}_done` }]
+            ];
+          }
+
+        } else if (['ونش', 'كهربائي', 'سباكة', 'نجارة', 'نقل اثاث', 'رخام', 'مطابخ'].includes(order.serviceName)) {
+          if (statusKey === 'inspection') newStatus = '🔧 الفني في الطريق للمعاينة';
+          else if (statusKey === 'working') newStatus = '⚙️ جاري العمل على الإصلاح';
+          else if (statusKey === 'done') newStatus = '✅ تم إنهاء الخدمة بنجاح';
+
+          if (statusKey === 'inspection') {
+            buttons = [
+              [{ text: '⚙️ جاري العمل', callback_data: `status_${orderId}_working` }],
+              [{ text: '✅ تم الإنتهاء', callback_data: `status_${orderId}_done` }]
+            ];
+          } else if (statusKey === 'working') {
+            buttons = [
+              [{ text: '✅ تم الإنتهاء', callback_data: `status_${orderId}_done` }]
+            ];
+          }
+
+        } else {
+          if (statusKey === 'preparing') newStatus = '🔧 جاري تجهيز الطلبية';
+          else if (statusKey === 'delivering') newStatus = '🚚 الطلب مع مندوب التوصيل';
+          else if (statusKey === 'done') newStatus = '✅ تم التسليم';
+
+          if (statusKey === 'preparing') {
+            buttons = [
+              [{ text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` }],
+              [{ text: '✅ تم التسليم', callback_data: `status_${orderId}_done` }]
+            ];
+          } else if (statusKey === 'delivering') {
+            buttons = [
+              [{ text: '✅ تم التسليم', callback_data: `status_${orderId}_done` }]
+            ];
+          }
+        }
+
+        order.status = newStatus;
+
+        const updatedText = message.text.replace(/🔻 الحالة:.+/, `🔻 الحالة: ${newStatus}`);
+        await editMessage(chatId, messageId, updatedText, buttons.length ? buttons : null, order.botType);
+      }
+    }
   }
 
   // استقبال رقم التليفون من المندوب
@@ -329,15 +466,27 @@ app.post('/webhook', async (req, res) => {
       if (order) {
         order.driverPhone = text;
 
-        await sendMessage(chatId,
-          `✅ تم حفظ رقم التليفون: ${text}\n\n` +
-          `💰 الرجاء إدخال سعر الطلبات (بدون تكلفة التوصيل):`,
-          null,
-          order.botType
-        );
+        let nextStep = '';
+
+        if (order.serviceName === 'مكوجي') {
+          await sendMessage(chatId,
+            `✅ تم حفظ رقم التليفون: ${text}\n\n` +
+            `💰 الرجاء إدخال سعر الغسيل (إجمالي):`,
+            null,
+            order.botType
+          );
+          pendingOrders[`price_${chatId}`] = orderId;
+        } else {
+          await sendMessage(chatId,
+            `✅ تم حفظ رقم التليفون: ${text}\n\n` +
+            `💰 الرجاء إدخال سعر الخدمة (إجمالي):`,
+            null,
+            order.botType
+          );
+          pendingOrders[`price_${chatId}`] = orderId;
+        }
 
         delete pendingOrders[chatId];
-        pendingOrders[`price_${chatId}`] = orderId;
       }
     }
 
@@ -347,99 +496,48 @@ app.post('/webhook', async (req, res) => {
 
       if (order) {
         order.itemsPrice = parseInt(text);
-        order.totalPrice = order.itemsPrice + (order.deliveryFee || 15);
+        order.totalPrice = order.itemsPrice;
+
+        let statusButtons = [];
+
+        if (order.serviceName === 'مكوجي') {
+          statusButtons = [
+            [{ text: '🚚 جاري مندوبنا لاستلام الملابس', callback_data: `status_${orderId}_collecting` }],
+            [{ text: '🧼 جاري الغسيل', callback_data: `status_${orderId}_washing` }],
+            [{ text: '✅ تم التجهيز', callback_data: `status_${orderId}_ready` }],
+            [{ text: '🎉 تم التسليم', callback_data: `status_${orderId}_done` }]
+          ];
+        } else if (['ونش', 'كهربائي', 'سباكة', 'نجارة', 'نقل اثاث', 'رخام', 'مطابخ'].includes(order.serviceName)) {
+          statusButtons = [
+            [{ text: '🔧 الفني في الطريق للمعاينة', callback_data: `status_${orderId}_inspection` }],
+            [{ text: '⚙️ جاري العمل', callback_data: `status_${orderId}_working` }],
+            [{ text: '✅ تم الإنتهاء', callback_data: `status_${orderId}_done` }]
+          ];
+        } else {
+          statusButtons = [
+            [{ text: '🔧 جاري التجهيز', callback_data: `status_${orderId}_preparing` }],
+            [{ text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` }],
+            [{ text: '✅ تم التسليم', callback_data: `status_${orderId}_done` }]
+          ];
+        }
 
         await sendMessage(chatId,
-          `✅ تم حفظ سعر الطلبات: ${order.itemsPrice} ج\n\n` +
-          `🚚 الرجاء إدخال تكلفة خدمة التوصيل:`,
-          null,
+          `✅ <b>تم حفظ جميع البيانات</b>\n\n` +
+          `📞 رقم المندوب: ${order.driverPhone}\n` +
+          `💰 إجمالي السعر: ${order.totalPrice} ج\n\n` +
+          `🔻 يمكنك الآن تحديث حالة الطلب:`,
+          statusButtons,
           order.botType
         );
 
         delete pendingOrders[`price_${chatId}`];
-        pendingOrders[`delivery_${chatId}`] = orderId;
       }
-    }
-
-    else if (pendingOrders[`delivery_${chatId}`] && text.match(/^\d+$/)) {
-      const orderId = pendingOrders[`delivery_${chatId}`];
-      const order = orders.find(o => o.id === orderId);
-
-      if (order) {
-        order.deliveryFee = parseInt(text);
-        order.totalPrice = order.itemsPrice + order.deliveryFee;
-
-        // تحديث رسالة الجروب بالأسعار (اختياري)
-
-        // أزرار التتبع
-        await sendMessage(chatId,
-          `✅ <b>تم حفظ جميع البيانات</b>\n\n` +
-          `📞 رقم المندوب: ${order.driverPhone}\n` +
-          `💰 سعر الطلبات: ${order.itemsPrice} ج\n` +
-          `🚚 تكلفة التوصيل: ${order.deliveryFee} ج\n` +
-          `💵 الإجمالي: ${order.totalPrice} ج\n\n` +
-          `🔻 يمكنك الآن تحديث حالة الطلب:`,
-          [
-            [
-              { text: '🔧 جاري التجهيز', callback_data: `status_${orderId}_preparing` },
-              { text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` },
-              { text: '✅ تم التسليم', callback_data: `status_${orderId}_done` }
-            ]
-          ],
-          order.botType
-        );
-
-        delete pendingOrders[`delivery_${chatId}`];
-      }
-    }
-  }
-
-  // معالجة أزرار الحالة
-  if (update.callback_query && update.callback_query.data.startsWith('status_')) {
-    const { data, message, id } = update.callback_query;
-    const chatId = message.chat.id;
-    const messageId = message.message_id;
-
-    await fetch(`https://api.telegram.org/bot8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A/answerCallbackQuery`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callback_query_id: id })
-    });
-
-    const [_, orderId, statusKey] = data.split('_');
-    const order = orders.find(o => o.id === orderId);
-
-    if (order) {
-      let newStatus = '';
-      let buttons = [];
-
-      if (statusKey === 'preparing') {
-        newStatus = '🔧 جاري التجهيز';
-        buttons = [
-          [{ text: '🚚 جاري التوصيل', callback_data: `status_${orderId}_delivering` }],
-          [{ text: '✅ تم التسليم', callback_data: `status_${orderId}_done` }]
-        ];
-      } else if (statusKey === 'delivering') {
-        newStatus = '🚚 جاري التوصيل';
-        buttons = [
-          [{ text: '✅ تم التسليم', callback_data: `status_${orderId}_done` }]
-        ];
-      } else if (statusKey === 'done') {
-        newStatus = '✅ تم التسليم';
-        buttons = [];
-      }
-
-      order.status = newStatus;
-
-      const updatedText = message.text.replace(/🔻 الحالة:.+/, `🔻 الحالة: ${newStatus}`);
-      await editMessage(chatId, messageId, updatedText, buttons.length ? buttons : null, order.botType);
     }
   }
 
   res.sendStatus(200);
 });
 
-// الصفحة الرئيسية
 app.get('/', (req, res) => res.json({
   status: "✅ شغال",
   ordersCount: orders.length,
