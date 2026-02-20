@@ -24,12 +24,10 @@ function CustomerStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="CustomerMain" component={CustomerScreen} />
       
-      {/* الأنظمة الحالية (لا تغيير) */}
+      {/* الأنظمة الحالية */}
       <Stack.Screen name="Restaurant" component={RestaurantScreen} />
       <Stack.Screen name="Grocery" component={GroceryScreen} />
       <Stack.Screen name="Ironing" component={IroningScreen} />
-      
-      {/* الخدمات الجديدة */}
       <Stack.Screen name="Kitchen" component={KitchenScreen} />
       <Stack.Screen name="Pharmacy" component={PharmacyScreen} />
       
