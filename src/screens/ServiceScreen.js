@@ -16,61 +16,53 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import * as Location from 'expo-location';
 
 const SERVER_URL = 'https://zayedid-production.up.railway.app';
 
-// بيانات الخدمات
-const serviceData = {
-  winch: {
-    name: 'ونش',
-    icon: 'car',
-    color: '#EF4444',
-    hasLocation: true,
-  },
-  electrician: {
-    name: 'كهربائي',
-    icon: 'flash',
-    color: '#F59E0B',
-    hasLocation: false,
-  },
-  moving: {
-    name: 'نقل اثاث',
-    icon: 'cube',
-    color: '#10B981',
-    hasLocation: false,
-  },
-  marble: {
-    name: 'رخام',
-    icon: 'apps',
-    color: '#EC4899',
-    hasLocation: false,
-  },
-  plumbing: {
-    name: 'سباكة',
-    icon: 'water',
-    color: '#3B82F6',
-    hasLocation: false,
-  },
-  carpentry: {
-    name: 'نجارة',
-    icon: 'hammer',
-    color: '#8B5CF6',
-    hasLocation: false,
-  },
+// أسماء الخدمات بالعربي
+const serviceNames = {
+  winch: 'ونش',
+  electrician: 'كهربائي',
+  moving: 'نقل اثاث',
+  marble: 'رخام',
+  plumbing: 'سباكة',
+  carpentry: 'نجارة',
+  kitchen: 'مطابخ',
+};
+
+// أيقونات الخدمات
+const serviceIcons = {
+  winch: 'car',
+  electrician: 'flash',
+  moving: 'cube',
+  marble: 'apps',
+  plumbing: 'water',
+  carpentry: 'hammer',
+  kitchen: 'restaurant',
+};
+
+// ألوان الخدمات
+const serviceColors = {
+  winch: '#EF4444',
+  electrician: '#F59E0B',
+  moving: '#10B981',
+  marble: '#EC4899',
+  plumbing: '#3B82F6',
+  carpentry: '#8B5CF6',
+  kitchen: '#10B981',
 };
 
 export default function ServiceScreen({ route, navigation }) {
-  const { serviceType } = route.params;
-  const service = serviceData[serviceType] || { name: 'خدمة', icon: 'construct', color: '#F59E0B', hasLocation: false };
+  const { serviceType } = route.params || { serviceType: 'winch' };
+  const serviceName = serviceNames[serviceType] || 'خدمة';
+  const iconName = serviceIcons[serviceType] || 'construct';
+  const color = serviceColors[serviceType] || '#F59E0B';
 
   const [phoneNumber, setPhoneNumber] = useState('');
   const [address, setAddress] = useState('جنة 2');
   const [description, setDescription] = useState('');
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [location, setLocation] = useState(null);
-  const [locationText, setLocationText] = useState('');
 
   // حالات التسجيل الصوتي
   const [isRecording, setIsRecording] = useState(false);
@@ -92,23 +84,6 @@ export default function ServiceScreen({ route, navigation }) {
     if (savedPhone) setPhoneNumber(savedPhone);
     const savedAddress = await AsyncStorage.getItem('zayed_address');
     if (savedAddress) setAddress(savedAddress);
-  };
-
-  // الحصول على الموقع (لخدمة الونش فقط)
-  const getCurrentLocation = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('خطأ', 'يجب السماح للتطبيق بالوصول للموقع');
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({});
-      setLocation(location.coords);
-      setLocationText(`خط العرض: ${location.coords.latitude.toFixed(6)}, خط الطول: ${location.coords.longitude.toFixed(6)}`);
-    } catch (error) {
-      Alert.alert('خطأ', 'فشل الحصول على الموقع');
-    }
   };
 
   // ========== دوال الصور ==========
@@ -282,25 +257,18 @@ export default function ServiceScreen({ route, navigation }) {
         voiceUrl = await uploadVoice(recordedUri);
       }
 
-      // إضافة الموقع للونش
-      let locationData = null;
-      if (service.hasLocation && location) {
-        locationData = `${location.latitude},${location.longitude}`;
-      }
-
       const orderData = {
         phone: phoneNumber,
         address: address,
         rawText: description,
         items: [description],
-        imageUrl: uploadedImages.length > 0 ? uploadedImages[0] : null,
         images: uploadedImages,
         voiceUrl: voiceUrl,
-        serviceName: service.name,
-        location: locationData,
+        serviceName: serviceName,
+        isServiceRequest: true,
       };
 
-      console.log(`📤 إرسال طلب ${service.name}:`, orderData);
+      console.log(`📤 إرسال طلب ${serviceName}:`, orderData);
 
       const response = await fetch(`${SERVER_URL}/send-order`, {
         method: 'POST',
@@ -316,7 +284,7 @@ export default function ServiceScreen({ route, navigation }) {
 
         Alert.alert(
           '✅ تم بنجاح',
-          'تم إرسال طلبك، سيتم التواصل معك قريباً',
+          'تم إرسال طلبك، سيتم التواصل معك خلال 24 ساعة',
           [{ text: 'ممتاز', onPress: () => navigation.goBack() }]
         );
       } else {
@@ -332,17 +300,23 @@ export default function ServiceScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={[styles.header, { backgroundColor: service.color }]}>
+      <View style={[styles.header, { backgroundColor: color }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={28} color="#FFF" />
         </TouchableOpacity>
-        <Ionicons name={service.icon} size={32} color="#FFF" />
-        <Text style={styles.headerTitle}>{service.name}</Text>
+        <Ionicons name={iconName} size={40} color="#FFF" />
+        <Text style={styles.headerTitle}>{serviceName}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.infoCard}>
+          <Text style={styles.infoText}>
+            هذا طلب خدمي. سيتم التواصل معك خلال 24 ساعة لتحديد موعد الزيارة.
+          </Text>
+        </View>
+
         <View style={styles.inputContainer}>
-          <Ionicons name="call" size={20} color={service.color} style={styles.inputIcon} />
+          <Ionicons name="call" size={20} color={color} style={styles.inputIcon} />
           <TextInput
             style={styles.input}
             placeholder="رقم الموبايل"
@@ -353,7 +327,7 @@ export default function ServiceScreen({ route, navigation }) {
         </View>
 
         <View style={styles.inputContainer}>
-          <Ionicons name="location" size={20} color={service.color} style={styles.inputIcon} />
+          <Ionicons name="location" size={20} color={color} style={styles.inputIcon} />
           <TextInput
             style={styles.input}
             placeholder="العنوان"
@@ -362,21 +336,8 @@ export default function ServiceScreen({ route, navigation }) {
           />
         </View>
 
-        {/* زر الموقع للونش فقط */}
-        {service.hasLocation && (
-          <View style={styles.locationSection}>
-            <TouchableOpacity style={styles.locationButton} onPress={getCurrentLocation}>
-              <Ionicons name="navigate" size={24} color={service.color} />
-              <Text style={styles.locationButtonText}>الحصول على موقعي الحالي</Text>
-            </TouchableOpacity>
-            {locationText ? (
-              <Text style={styles.locationText}>📍 {locationText}</Text>
-            ) : null}
-          </View>
-        )}
-
         <View style={styles.textAreaContainer}>
-          <Text style={[styles.label, { color: service.color }]}>📝 وصف الطلب</Text>
+          <Text style={[styles.label, { color }]}>📝 وصف الطلب</Text>
           <TextInput
             style={styles.textArea}
             placeholder="اكتب تفاصيل الطلب هنا..."
@@ -390,11 +351,11 @@ export default function ServiceScreen({ route, navigation }) {
 
         {/* قسم الصور */}
         <View style={styles.imagesSection}>
-          <Text style={[styles.label, { color: service.color }]}>🖼️ صور توضيحية (اختياري)</Text>
+          <Text style={[styles.label, { color }]}>🖼️ صور توضيحية (اختياري)</Text>
           
           <View style={styles.imageButtons}>
             <TouchableOpacity style={styles.imageButton} onPress={takePhoto}>
-              <Ionicons name="camera" size={32} color={service.color} />
+              <Ionicons name="camera" size={32} color={color} />
               <Text style={styles.imageButtonText}>تصوير</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
@@ -422,7 +383,7 @@ export default function ServiceScreen({ route, navigation }) {
 
         {/* قسم التسجيل الصوتي */}
         <View style={styles.voiceSection}>
-          <Text style={[styles.label, { color: service.color }]}>🎤 تسجيل صوتي (اختياري)</Text>
+          <Text style={[styles.label, { color }]}>🎤 تسجيل صوتي (اختياري)</Text>
 
           {!recordedUri ? (
             <TouchableOpacity
@@ -433,7 +394,7 @@ export default function ServiceScreen({ route, navigation }) {
               <Ionicons
                 name={isRecording ? "stop" : "mic"}
                 size={24}
-                color={isRecording ? "#FFF" : service.color}
+                color={isRecording ? "#FFF" : color}
               />
               <Text style={[styles.voiceButtonText, isRecording && styles.recordingText]}>
                 {isRecording ? 'جاري التسجيل... اضغط للإيقاف' : 'اضغط للتسجيل'}
@@ -455,7 +416,7 @@ export default function ServiceScreen({ route, navigation }) {
         </View>
 
         <TouchableOpacity
-          style={[styles.sendButton, { backgroundColor: service.color }, loading && styles.disabled]}
+          style={[styles.sendButton, { backgroundColor: color }]}
           onPress={sendOrder}
           disabled={loading}
         >
@@ -482,6 +443,19 @@ const styles = StyleSheet.create({
   backButton: { marginRight: 5 },
   headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#FFF', flex: 1 },
   content: { padding: 20 },
+  infoCard: {
+    backgroundColor: '#FEF3C7',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#92400E',
+    textAlign: 'center',
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -494,18 +468,6 @@ const styles = StyleSheet.create({
   },
   inputIcon: { marginRight: 10 },
   input: { flex: 1, paddingVertical: 15, fontSize: 14, color: '#1F2937' },
-  locationSection: { marginBottom: 15 },
-  locationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F3F4F6',
-    padding: 12,
-    borderRadius: 12,
-    gap: 8,
-  },
-  locationButtonText: { fontSize: 14, fontWeight: '600', color: '#4B5563' },
-  locationText: { marginTop: 5, fontSize: 12, color: '#6B7280', textAlign: 'center' },
   textAreaContainer: { marginBottom: 20 },
   label: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
   textArea: {
@@ -551,7 +513,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   recordingButton: { backgroundColor: '#EF4444' },
-  voiceButtonText: { fontSize: 14, fontWeight: '600' },
+  voiceButtonText: { fontSize: 14, fontWeight: '600', color: '#4B5563' },
   recordingText: { color: '#FFF' },
   recordedControls: { flexDirection: 'row', gap: 10 },
   recordAction: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6', padding: 12, borderRadius: 12, gap: 6 },
@@ -566,6 +528,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
-  disabled: { opacity: 0.6 },
   sendButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
 });

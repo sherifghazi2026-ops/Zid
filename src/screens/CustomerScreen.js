@@ -9,7 +9,6 @@ import {
   Dimensions,
   Image,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,6 +17,7 @@ import OrderTracking from '../components/OrderTracking';
 const { width } = Dimensions.get('window');
 const CARD_SIZE = (width - 60) / 2;
 
+// أيقونة التطبيق فقط (بدون خلفية)
 const appIcon = require('../../assets/icons/Zidicon.png');
 
 const images = {
@@ -35,15 +35,12 @@ const images = {
 };
 
 const SERVICES = [
-  // الأنظمة الحالية
   { id: 'supermarket', name: 'سوبر ماركت', image: images.supermarket, screen: 'Grocery' },
   { id: 'restaurant', name: 'مطاعم', image: images.restaurant, screen: 'Restaurant' },
-  { id: 'ironing', name: 'مكوجي', image: images.ironing, screen: 'Ironing' },
   { id: 'pharmacy', name: 'صيدليات', image: images.pharmacy, screen: 'Pharmacy' },
-  
-  // الخدمات الجديدة
-  { id: 'kitchen', name: 'مطابخ', image: images.kitchen, screen: 'Kitchen' },
+  { id: 'ironing', name: 'مكوجي', image: images.ironing, screen: 'Ironing' },
   { id: 'plumbing', name: 'سباكة', image: images.plumbing, screen: 'Plumbing' },
+  { id: 'kitchen', name: 'مطابخ', image: images.kitchen, screen: 'Kitchen' },
   { id: 'carpentry', name: 'نجارة', image: images.carpentry, screen: 'Carpentry' },
   { id: 'marble', name: 'رخام', image: images.marble, screen: 'Marble' },
   { id: 'winch', name: 'ونش', image: images.winch, screen: 'Winch' },
@@ -89,25 +86,24 @@ export default function CustomerScreen({ navigation }) {
   }, [navigation]);
 
   const getStatusColor = (status) => {
-    if (status.includes('جاري التوصيل')) return '#3B82F6';
-    if (status.includes('تم التوصيل')) return '#10B981';
+    if (status.includes('في الطريق')) return '#3B82F6';
+    if (status.includes('تم التوصيل') || status.includes('تم التسليم')) return '#10B981';
     if (status.includes('تم استلام')) return '#F59E0B';
-    if (status.includes('تم التواصل')) return '#8B5CF6';
-    if (status.includes('جاري التنفيذ')) return '#F59E0B';
+    if (status.includes('جاري')) return '#F59E0B';
     return '#6B7280';
   };
 
   const getStatusIcon = (status) => {
-    if (status.includes('جاري التوصيل')) return 'bicycle-outline';
-    if (status.includes('تم التوصيل')) return 'checkmark-circle-outline';
+    if (status.includes('في الطريق')) return 'bicycle-outline';
+    if (status.includes('تم التوصيل') || status.includes('تم التسليم')) return 'checkmark-circle-outline';
     if (status.includes('تم استلام')) return 'time-outline';
-    if (status.includes('تم التواصل')) return 'call-outline';
-    if (status.includes('جاري التنفيذ')) return 'construct-outline';
+    if (status.includes('جاري')) return 'time-outline';
     return 'help-outline';
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* الهيدر الأصلي */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Image source={appIcon} style={styles.headerIcon} />
@@ -118,6 +114,7 @@ export default function CustomerScreen({ navigation }) {
         </View>
       </View>
 
+      {/* الطلبات الحالية (تظهر فقط إذا في طلبات) */}
       {activeOrders.length > 0 && (
         <View style={styles.ordersSection}>
           <View style={styles.sectionHeader}>
