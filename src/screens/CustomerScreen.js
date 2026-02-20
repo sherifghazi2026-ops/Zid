@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -56,7 +56,8 @@ export default function CustomerScreen({ navigation }) {
   const [showTracking, setShowTracking] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState(null);
 
-  const loadActiveOrders = async () => {
+  // دالة تحميل الطلبات
+  const loadActiveOrders = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`${RAILWAY_API_URL}/active-orders`);
@@ -73,7 +74,7 @@ export default function CustomerScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadActiveOrders();
@@ -83,7 +84,7 @@ export default function CustomerScreen({ navigation }) {
       clearInterval(interval);
       unsubscribe();
     };
-  }, [navigation]);
+  }, [navigation, loadActiveOrders]);
 
   const getStatusColor = (status) => {
     if (status.includes('في الطريق')) return '#3B82F6';
@@ -99,6 +100,15 @@ export default function CustomerScreen({ navigation }) {
     if (status.includes('تم استلام')) return 'time-outline';
     if (status.includes('جاري')) return 'time-outline';
     return 'help-outline';
+  };
+
+  // دالة هتتنفذ لما الطلب يتقفل في مودال التتبع
+  const handleTrackingClose = (orderJustCompleted = false) => {
+    setShowTracking(false);
+    // لو الطلب اكتمل، نحدث القائمة علطول
+    if (orderJustCompleted) {
+      loadActiveOrders();
+    }
   };
 
   return (
@@ -172,8 +182,9 @@ export default function CustomerScreen({ navigation }) {
 
       <OrderTracking
         visible={showTracking}
-        onClose={() => setShowTracking(false)}
+        onClose={handleTrackingClose}
         orderId={currentOrderId}
+        onOrderCompleted={loadActiveOrders}
       />
     </SafeAreaView>
   );

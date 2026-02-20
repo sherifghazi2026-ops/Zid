@@ -20,7 +20,7 @@ const fetchOrderStatusFromServer = async (orderId) => {
   try {
     const response = await fetch(`${SERVER_URL}/active-orders`);
     const data = await response.json();
-    
+
     if (data.success && data.orders) {
       const order = data.orders.find(o => o.id === orderId);
       if (order) {
@@ -39,20 +39,20 @@ const makePhoneCall = (phoneNumber) => {
     Alert.alert('تنبيه', 'رقم المندوب غير متوفر');
     return;
   }
-  
+
   const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
-  
+
   if (cleanNumber.length < 10) {
     Alert.alert('خطأ', 'رقم المندوب غير صحيح');
     return;
   }
-  
+
   Linking.openURL(`tel:${cleanNumber}`).catch(() => {
     Alert.alert('خطأ', 'لا يمكن إجراء المكالمة');
   });
 };
 
-export default function OrderTracking({ visible, onClose, orderId }) {
+export default function OrderTracking({ visible, onClose, orderId, onOrderCompleted }) {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -61,7 +61,6 @@ export default function OrderTracking({ visible, onClose, orderId }) {
   useEffect(() => {
     if (visible && orderId) {
       loadOrderStatus();
-      // تغيير وقت التحديث من 5 ثواني إلى 20 ثانية
       const interval = setInterval(loadOrderStatus, 20000);
       return () => clearInterval(interval);
     }
@@ -70,20 +69,26 @@ export default function OrderTracking({ visible, onClose, orderId }) {
   useEffect(() => {
     if (order?.status === 'تم التوصيل' && visible) {
       setShowThankYou(true);
+      
+      // ننادي callback عشان نقول للـ CustomerScreen إن الطلب اكتمل
+      if (onOrderCompleted) {
+        onOrderCompleted();
+      }
+
       const timer = setTimeout(() => {
         setShowThankYou(false);
-        onClose();
+        onClose(true);
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [order?.status, visible]);
+  }, [order?.status, visible, onOrderCompleted]);
 
   const loadOrderStatus = async () => {
     setLoading(true);
     setError(null);
 
     const orderData = await fetchOrderStatusFromServer(orderId);
-    
+
     if (orderData) {
       setOrder(orderData);
     } else {
@@ -95,7 +100,7 @@ export default function OrderTracking({ visible, onClose, orderId }) {
 
   const getStatusIcon = () => {
     if (!order) return 'help-outline';
-    
+
     switch(order.status) {
       case 'تم استلام طلبك': return 'time-outline';
       case 'طلبك تحت التنفيذ': return 'construct-outline';
@@ -107,7 +112,7 @@ export default function OrderTracking({ visible, onClose, orderId }) {
 
   const getStatusColor = () => {
     if (!order) return '#6B7280';
-    
+
     switch(order.status) {
       case 'تم استلام طلبك': return '#F59E0B';
       case 'طلبك تحت التنفيذ': return '#3B82F6';
@@ -146,7 +151,7 @@ export default function OrderTracking({ visible, onClose, orderId }) {
                 <Text style={styles.headerSub}>طلب #{orderId?.slice(-6) || '---'}</Text>
               </View>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <TouchableOpacity onPress={() => onClose(false)} style={styles.closeBtn}>
               <Ionicons name="close" size={24} color="#EF4444" />
             </TouchableOpacity>
           </View>
@@ -203,18 +208,18 @@ export default function OrderTracking({ visible, onClose, orderId }) {
               <View style={styles.detailsCard}>
                 <Text style={styles.detailsTitle}>📍 العنوان</Text>
                 <Text style={styles.detailText}>{order.address}</Text>
-                
+
                 {order.items && order.items.length > 0 && (
                   <>
                     <Text style={[styles.detailsTitle, { marginTop: 12 }]}>📝 التفاصيل</Text>
-{order.items && Array.isArray(order.items) 
-  ? order.items.map((item, index) => (
-      <Text key={index} style={styles.detailText}>• {item}</Text>
-    ))
-  : order.items && typeof order.items === 'string'
-    ? <Text style={styles.detailText}>• {order.items}</Text>
-    : null
-}
+                    {order.items && Array.isArray(order.items)
+                      ? order.items.map((item, index) => (
+                          <Text key={index} style={styles.detailText}>• {item}</Text>
+                        ))
+                      : order.items && typeof order.items === 'string'
+                        ? <Text style={styles.detailText}>• {order.items}</Text>
+                        : null
+                    }
                   </>
                 )}
               </View>

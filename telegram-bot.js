@@ -118,12 +118,23 @@ app.use('/uploads', express.static('/tmp', {
   }
 }));
 
-// ==================== جلب الطلبات النشطة ====================
+// ==================== جلب الطلبات النشطة (المعدلة) ====================
 app.get('/active-orders', (req, res) => {
   try {
-    const activeOrders = orders.filter(o => o.status !== '✅ تم التسليم');
-    res.json({ 
-      success: true, 
+    // بنفلتر الطلبات: نشوف الحالة مش مكتملة
+    const activeOrders = orders.filter(o => {
+      // استبعد الطلبات المكتملة
+      if (o.status === '✅ تم التسليم' || 
+          o.status === '🎉 تم التسليم' || 
+          o.status === 'تم التسليم' ||
+          o.status === 'تم التوصيل') {
+        return false;
+      }
+      return true;
+    });
+
+    res.json({
+      success: true,
       orders: activeOrders.map(o => ({
         id: o.id,
         phone: o.phone,
@@ -134,8 +145,9 @@ app.get('/active-orders', (req, res) => {
         driverPhone: o.driverPhone || null,
         itemsPrice: o.itemsPrice || 0,
         deliveryFee: o.deliveryFee || 0,
-        totalPrice: o.totalPrice || 0
-      })) 
+        totalPrice: o.totalPrice || 0,
+        items: o.items || []
+      }))
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -251,7 +263,7 @@ app.post('/send-order', async (req, res) => {
 
   if (isTechnical) {
     // رسالة الخدمات الفنية
-    message = 
+    message =
       `🛻 <b>طلب خدمة فنية - ${serviceName}</b>\n` +
       `════════════════════════\n` +
       `👤 <b>العميل:</b> ${phone}\n` +
@@ -261,7 +273,7 @@ app.post('/send-order', async (req, res) => {
       message += `📍 <b>الموقع:</b> <a href="https://maps.google.com/?q=${location}">اضغط للعرض</a>\n`;
     }
 
-    message += 
+    message +=
       `════════════════════════\n` +
       `📝 <b>وصف المشكلة:</b>\n${rawText || 'بدون وصف'}\n`;
 
@@ -270,7 +282,7 @@ app.post('/send-order', async (req, res) => {
     }
     if (voiceUrl) message += `🎤 <b>تسجيل صوتي مرفق</b>\n`;
 
-    message += 
+    message +=
       `════════════════════════\n` +
       `💰 <b>التسعير:</b> يحدد السعر بعد المعاينة والفحص\n` +
       `════════════════════════\n` +
@@ -279,7 +291,7 @@ app.post('/send-order', async (req, res) => {
 
   } else if (isIroning) {
     // رسالة المكوجي
-    message = 
+    message =
       `👕 <b>طلب مكوجي</b>\n` +
       `════════════════════════\n` +
       `👤 <b>العميل:</b> ${phone}\n` +
@@ -289,7 +301,7 @@ app.post('/send-order', async (req, res) => {
 
     if (voiceUrl) message += `🎤 <b>تسجيل صوتي مرفق</b>\n`;
 
-    message += 
+    message +=
       `════════════════════════\n` +
       `💰 <b>سعر الغسيل:</b> يحدد حسب عدد القطع عند الاستلام\n` +
       `🚚 <b>رسوم التوصيل:</b> ${deliveryFee} ج\n` +
@@ -299,7 +311,7 @@ app.post('/send-order', async (req, res) => {
 
   } else if (isProduct) {
     // رسالة المنتجات (سوبر ماركت، صيدلية)
-    message = 
+    message =
       `🛒 <b>طلب - ${serviceName}</b>\n` +
       `════════════════════════\n` +
       `👤 <b>العميل:</b> ${phone}\n` +
@@ -312,7 +324,7 @@ app.post('/send-order', async (req, res) => {
     }
     if (voiceUrl) message += `🎤 <b>تسجيل صوتي مرفق</b>\n`;
 
-    message += 
+    message +=
       `════════════════════════\n` +
       `💰 <b>سعر المنتجات:</b> يحدد لاحقاً\n` +
       `🚚 <b>خدمة التوصيل:</b> يحدد لاحقاً\n` +
