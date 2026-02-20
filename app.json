@@ -4,7 +4,7 @@
     "slug": "Zayedid",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/Zidicon.png",
+    "icon": "./assets/icons/Zidicon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
@@ -18,14 +18,18 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.sharo2026.Zayedid",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icons/Zidicon.png",
         "backgroundColor": "#ffffff"
       }
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "plugins": []
+    "extra": {
+      "eas": {
+        "projectId": "09f4072b-c789-4c33-988e-17a0c3a1da33"
+      }
+    }
   }
 }
+
