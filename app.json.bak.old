@@ -29,9 +29,29 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-av",
-      "expo-image-picker",
-      "expo-location"
-    ]
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "يحتاج التطبيق للوصول إلى الكاميرا لتصوير الروشتة والمنتجات"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "يحتاج التطبيق للوصول إلى موقعك لتحديد عنوان التوصيل"
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "يحتاج التطبيق للوصول إلى الميكروفون لتسجيل الملاحظات الصوتية"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "zayedid-project"
+      }
+    }
   }
 }
