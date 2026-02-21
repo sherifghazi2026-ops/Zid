@@ -1,23 +1,25 @@
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
+const path = require('path');
 
-// ==================== إضافة fetch للتوافق مع Node.js 18+ ====================
-// دي أهم سطرين عشان السيرفر يشتغل على Railway من غير مشاكل
+// دعم fetch للإصدارات الحديثة
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
   res.setHeader('Content-Type', 'application/json');
   next();
 });
 
-// ==================== البوتات (11 بوت) ====================
+// ==================== البوتات (12 بوت - مع بوت العروض) ====================
 const BOTS = {
+  // بوتات الخدمات (11 بوت)
   supermarket: { token: "8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A", api: "https://api.telegram.org/bot8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A" },
   restaurant: { token: "8529394963:AAGKZYTeAUwsnK9RJF-sbOmIj6e7F7XmJdw", api: "https://api.telegram.org/bot8529394963:AAGKZYTeAUwsnK9RJF-sbOmIj6e7F7XmJdw" },
   ironing: { token: "8216174777:AAERldfUvyWcDsXWPHLrnvz4bmmkcQiTzus", api: "https://api.telegram.org/bot8216174777:AAERldfUvyWcDsXWPHLrnvz4bmmkcQiTzus" },
@@ -28,50 +30,67 @@ const BOTS = {
   marble: { token: "8318895116:AAFWrsOhjpyRSjF1ivr4SPe_N_cOs6fwFlE", api: "https://api.telegram.org/bot8318895116:AAFWrsOhjpyRSjF1ivr4SPe_N_cOs6fwFlE" },
   plumbing: { token: "8514986529:AAF50RKZgQjXymrv4Y6Sd9Uw-UVBC3bCK4Y", api: "https://api.telegram.org/bot8514986529:AAF50RKZgQjXymrv4Y6Sd9Uw-UVBC3bCK4Y" },
   carpentry: { token: "8328607450:AAFR_fCtlFq4nPEdx5az27fsdpTg0rFi1Bs", api: "https://api.telegram.org/bot8328607450:AAFR_fCtlFq4nPEdx5az27fsdpTg0rFi1Bs" },
-  kitchen: { token: "8036001015:AAFLp3P1pzHgtiUyPQqNyheKLRqF2VrQxdU", api: "https://api.telegram.org/bot8036001015:AAFLp3P1pzHgtiUyPQqNyheKLRqF2VrQxdU" }
+  kitchen: { token: "8036001015:AAFLp3P1pzHgtiUyPQqNyheKLRqF2VrQxdU", api: "https://api.telegram.org/bot8036001015:AAFLp3P1pzHgtiUyPQqNyheKLRqF2VrQxdU" },
+  
+  // بوت العروض (منفصل)
+  offers: { token: "8367864849:AAEgn5GdgBZZgVH0RP3h_QfqLEOdEkRGLS4", api: "https://api.telegram.org/bot8367864849:AAEgn5GdgBZZgVH0RP3h_QfqLEOdEkRGLS4" }
 };
 
 const DRIVER_CHANNEL_ID = "1814331589";
+const ADMIN_IDS = [1814331589];
+
 let orders = [];
 let pendingOrders = {};
+let offers = [];
 
 // ==================== دوال المساعدة ====================
 const sendMessage = async (chatId, text, keyboard = null, botType = 'supermarket') => {
   try {
     const payload = { chat_id: chatId, text: text, parse_mode: 'HTML' };
     if (keyboard) payload.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
-    await fetch(`${BOTS[botType].api}/sendMessage`, {
+    
+    const response = await fetch(`${BOTS[botType].api}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-  } catch (e) { console.error("Send Error:", e); }
+    return await response.json();
+  } catch (e) { console.error("Send Error:", e); return null; }
 };
 
 const sendVoice = async (chatId, voiceUrl, botType = 'supermarket') => {
   try {
-    await fetch(`${BOTS[botType].api}/sendVoice`, {
+    // استخدام form-data بشكل صحيح
+    const FormData = require('form-data');
+    const formData = new FormData();
+    formData.append('chat_id', chatId);
+    formData.append('voice', voiceUrl);
+
+    const response = await fetch(`${BOTS[botType].api}/sendVoice`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, voice: voiceUrl })
+      body: formData,
+      headers: formData.getHeaders()
     });
-  } catch (e) { console.error("Voice Error:", e); }
+    return await response.json();
+  } catch (e) { console.error("Voice Error:", e); return null; }
 };
 
 const sendPhoto = async (chatId, photoUrl, caption = '', botType = 'supermarket') => {
   try {
-    await fetch(`${BOTS[botType].api}/sendPhoto`, {
+    const response = await fetch(`${BOTS[botType].api}/sendPhoto`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption: caption, parse_mode: 'HTML' })
     });
-  } catch (e) { console.error("Photo Error:", e); }
+    return await response.json();
+  } catch (e) { console.error("Photo Error:", e); return null; }
 };
 
 const editMessage = async (chatId, messageId, text, keyboard = null, botType = 'supermarket') => {
   try {
     const payload = { chat_id: chatId, message_id: messageId, text: text, parse_mode: 'HTML' };
     if (keyboard) payload.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
+    
     await fetch(`${BOTS[botType].api}/editMessageText`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -123,12 +142,18 @@ app.use('/uploads', express.static('/tmp', {
   }
 }));
 
-// ==================== جلب الطلبات النشطة (المعدلة) ====================
+// ==================== نظام العروض ====================
+app.get('/api/offers', (req, res) => {
+  const sortedOffers = [...offers].sort((a, b) =>
+    new Date(b.createdAt) - new Date(a.createdAt)
+  );
+  res.json({ success: true, offers: sortedOffers });
+});
+
+// ==================== جلب الطلبات النشطة ====================
 app.get('/active-orders', (req, res) => {
   try {
-    // بنفلتر الطلبات: نشوف الحالة مش مكتملة
     const activeOrders = orders.filter(o => {
-      // استبعد الطلبات المكتملة
       if (o.status === '✅ تم التسليم' ||
           o.status === '🎉 تم التسليم' ||
           o.status === 'تم التسليم' ||
@@ -186,7 +211,6 @@ app.get('/order-status/:orderId', (req, res) => {
 app.post('/send-order', async (req, res) => {
   const { phone, address, items, rawText, voiceUrl, imageUrl, images, serviceName = 'سوبر ماركت', itemsPrice = 0, deliveryFee = 15, location } = req.body;
 
-  // استقبال الصور من المصفوفة إذا وجدت
   let uploadedImages = [];
   if (images && Array.isArray(images) && images.length > 0) {
     uploadedImages = images;
@@ -194,7 +218,6 @@ app.post('/send-order', async (req, res) => {
     uploadedImages = [imageUrl];
   }
 
-  // منع الصور للونش
   if (serviceName === 'ونش') {
     uploadedImages = [];
   }
@@ -219,18 +242,12 @@ app.post('/send-order', async (req, res) => {
   const orderId = (serviceName === 'مكوجي' ? 'IRN-' : 'ORD-') + Math.floor(100000 + Math.random() * 900000);
   const date = new Date().toISOString();
 
-  // ==================== الخدمات الفنية (ونش، كهرباء، سباكة، نجارة، نقل أثاث، رخام، مطابخ) ====================
   const technicalServices = ['ونش', 'كهربائي', 'سباكة', 'نجارة', 'نقل اثاث', 'رخام', 'مطابخ'];
   const isTechnical = technicalServices.includes(serviceName);
-
-  // ==================== الخدمات (صيدلية، سوبر ماركت) ====================
   const productServices = ['سوبر ماركت', 'صيدلية'];
   const isProduct = productServices.includes(serviceName);
-
-  // ==================== المكوجي ====================
   const isIroning = serviceName === 'مكوجي';
 
-  // تحديد الحالة الأولية حسب نوع الخدمة
   let initialStatus = '';
   if (isTechnical) {
     initialStatus = '📦 تم استلام طلبك (سيتم التواصل خلال 24 ساعة)';
@@ -242,7 +259,6 @@ app.post('/send-order', async (req, res) => {
     initialStatus = '📦 تم استلام طلبك';
   }
 
-  // إنشاء الطلب
   const newOrder = {
     id: orderId,
     phone,
@@ -263,11 +279,9 @@ app.post('/send-order', async (req, res) => {
   };
   orders.push(newOrder);
 
-  // بناء رسالة الطلب حسب نوع الخدمة
   let message = '';
 
   if (isTechnical) {
-    // رسالة الخدمات الفنية
     message =
       `🛻 <b>طلب خدمة فنية - ${serviceName}</b>\n` +
       `════════════════════════\n` +
@@ -295,7 +309,6 @@ app.post('/send-order', async (req, res) => {
       `🆔 <b>رقم الطلب:</b> <code>${orderId}</code>`;
 
   } else if (isIroning) {
-    // رسالة المكوجي
     message =
       `👕 <b>طلب مكوجي</b>\n` +
       `════════════════════════\n` +
@@ -315,7 +328,6 @@ app.post('/send-order', async (req, res) => {
       `🆔 <b>رقم الطلب:</b> <code>${orderId}</code>`;
 
   } else if (isProduct) {
-    // رسالة المنتجات (سوبر ماركت، صيدلية)
     message =
       `🛒 <b>طلب - ${serviceName}</b>\n` +
       `════════════════════════\n` +
@@ -338,14 +350,12 @@ app.post('/send-order', async (req, res) => {
       `🆔 <b>رقم الطلب:</b> <code>${orderId}</code>`;
   }
 
-  // أزرار القبول
   let keyboard = [[
     { text: '✅ قبول الطلب', callback_data: `accept_${orderId}` }
   ]];
 
   await sendMessage(DRIVER_CHANNEL_ID, message, keyboard, botType);
 
-  // إرسال الصور (واحد ورا التاني)
   for (const img of uploadedImages) {
     await sendPhoto(DRIVER_CHANNEL_ID, img, '🖼️ صورة الطلب', botType);
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -355,6 +365,129 @@ app.post('/send-order', async (req, res) => {
 
   res.json({ success: true, orderId });
 });
+
+// ==================== ويب هوك للعروض ====================
+app.post('/webhook-offers', async (req, res) => {
+  const update = req.body;
+
+  if (update.message) {
+    const chatId = update.message.chat.id;
+    const text = update.message.text;
+    const isAdmin = ADMIN_IDS.includes(chatId);
+
+    if (!isAdmin) {
+      return res.sendStatus(200);
+    }
+
+    if (text && !text.startsWith('/')) {
+      const offerId = 'OFFER-' + Date.now();
+      const newOffer = {
+        id: offerId,
+        type: 'text',
+        text: text,
+        createdAt: new Date().toISOString(),
+        createdBy: chatId
+      };
+
+      offers.push(newOffer);
+
+      await sendMessage(chatId,
+        `✅ <b>تم نشر العرض بنجاح!</b>\n` +
+        `🆔 معرف العرض: <code>${offerId}</code>\n` +
+        `📝 النص: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`,
+        null,
+        'offers'
+      );
+    }
+
+    else if (text) {
+      if (text === '/offers') {
+        if (offers.length === 0) {
+          await sendMessage(chatId, '📭 لا توجد عروض حالياً', null, 'offers');
+        } else {
+          let response = '📋 <b>العروض الحالية:</b>\n\n';
+          offers.slice(-10).reverse().forEach((offer, index) => {
+            response += `${index + 1}. 🆔 <code>${offer.id}</code>\n`;
+            response += `   📝 ${offer.text.substring(0, 50)}${offer.text.length > 50 ? '...' : ''}\n`;
+            response += `   🕐 ${new Date(offer.createdAt).toLocaleString('ar-EG')}\n\n`;
+          });
+          await sendMessage(chatId, response, null, 'offers');
+        }
+      }
+
+      else if (text.startsWith('/delete_offer ')) {
+        const offerId = text.replace('/delete_offer ', '').trim();
+        const index = offers.findIndex(o => o.id === offerId);
+
+        if (index !== -1) {
+          offers.splice(index, 1);
+          await sendMessage(chatId, `✅ تم مسح العرض <code>${offerId}</code>`, null, 'offers');
+        } else {
+          await sendMessage(chatId, `❌ العرض <code>${offerId}</code> غير موجود`, null, 'offers');
+        }
+      }
+
+      else if (text === '/clear_all') {
+        offers = [];
+        await sendMessage(chatId, '✅ تم مسح جميع العروض', null, 'offers');
+      }
+    }
+
+    if (update.message.photo) {
+      const photo = update.message.photo.pop();
+      const fileId = photo.file_id;
+      const caption = update.message.caption || '';
+
+      const fileResponse = await fetch(`${BOTS.offers.api}/getFile?file_id=${fileId}`);
+      const fileData = await fileResponse.json();
+
+      if (fileData.ok) {
+        const filePath = fileData.result.file_path;
+        const fileUrl = `https://api.telegram.org/file/bot${BOTS.offers.token}/${filePath}`;
+
+        const imageResponse = await fetch(fileUrl);
+        const imageBuffer = await imageResponse.buffer();
+
+        const uploadsDir = path.join(__dirname, 'offer-uploads');
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir);
+        }
+
+        const fileName = `offer-${Date.now()}.jpg`;
+        const localPath = path.join(uploadsDir, fileName);
+        fs.writeFileSync(localPath, imageBuffer);
+
+        const baseUrl = process.env.RAILWAY_STATIC_URL || `https://zayedid-production.up.railway.app`;
+        const imageUrl = `${baseUrl}/offer-uploads/${fileName}`;
+
+        const offerId = 'OFFER-' + Date.now();
+        const newOffer = {
+          id: offerId,
+          type: 'image',
+          imageUrl: imageUrl,
+          text: caption || null,
+          createdAt: new Date().toISOString(),
+          createdBy: chatId
+        };
+
+        offers.push(newOffer);
+
+        await sendMessage(chatId,
+          `✅ <b>تم نشر العرض المصور!</b>\n` +
+          `🆔 معرف العرض: <code>${offerId}</code>\n` +
+          (caption ? `📝 التعليق: ${caption.substring(0, 50)}${caption.length > 50 ? '...' : ''}` : ''),
+          null,
+          'offers'
+        );
+      }
+    }
+  }
+
+  res.sendStatus(200);
+});
+
+// ==================== خدمة صور العروض ====================
+app.use('/offer-uploads', express.static(path.join(__dirname, 'offer-uploads')));
 
 // ==================== معالجة أزرار المندوبين ====================
 app.post('/webhook', async (req, res) => {
@@ -406,7 +539,6 @@ app.post('/webhook', async (req, res) => {
         let newStatus = '';
         let buttons = [];
 
-        // تحديد الحالة حسب نوع الخدمة
         if (order.serviceName === 'مكوجي') {
           if (statusKey === 'collecting') newStatus = '🚚 جاري مندوبنا لاستلام الملابس';
           else if (statusKey === 'washing') newStatus = '🧼 جاري الغسيل والكي';
@@ -471,7 +603,6 @@ app.post('/webhook', async (req, res) => {
     }
   }
 
-  // استقبال رقم التليفون من المندوب
   else if (update.message) {
     const chatId = update.message.chat.id;
     const text = update.message.text;
@@ -482,8 +613,6 @@ app.post('/webhook', async (req, res) => {
 
       if (order) {
         order.driverPhone = text;
-
-        let nextStep = '';
 
         if (order.serviceName === 'مكوجي') {
           await sendMessage(chatId,
@@ -555,11 +684,21 @@ app.post('/webhook', async (req, res) => {
   res.sendStatus(200);
 });
 
-app.get('/', (req, res) => res.json({
-  status: "✅ شغال",
-  ordersCount: orders.length,
-  bots: Object.keys(BOTS)
-}));
+// ==================== الصفحة الرئيسية ====================
+app.get('/', (req, res) => {
+  res.json({
+    status: '✅ جميع الأنظمة شغالة',
+    time: new Date().toISOString(),
+    bots: Object.keys(BOTS),
+    ordersCount: orders.length,
+    offersCount: offers.length
+  });
+});
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => console.log(`🚀 شغال على بورت ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 السيرفر الموحد شغال على بورت ${PORT}`);
+  console.log(`🤖 عدد البوتات: ${Object.keys(BOTS).length} بوت (مع بوت العروض)`);
+  console.log(`📢 قناة المندوبين: ${DRIVER_CHANNEL_ID}`);
+  console.log(`🔗 رابط العروض: /api/offers`);
+});
