@@ -1,6 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
+
+// ==================== إضافة fetch للتوافق مع Node.js 18+ ====================
+// دي أهم سطرين عشان السيرفر يشتغل على Railway من غير مشاكل
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+
 const app = express();
 
 app.use(cors());
@@ -124,8 +129,8 @@ app.get('/active-orders', (req, res) => {
     // بنفلتر الطلبات: نشوف الحالة مش مكتملة
     const activeOrders = orders.filter(o => {
       // استبعد الطلبات المكتملة
-      if (o.status === '✅ تم التسليم' || 
-          o.status === '🎉 تم التسليم' || 
+      if (o.status === '✅ تم التسليم' ||
+          o.status === '🎉 تم التسليم' ||
           o.status === 'تم التسليم' ||
           o.status === 'تم التوصيل') {
         return false;
