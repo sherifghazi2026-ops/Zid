@@ -17,12 +17,8 @@ import KitchenScreen from './src/screens/KitchenScreen';
 import PharmacyScreen from './src/screens/PharmacyScreen';
 import ServiceScreen from './src/screens/ServiceScreen';
 
-// شاشات التاجر (هنضيفها بعدين)
-// import MerchantHomeScreen from './src/screens/merchant/MerchantHomeScreen';
-// import MerchantOrdersScreen from './src/screens/merchant/MerchantOrdersScreen';
-
-// شاشات المندوب (هنضيفها بعدين)
-// import DriverHomeScreen from './src/screens/driver/DriverHomeScreen';
+// شاشات الأدمن (الجديدة)
+import AdminHomeScreen from './src/screens/AdminHomeScreen';
 
 const Stack = createStackNavigator();
 
@@ -47,12 +43,8 @@ export default function App() {
           <Stack.Screen name="Pharmacy" component={PharmacyScreen} />
           <Stack.Screen name="Service" component={ServiceScreen} />
 
-          {/* شاشات التاجر (هنفعلها بعدين) */}
-          {/* <Stack.Screen name="MerchantHome" component={MerchantHomeScreen} /> */}
-          {/* <Stack.Screen name="MerchantOrders" component={MerchantOrdersScreen} /> */}
-
-          {/* شاشات المندوب (هنفعلها بعدين) */}
-          {/* <Stack.Screen name="DriverHome" component={DriverHomeScreen} /> */}
+          {/* شاشات الأدمن */}
+          <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
