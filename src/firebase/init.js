@@ -1,16 +1,15 @@
 import { initializeApp } from 'firebase/app';
-import { initializeFirestore, persistentLocalCache, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { firebaseConfig } from './config';
 
-// تهيئة تطبيق Firebase
 const app = initializeApp(firebaseConfig);
 
-// تهيئة Firestore مع إعدادات الأداء
-export const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
-  localCache: persistentLocalCache({
-    cacheSizeBytes: CACHE_SIZE_UNLIMITED
-  })
+export const db = getFirestore(app);
+
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage)
 });
 
 console.log('✅ Firebase initialized successfully');

@@ -7,9 +7,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { View, Text } from 'react-native';
 
-// شاشات المصادقة
-import SplashScreen from './src/screens/SplashScreen';
-import LoginScreen from './src/screens/auth/LoginScreen';
+// شاشات جديدة
+import WelcomeScreen from './src/screens/WelcomeScreen';
+import CustomerAuthScreen from './src/screens/CustomerAuthScreen';
+import MerchantLoginScreen from './src/screens/auth/LoginScreen'; // نفس اللي موجودة
 
 // شاشات العميل
 import CustomerScreen from './src/screens/CustomerScreen';
@@ -26,20 +27,15 @@ import AdminHomeScreen from './src/screens/AdminHomeScreen';
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// Stack للعميل (فيه كل الخدمات)
 function CustomerStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="CustomerMain" component={CustomerScreen} />
-
-      {/* الخدمات */}
       <Stack.Screen name="Restaurant" component={RestaurantScreen} />
       <Stack.Screen name="Grocery" component={GroceryScreen} />
       <Stack.Screen name="Ironing" component={IroningScreen} />
       <Stack.Screen name="Kitchen" component={KitchenScreen} />
       <Stack.Screen name="Pharmacy" component={PharmacyScreen} />
-
-      {/* الخدمات العامة */}
       <Stack.Screen name="Winch" component={ServiceScreen} initialParams={{ serviceType: 'winch' }} />
       <Stack.Screen name="Electrician" component={ServiceScreen} initialParams={{ serviceType: 'electrician' }} />
       <Stack.Screen name="Moving" component={ServiceScreen} initialParams={{ serviceType: 'moving' }} />
@@ -50,7 +46,6 @@ function CustomerStack() {
   );
 }
 
-// شاشة العروض
 function OffersScreen() {
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' }}>
@@ -63,30 +58,19 @@ function OffersScreen() {
   );
 }
 
-// التبويبات الرئيسية (للعميل العادي)
 function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
-          if (route.name === 'طلب') {
-            iconName = focused ? 'cart' : 'cart-outline';
-          } else if (route.name === 'عروض') {
-            iconName = focused ? 'pricetag' : 'pricetag-outline';
-          }
+          if (route.name === 'طلب') iconName = focused ? 'cart' : 'cart-outline';
+          else if (route.name === 'عروض') iconName = focused ? 'pricetag' : 'pricetag-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: '#F59E0B',
         tabBarInactiveTintColor: '#9CA3AF',
-        tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopWidth: 1,
-          borderTopColor: '#E5E7EB',
-          paddingBottom: 5,
-          paddingTop: 5,
-          height: 60,
-        },
+        tabBarStyle: { backgroundColor: '#FFF', borderTopColor: '#E5E7EB', paddingBottom: 5, height: 60 },
         tabBarLabelStyle: { fontSize: 12, fontWeight: '500' },
         headerShown: false,
       })}
@@ -97,12 +81,13 @@ function MainTabs() {
   );
 }
 
-// Stack رئيسي للـ Auth والـ Admin
+// Root Stack الجديد
 function RootStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Splash" component={SplashScreen} />
-      <Stack.Screen name="Login" component={LoginScreen} />
+    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Welcome">
+      <Stack.Screen name="Welcome" component={WelcomeScreen} />
+      <Stack.Screen name="CustomerAuth" component={CustomerAuthScreen} />
+      <Stack.Screen name="MerchantLogin" component={MerchantLoginScreen} />
       <Stack.Screen name="MainTabs" component={MainTabs} />
       <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
     </Stack.Navigator>
