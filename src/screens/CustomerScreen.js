@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,16 +8,14 @@ import {
   SafeAreaView,
   Dimensions,
   Image,
-  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import OrderTracking from '../components/OrderTracking';
 
 const { width } = Dimensions.get('window');
 const CARD_SIZE = (width - 60) / 2;
 
-// أيقونة التطبيق فقط (بدون خلفية)
 const appIcon = require('../../assets/icons/Zidicon.png');
 
 const images = {
@@ -48,128 +46,145 @@ const SERVICES = [
   { id: 'moving', name: 'نقل اثاث', image: images.moving, screen: 'Moving' },
 ];
 
-const RAILWAY_API_URL = 'https://zayedid-production.up.railway.app';
-
 export default function CustomerScreen({ navigation }) {
-  const [activeOrders, setActiveOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [showTracking, setShowTracking] = useState(false);
-  const [currentOrderId, setCurrentOrderId] = useState(null);
-
-  // دالة تحميل الطلبات
-  const loadActiveOrders = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${RAILWAY_API_URL}/active-orders`);
-      const data = await response.json();
-
-      if (data.success && data.orders) {
-        setActiveOrders(data.orders);
-      } else {
-        setActiveOrders([]);
-      }
-    } catch (error) {
-      console.error('خطأ في جلب الطلبات:', error);
-      setActiveOrders([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [userRole, setUserRole] = useState(null);
 
   useEffect(() => {
-    loadActiveOrders();
-    const interval = setInterval(loadActiveOrders, 10000);
-    const unsubscribe = navigation.addListener('focus', loadActiveOrders);
-    return () => {
-      clearInterval(interval);
-      unsubscribe();
-    };
-  }, [navigation, loadActiveOrders]);
+    checkUserStatus();
+  }, []);
 
-  const getStatusColor = (status) => {
-    if (status.includes('في الطريق')) return '#3B82F6';
-    if (status.includes('تم التوصيل') || status.includes('تم التسليم')) return '#10B981';
-    if (status.includes('تم استلام')) return '#F59E0B';
-    if (status.includes('جاري')) return '#F59E0B';
-    return '#6B7280';
-  };
-
-  const getStatusIcon = (status) => {
-    if (status.includes('في الطريق')) return 'bicycle-outline';
-    if (status.includes('تم التوصيل') || status.includes('تم التسليم')) return 'checkmark-circle-outline';
-    if (status.includes('تم استلام')) return 'time-outline';
-    if (status.includes('جاري')) return 'time-outline';
-    return 'help-outline';
-  };
-
-  // دالة هتتنفذ لما الطلب يتقفل في مودال التتبع
-  const handleTrackingClose = (orderJustCompleted = false) => {
-    setShowTracking(false);
-    // لو الطلب اكتمل، نحدث القائمة علطول
-    if (orderJustCompleted) {
-      loadActiveOrders();
+  const checkUserStatus = async () => {
+    const role = await AsyncStorage.getItem('userRole');
+    setUserRole(role);
+    // لو في مستخدم مسجل، نوقف عرض شاشة الترحيب
+    if (role) {
+      setShowWelcome(false);
     }
   };
 
+  const handleVisitorEntry = () => {
+    setShowWelcome(false);
+  };
+
+  const handleRoleSelect = (role) => {
+    switch(role) {
+      case 'customer':
+        navigation.navigate('CustomerAuth');
+        break;
+      case 'merchant':
+        navigation.navigate('MerchantLogin');
+        break;
+      case 'driver':
+        navigation.navigate('DriverLogin');
+        break;
+      default:
+        Alert.alert('خطأ', 'الرجاء اختيار نوع صحيح');
+    }
+  };
+
+  // شاشة الترحيب
+  if (showWelcome) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ScrollView contentContainerStyle={styles.welcomeContainer}>
+          <Image source={appIcon} style={styles.welcomeLogo} />
+          <Text style={styles.welcomeTitle}>مرحباً بك في ZAYED ID</Text>
+          <Text style={styles.welcomeSubtitle}>اختر نوع الدخول</Text>
+
+          <View style={styles.roleButtons}>
+            <TouchableOpacity
+              style={[styles.roleButton, styles.customerRole]}
+              onPress={() => handleRoleSelect('customer')}
+            >
+              <Ionicons name="person-outline" size={32} color="#FFF" />
+              <View style={styles.roleTextContainer}>
+                <Text style={styles.roleTitle}>عميل</Text>
+                <Text style={styles.roleDescription}>لطلب الخدمات والمنتجات</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.roleButton, styles.merchantRole]}
+              onPress={() => handleRoleSelect('merchant')}
+            >
+              <Ionicons name="business-outline" size={32} color="#FFF" />
+              <View style={styles.roleTextContainer}>
+                <Text style={styles.roleTitle}>تاجر</Text>
+                <Text style={styles.roleDescription}>لإدارة متجرك وطلباتك</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.roleButton, styles.driverRole]}
+              onPress={() => handleRoleSelect('driver')}
+            >
+              <Ionicons name="bicycle-outline" size={32} color="#FFF" />
+              <View style={styles.roleTextContainer}>
+                <Text style={styles.roleTitle}>مندوب</Text>
+                <Text style={styles.roleDescription}>لتوصيل الطلبات</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.visitorButton}
+              onPress={handleVisitorEntry}
+            >
+              <Text style={styles.visitorButtonText}>الدخول كزائر</Text>
+              <Ionicons name="arrow-forward" size={20} color="#4F46E5" />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.welcomeFooter}>
+            بالدخول كزائر، يمكنك تصفح الخدمات ولكن لن تتمكن من الطلب
+          </Text>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // شاشة الخدمات الرئيسية (بعد الدخول)
   return (
     <SafeAreaView style={styles.container}>
-      {/* الهيدر الأصلي */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Image source={appIcon} style={styles.headerIcon} />
           <View>
             <Text style={styles.title}>ZAYED ID</Text>
-            <Text style={styles.subtitle}>دوس على الخدمة اللي عايزها</Text>
+            <Text style={styles.subtitle}>
+              {userRole === 'visitor' ? 'زائر' : 'مرحباً'}
+            </Text>
           </View>
         </View>
+        {userRole && userRole !== 'visitor' && (
+          <TouchableOpacity 
+            style={styles.profileButton}
+            onPress={() => navigation.navigate('Profile')}
+          >
+            <Ionicons name="person-circle-outline" size={32} color="#4F46E5" />
+          </TouchableOpacity>
+        )}
       </View>
-
-      {/* الطلبات الحالية (تظهر فقط إذا في طلبات) */}
-      {activeOrders.length > 0 && (
-        <View style={styles.ordersSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🕒 طلباتك الحالية</Text>
-            <TouchableOpacity onPress={loadActiveOrders}>
-              <Ionicons name="refresh" size={20} color="#4F46E5" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {loading ? (
-              <ActivityIndicator color="#4F46E5" style={{ padding: 20 }} />
-            ) : (
-              activeOrders.map((order) => (
-                <TouchableOpacity
-                  key={order.id}
-                  style={styles.orderCard}
-                  onPress={() => {
-                    setCurrentOrderId(order.id);
-                    setShowTracking(true);
-                  }}
-                >
-                  <View style={[styles.statusIcon, { backgroundColor: getStatusColor(order.status) + '20' }]}>
-                    <Ionicons name={getStatusIcon(order.status)} size={24} color={getStatusColor(order.status)} />
-                  </View>
-                  <View style={styles.orderInfo}>
-                    <Text style={styles.orderIdText}>طلب #{order.id.slice(-6)}</Text>
-                    <Text style={styles.orderServiceText}>{order.serviceName || 'طلب'}</Text>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
-                    <Text style={styles.statusBadgeText}>{order.status}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))
-            )}
-          </ScrollView>
-        </View>
-      )}
 
       <ScrollView contentContainerStyle={styles.grid}>
         {SERVICES.map((service) => (
           <TouchableOpacity
             key={service.id}
             style={[styles.card, { width: CARD_SIZE }]}
-            onPress={() => navigation.navigate(service.screen, { serviceType: service.id })}
+            onPress={() => {
+              if (!userRole) {
+                Alert.alert(
+                  'تسجيل الدخول',
+                  'تحتاج إلى تسجيل الدخول أولاً للطلب',
+                  [
+                    { text: 'إلغاء', style: 'cancel' },
+                    { text: 'دخول', onPress: () => setShowWelcome(true) }
+                  ]
+                );
+              } else {
+                navigation.navigate(service.screen, { serviceType: service.id });
+              }
+            }}
             activeOpacity={0.8}
           >
             <Image source={service.image} style={styles.cardImage} />
@@ -179,32 +194,95 @@ export default function CustomerScreen({ navigation }) {
           </TouchableOpacity>
         ))}
       </ScrollView>
-
-      <OrderTracking
-        visible={showTracking}
-        onClose={handleTrackingClose}
-        orderId={currentOrderId}
-        onOrderCompleted={loadActiveOrders}
-      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
+  // Welcome Screen Styles
+  welcomeContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  welcomeLogo: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    marginBottom: 20,
+    borderWidth: 3,
+    borderColor: '#4F46E5',
+  },
+  welcomeTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 5,
+  },
+  welcomeSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 30,
+  },
+  roleButtons: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  roleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  customerRole: { backgroundColor: '#F59E0B' },
+  merchantRole: { backgroundColor: '#10B981' },
+  driverRole: { backgroundColor: '#3B82F6' },
+  roleTextContainer: { marginLeft: 15, flex: 1 },
+  roleTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+  roleDescription: { color: '#FFF', fontSize: 12, opacity: 0.9 },
+  visitorButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#4F46E5',
+    marginTop: 10,
+  },
+  visitorButtonText: {
+    color: '#4F46E5',
+    fontSize: 16,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  welcomeFooter: {
+    textAlign: 'center',
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginTop: 20,
+  },
+  // Main Screen Styles
   header: {
     backgroundColor: '#4F46E5',
     paddingTop: 60,
     paddingBottom: 20,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
-  },
-  headerContent: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    gap: 15,
   },
+  headerContent: { flexDirection: 'row', alignItems: 'center', gap: 15 },
   headerIcon: {
     width: 50,
     height: 50,
@@ -212,54 +290,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.9)',
-  },
-  ordersSection: { padding: 20 },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12
-  },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', textAlign: 'right' },
-  orderCard: {
-    backgroundColor: '#FFF',
-    padding: 15,
-    borderRadius: 15,
-    marginRight: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 220,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#E5E7EB'
-  },
-  statusIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10
-  },
-  orderInfo: { flex: 1 },
-  orderIdText: { fontSize: 14, fontWeight: 'bold', marginBottom: 2 },
-  orderServiceText: { fontSize: 12, color: '#6B7280' },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    marginLeft: 5
-  },
-  statusBadgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
+  title: { fontSize: 32, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 },
+  subtitle: { fontSize: 16, color: 'rgba(255,255,255,0.9)' },
+  profileButton: { padding: 5 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', padding: 16 },
   card: { height: 180, marginBottom: 16, borderRadius: 25, overflow: 'hidden', elevation: 5 },
   cardImage: { width: '100%', height: '100%' },
@@ -267,7 +300,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.2)',
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   cardTitle: { color: '#FFF', fontSize: 22, fontWeight: 'bold' },
 });

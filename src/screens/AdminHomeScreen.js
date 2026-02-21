@@ -28,7 +28,7 @@ export default function AdminHomeScreen({ navigation }) {
     await AsyncStorage.removeItem('userToken');
     await AsyncStorage.removeItem('userData');
     await AsyncStorage.removeItem('userRole');
-    navigation.replace('Login');
+    navigation.replace('MerchantLogin');
   };
 
   return (
@@ -63,7 +63,8 @@ export default function AdminHomeScreen({ navigation }) {
               <Text style={styles.statLabel}>مندوبين</Text>
             </View>
             <View style={styles.statItem}>
-              <Ionicons name="storefront-outline" size={32} color="#8B5CF6" />
+              {/* ✅ تم التعديل: استخدام business-outline بدلاً من storefront-outline */}
+              <Ionicons name="business-outline" size={32} color="#8B5CF6" />
               <Text style={styles.statNumber}>0</Text>
               <Text style={styles.statLabel}>تجار</Text>
             </View>

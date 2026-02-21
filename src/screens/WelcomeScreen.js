@@ -16,14 +16,11 @@ const { width } = Dimensions.get('window');
 export default function WelcomeScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
-      {/* خلفية متدرجة */}
       <LinearGradient
         colors={['#4F46E5', '#7C3AED']}
         style={styles.gradient}
       >
-        {/* المحتوى الرئيسي */}
         <View style={styles.content}>
-          {/* الأيقونة والرسالة الترحيبية */}
           <View style={styles.header}>
             <Image
               source={require('../../assets/icons/Zidicon.png')}
@@ -34,7 +31,6 @@ export default function WelcomeScreen({ navigation }) {
             <Text style={styles.subText}>كل الخدمات في مكان واحد</Text>
           </View>
 
-          {/* نقاط الجانب الأيمن */}
           <View style={styles.featuresContainer}>
             <View style={styles.featureItem}>
               <Ionicons name="checkmark-circle" size={24} color="#FFD700" />
@@ -50,7 +46,6 @@ export default function WelcomeScreen({ navigation }) {
             </View>
           </View>
 
-          {/* الأزرار */}
           <View style={styles.buttonsContainer}>
             <TouchableOpacity
               style={[styles.button, styles.customerButton]}
@@ -71,7 +66,6 @@ export default function WelcomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* سياسة الخصوصية */}
           <Text style={styles.footerText}>
             باستخدامك للتطبيق، أنت توافق على{' '}
             <Text style={styles.linkText}>شروط الخدمة</Text> و{' '}

@@ -7,13 +7,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { View, Text } from 'react-native';
 
-// شاشات جديدة
-import WelcomeScreen from './src/screens/WelcomeScreen';
+// شاشات المصادقة والترحيب
+import CustomerScreen from './src/screens/CustomerScreen';
 import CustomerAuthScreen from './src/screens/CustomerAuthScreen';
-import MerchantLoginScreen from './src/screens/auth/LoginScreen'; // نفس اللي موجودة
+import MerchantLoginScreen from './src/screens/auth/LoginScreen';
+import DriverLoginScreen from './src/screens/auth/DriverLoginScreen';
 
 // شاشات العميل
-import CustomerScreen from './src/screens/CustomerScreen';
 import RestaurantScreen from './src/screens/RestaurantScreen';
 import GroceryScreen from './src/screens/GroceryScreen';
 import IroningScreen from './src/screens/IroningScreen';
@@ -81,13 +81,13 @@ function MainTabs() {
   );
 }
 
-// Root Stack الجديد
 function RootStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Welcome">
-      <Stack.Screen name="Welcome" component={WelcomeScreen} />
+    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="CustomerScreen">
+      <Stack.Screen name="CustomerScreen" component={CustomerScreen} />
       <Stack.Screen name="CustomerAuth" component={CustomerAuthScreen} />
       <Stack.Screen name="MerchantLogin" component={MerchantLoginScreen} />
+      <Stack.Screen name="DriverLogin" component={DriverLoginScreen} />
       <Stack.Screen name="MainTabs" component={MainTabs} />
       <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
     </Stack.Navigator>
