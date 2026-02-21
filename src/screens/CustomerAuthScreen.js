@@ -1,24 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  ActivityIndicator,
-  SafeAreaView,
-  KeyboardAvoidingView,
-  Platform,
+  View, Text, StyleSheet, TouchableOpacity, TextInput,
+  Alert, ActivityIndicator, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
-import { getAuth, signInWithCredential, GoogleAuthProvider, PhoneAuthProvider, signInWithPhoneNumber } from 'firebase/auth';
+import { 
+  GoogleAuthProvider, 
+  signInWithCredential,
+  PhoneAuthProvider,
+  signInWithPhoneNumber
+} from 'firebase/auth';
+import { auth, db } from '../firebase/init';
 import { doc, setDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase/init';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Application from 'expo-application';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -29,45 +25,48 @@ export default function CustomerAuthScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [isCodeSent, setIsCodeSent] = useState(false);
 
-  // ✅ Client IDs الصحيحة (بدلها بقيمك من Firebase)
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: '112994130336-xxxxx.apps.googleusercontent.com', // Web Client ID
-    iosClientId: '112994130336-xxxxx.apps.googleusercontent.com',
-    androidClientId: '112994130336-xxxxx.apps.googleusercontent.com',
+  // ✅ Google Sign-In
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: '560415054284-97a0d9b0f7874328f72569.apps.googleusercontent.com',
+    webClientId: '560415054284-huem3p73tkdd7qebjmul1lu1nk0pm5kb.apps.googleusercontent.com',
+    expoClientId: '560415054284-huem3p73tkdd7qebjmul1lu1nk0pm5kb.apps.googleusercontent.com',
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (response?.type === 'success') {
-      handleGoogleSignIn(response.params.id_token);
+      const { id_token } = response.params;
+      const credential = GoogleAuthProvider.credential(id_token);
+      handleGoogleSignIn(credential);
     }
   }, [response]);
 
-  const handleGoogleSignIn = async (idToken) => {
+  const handleGoogleSignIn = async (credential) => {
     setLoading(true);
     try {
-      const credential = GoogleAuthProvider.credential(idToken);
       const userCredential = await signInWithCredential(auth, credential);
       const user = userCredential.user;
-
+      
       await setDoc(doc(db, 'users', user.uid), {
-        email: user.email,
         name: user.displayName,
+        email: user.email,
         phone: user.phoneNumber || '',
         role: 'customer',
-        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString()
       }, { merge: true });
-
-      await AsyncStorage.setItem('userToken', 'logged_in');
+      
+      await AsyncStorage.setItem('userToken', user.uid);
       await AsyncStorage.setItem('userRole', 'customer');
+      
+      Alert.alert('نجاح', `مرحباً بك يا ${user.displayName}`);
       navigation.replace('MainTabs');
     } catch (error) {
-      Alert.alert('خطأ', 'فشل تسجيل الدخول عبر Google');
-      console.error('Google Sign-In Error:', error);
+      Alert.alert('خطأ', error.message);
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ Phone Authentication (SMS)
   const sendVerificationCode = async () => {
     if (!phone || phone.length < 10) {
       Alert.alert('تنبيه', 'أدخل رقم هاتف صحيح');
@@ -75,13 +74,12 @@ export default function CustomerAuthScreen({ navigation }) {
     }
     setLoading(true);
     try {
-      // ✅ تأكد من تفعيل Phone Authentication في Firebase Console
       const verificationId = await signInWithPhoneNumber(auth, `+2${phone}`);
       setVerificationId(verificationId);
       setIsCodeSent(true);
       Alert.alert('تم', 'تم إرسال رمز التحقق');
     } catch (error) {
-      Alert.alert('خطأ', 'فشل إرسال الرمز. تأكد من تفعيل Phone Authentication في Firebase Console.');
+      Alert.alert('خطأ', 'فشل إرسال الرمز. تأكد من تفعيل Phone Authentication في Firebase');
       console.error('Phone Auth Error:', error);
     } finally {
       setLoading(false);
@@ -95,7 +93,6 @@ export default function CustomerAuthScreen({ navigation }) {
     }
     setLoading(true);
     try {
-      // ✅ التأكد من استخدام PhoneAuthProvider بشكل صحيح
       const credential = PhoneAuthProvider.credential(verificationId, verificationCode);
       const userCredential = await signInWithCredential(auth, credential);
       const user = userCredential.user;
@@ -103,15 +100,14 @@ export default function CustomerAuthScreen({ navigation }) {
       await setDoc(doc(db, 'users', user.uid), {
         phone: user.phoneNumber,
         role: 'customer',
-        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString()
       }, { merge: true });
 
-      await AsyncStorage.setItem('userToken', 'logged_in');
+      await AsyncStorage.setItem('userToken', user.uid);
       await AsyncStorage.setItem('userRole', 'customer');
       navigation.replace('MainTabs');
     } catch (error) {
-      Alert.alert('خطأ', 'رمز التحقق غير صحيح أو منتهي الصلاحية');
-      console.error('Verification Error:', error);
+      Alert.alert('خطأ', 'رمز التحقق غير صحيح');
     } finally {
       setLoading(false);
     }
@@ -119,33 +115,41 @@ export default function CustomerAuthScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        <View style={styles.content}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.content}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={28} color="#1F2937" />
+            <Ionicons name="arrow-back" size={28} color="#4F46E5" />
           </TouchableOpacity>
 
-          <Text style={styles.title}>تسجيل دخول العميل</Text>
-          <Text style={styles.subtitle}>اختر طريقة الدخول</Text>
+          <View style={styles.header}>
+            <View style={styles.iconCircle}>
+              <Ionicons name="person-add-outline" size={40} color="#4F46E5" />
+            </View>
+            <Text style={styles.title}>إنشاء حساب جديد</Text>
+            <Text style={styles.subtitle}>انضم إلى Zayed ID لتتمكن من الطلب بسهولة</Text>
+          </View>
 
-          <TouchableOpacity
-            style={styles.googleButton}
+          {/* Google Sign-In */}
+          <TouchableOpacity 
+            style={[styles.socialButton, { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E5E7EB' }]} 
             onPress={() => promptAsync()}
             disabled={loading}
           >
-            <Ionicons name="logo-google" size={24} color="#FFF" />
-            <Text style={styles.googleButtonText}>الدخول عبر Google</Text>
+            {loading ? <ActivityIndicator color="#4F46E5" /> : (
+              <>
+                <Ionicons name="logo-google" size={24} color="#DB4437" />
+                <Text style={[styles.socialButtonText, { color: '#1F2937' }]}>التسجيل بواسطة جوجل</Text>
+              </>
+            )}
           </TouchableOpacity>
 
           <View style={styles.divider}>
             <View style={styles.line} />
-            <Text style={styles.orText}>أو</Text>
+            <Text style={styles.dividerText}>أو</Text>
             <View style={styles.line} />
           </View>
 
+          {/* Phone Authentication */}
           {!isCodeSent ? (
             <View style={styles.phoneContainer}>
               <Text style={styles.label}>رقم الهاتف</Text>
@@ -158,6 +162,7 @@ export default function CustomerAuthScreen({ navigation }) {
                   onChangeText={setPhone}
                   keyboardType="phone-pad"
                   maxLength={10}
+                  editable={!loading}
                 />
               </View>
               <TouchableOpacity
@@ -178,6 +183,7 @@ export default function CustomerAuthScreen({ navigation }) {
                 onChangeText={setVerificationCode}
                 keyboardType="number-pad"
                 maxLength={6}
+                editable={!loading}
               />
               <TouchableOpacity
                 style={styles.verifyButton}
@@ -191,7 +197,7 @@ export default function CustomerAuthScreen({ navigation }) {
               </TouchableOpacity>
             </View>
           )}
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -199,23 +205,36 @@ export default function CustomerAuthScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
-  content: { flex: 1, padding: 20 },
-  backButton: { marginBottom: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#1F2937', textAlign: 'center' },
-  subtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 30 },
-  googleButton: {
-    backgroundColor: '#DB4437',
+  content: { padding: 25, flexGrow: 1, justifyContent: 'center' },
+  backButton: { position: 'absolute', top: 20, left: 20, zIndex: 10 },
+  header: { alignItems: 'center', marginBottom: 40 },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#E0E7FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#1F2937', marginBottom: 8 },
+  subtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', paddingHorizontal: 20 },
+  socialButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 15,
     borderRadius: 12,
-    marginBottom: 20,
+    gap: 10,
   },
-  googleButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', marginLeft: 10 },
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
+  socialButtonText: { fontSize: 16, fontWeight: '600' },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
   line: { flex: 1, height: 1, backgroundColor: '#E5E7EB' },
-  orText: { marginHorizontal: 10, color: '#9CA3AF' },
+  dividerText: { marginHorizontal: 10, color: '#9CA3AF', fontSize: 14 },
   phoneContainer: { marginTop: 10 },
   label: { fontSize: 14, fontWeight: '600', color: '#1F2937', marginBottom: 5 },
   phoneInput: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 15 },
