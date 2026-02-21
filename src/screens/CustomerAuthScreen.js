@@ -25,9 +25,9 @@ export default function CustomerAuthScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [isCodeSent, setIsCodeSent] = useState(false);
 
-  // ✅ Google Sign-In
+  // ✅ Google Sign-In مع Client IDs من google-services.json
   const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: '560415054284-97a0d9b0f7874328f72569.apps.googleusercontent.com',
+    androidClientId: '560415054284-huem3p73tkdd7qebjmul1lu1nk0pm5kb.apps.googleusercontent.com',
     webClientId: '560415054284-huem3p73tkdd7qebjmul1lu1nk0pm5kb.apps.googleusercontent.com',
     expoClientId: '560415054284-huem3p73tkdd7qebjmul1lu1nk0pm5kb.apps.googleusercontent.com',
   });
