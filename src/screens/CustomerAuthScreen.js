@@ -15,9 +15,10 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { getAuth, signInWithCredential, GoogleAuthProvider, PhoneAuthProvider, signInWithPhoneNumber } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase/init';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Application from 'expo-application';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -28,11 +29,11 @@ export default function CustomerAuthScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [isCodeSent, setIsCodeSent] = useState(false);
 
-  // Google Sign-In
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: '112994130336-...', // ضع clientId الخاص بك
-    iosClientId: '112994130336-...',      // ضع clientId الخاص بك
-    expoClientId: '112994130336-...',     // ضع clientId الخاص بك
+  // ✅ Client IDs الصحيحة (بدلها بقيمك من Firebase)
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    clientId: '112994130336-xxxxx.apps.googleusercontent.com', // Web Client ID
+    iosClientId: '112994130336-xxxxx.apps.googleusercontent.com',
+    androidClientId: '112994130336-xxxxx.apps.googleusercontent.com',
   });
 
   React.useEffect(() => {
@@ -48,7 +49,6 @@ export default function CustomerAuthScreen({ navigation }) {
       const userCredential = await signInWithCredential(auth, credential);
       const user = userCredential.user;
 
-      // حفظ بيانات المستخدم في Firestore
       await setDoc(doc(db, 'users', user.uid), {
         email: user.email,
         name: user.displayName,
@@ -62,13 +62,12 @@ export default function CustomerAuthScreen({ navigation }) {
       navigation.replace('MainTabs');
     } catch (error) {
       Alert.alert('خطأ', 'فشل تسجيل الدخول عبر Google');
-      console.error(error);
+      console.error('Google Sign-In Error:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // إرسال رمز التحقق عبر SMS
   const sendVerificationCode = async () => {
     if (!phone || phone.length < 10) {
       Alert.alert('تنبيه', 'أدخل رقم هاتف صحيح');
@@ -76,19 +75,19 @@ export default function CustomerAuthScreen({ navigation }) {
     }
     setLoading(true);
     try {
+      // ✅ تأكد من تفعيل Phone Authentication في Firebase Console
       const verificationId = await signInWithPhoneNumber(auth, `+2${phone}`);
       setVerificationId(verificationId);
       setIsCodeSent(true);
       Alert.alert('تم', 'تم إرسال رمز التحقق');
     } catch (error) {
-      Alert.alert('خطأ', 'فشل إرسال الرمز');
-      console.error(error);
+      Alert.alert('خطأ', 'فشل إرسال الرمز. تأكد من تفعيل Phone Authentication في Firebase Console.');
+      console.error('Phone Auth Error:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // التحقق من الرمز
   const verifyCode = async () => {
     if (!verificationCode) {
       Alert.alert('تنبيه', 'أدخل رمز التحقق');
@@ -96,6 +95,7 @@ export default function CustomerAuthScreen({ navigation }) {
     }
     setLoading(true);
     try {
+      // ✅ التأكد من استخدام PhoneAuthProvider بشكل صحيح
       const credential = PhoneAuthProvider.credential(verificationId, verificationCode);
       const userCredential = await signInWithCredential(auth, credential);
       const user = userCredential.user;
@@ -110,7 +110,8 @@ export default function CustomerAuthScreen({ navigation }) {
       await AsyncStorage.setItem('userRole', 'customer');
       navigation.replace('MainTabs');
     } catch (error) {
-      Alert.alert('خطأ', 'رمز التحقق غير صحيح');
+      Alert.alert('خطأ', 'رمز التحقق غير صحيح أو منتهي الصلاحية');
+      console.error('Verification Error:', error);
     } finally {
       setLoading(false);
     }
