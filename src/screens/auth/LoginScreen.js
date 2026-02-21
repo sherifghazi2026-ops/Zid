@@ -15,7 +15,6 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loginUser } from '../../firebase/users';
 
-// صورة التطبيق
 const appIcon = require('../../../assets/icons/Zidicon.png');
 
 export default function LoginScreen({ navigation }) {
@@ -25,7 +24,6 @@ export default function LoginScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-    // التحقق من المدخلات
     if (!phone.trim()) {
       Alert.alert('تنبيه', 'أدخل رقم التليفون');
       return;
@@ -47,24 +45,15 @@ export default function LoginScreen({ navigation }) {
       const result = await loginUser(phone, password);
       
       if (result.success) {
-        // حفظ بيانات المستخدم
         await AsyncStorage.setItem('userToken', 'logged_in');
         await AsyncStorage.setItem('userData', JSON.stringify(result.data));
         await AsyncStorage.setItem('userRole', result.data.role);
         
-        // توجيه المستخدم حسب الصلاحية
-        switch(result.data.role) {
-          case 'merchant':
-            navigation.replace('MerchantHome');
-            break;
-          case 'driver':
-            navigation.replace('DriverHome');
-            break;
-          case 'admin':
-            navigation.replace('AdminHome');
-            break;
-          default:
-            navigation.replace('CustomerHome');
+        if (result.data.role === 'admin') {
+          navigation.replace('AdminHome');
+        } else {
+          // ✅ التوجيه الصحيح للشاشة المتداخلة
+          navigation.replace('MainTabs', { screen: 'طلب' });
         }
         
       } else {
@@ -84,16 +73,13 @@ export default function LoginScreen({ navigation }) {
       style={styles.container}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {/* الشعار */}
         <View style={styles.logoContainer}>
           <Image source={appIcon} style={styles.logo} />
           <Text style={styles.title}>ZAYED ID</Text>
           <Text style={styles.subtitle}>تسجيل الدخول</Text>
         </View>
 
-        {/* حقول الإدخال */}
         <View style={styles.formContainer}>
-          {/* رقم التليفون */}
           <View style={styles.inputWrapper}>
             <Text style={styles.label}>رقم التليفون</Text>
             <View style={styles.inputContainer}>
@@ -109,7 +95,6 @@ export default function LoginScreen({ navigation }) {
             </View>
           </View>
 
-          {/* كلمة المرور */}
           <View style={styles.inputWrapper}>
             <Text style={styles.label}>كلمة المرور</Text>
             <View style={styles.inputContainer}>
@@ -130,7 +115,6 @@ export default function LoginScreen({ navigation }) {
             </View>
           </View>
 
-          {/* زر تسجيل الدخول */}
           <TouchableOpacity
             style={[styles.loginButton, loading && styles.disabledButton]}
             onPress={handleLogin}
@@ -143,19 +127,16 @@ export default function LoginScreen({ navigation }) {
             )}
           </TouchableOpacity>
 
-          {/* زر الدخول كعميل (للاختبار) */}
           <TouchableOpacity
             style={styles.customerButton}
             onPress={() => {
-              // دخول سريع كعميل للاختبار
-              navigation.replace('CustomerHome');
+              navigation.replace('MainTabs', { screen: 'طلب' });
             }}
           >
             <Text style={styles.customerButtonText}>الدخول كعميل (للاختبار)</Text>
           </TouchableOpacity>
         </View>
 
-        {/* الفوتر */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>للتجار والمناديب: تواصل مع الإدارة للحصول على حساب</Text>
         </View>

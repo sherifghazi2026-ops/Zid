@@ -60,7 +60,6 @@ const sendMessage = async (chatId, text, keyboard = null, botType = 'supermarket
 
 const sendVoice = async (chatId, voiceUrl, botType = 'supermarket') => {
   try {
-    // استخدام form-data بشكل صحيح
     const FormData = require('form-data');
     const formData = new FormData();
     formData.append('chat_id', chatId);
