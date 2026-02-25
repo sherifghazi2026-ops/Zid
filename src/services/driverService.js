@@ -1,31 +1,26 @@
-import { db } from '../firebase/init';
-import { collection, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
+import { databases, DATABASE_ID, USERS_COLLECTION_ID } from '../appwrite/config';
+import { ID } from 'appwrite';
 
 // تسجيل مندوب جديد
 export const registerDriver = async (driverData) => {
   try {
     const driver = {
       ...driverData,
-      isActive: true,
-      registeredAt: serverTimestamp(),
+      role: 'driver',
+      active: true,
+      createdAt: new Date().toISOString(),
     };
-    const docRef = await addDoc(collection(db, 'drivers'), driver);
-    return { success: true, id: docRef.id };
+    
+    const response = await databases.createDocument(
+      DATABASE_ID,
+      USERS_COLLECTION_ID,
+      ID.unique(),
+      driver
+    );
+    
+    return { success: true, id: response.$id };
   } catch (error) {
-    return { success: false, error: error.message };
-  }
-};
-
-// تحديث موقع المندوب
-export const updateDriverLocation = async (driverId, latitude, longitude) => {
-  try {
-    const driverRef = doc(db, 'drivers', driverId);
-    await updateDoc(driverRef, {
-      location: { latitude, longitude },
-      lastSeen: serverTimestamp()
-    });
-    return { success: true };
-  } catch (error) {
+    console.error('Error registering driver:', error);
     return { success: false, error: error.message };
   }
 };

@@ -1,91 +1,40 @@
 import React, { useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  ActivityIndicator,
-} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, Image, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const appIcon = require('../../assets/icons/Zidicon.png');
 
 export default function SplashScreen({ navigation }) {
   useEffect(() => {
-    checkLoginStatus();
+    const timer = setTimeout(() => {
+      navigation.replace('CustomerScreen');
+    }, 3000); // 3 ثواني
+
+    return () => clearTimeout(timer);
   }, []);
 
-  const checkLoginStatus = async () => {
-    try {
-      // نتأخر شوية عشان نظهر الشعار
-      setTimeout(async () => {
-        const userToken = await AsyncStorage.getItem('userToken');
-        const userRole = await AsyncStorage.getItem('userRole');
-        
-        if (userToken) {
-          // لو فيه مستخدم مسجل دخول، نوجهه حسب صلاحيته
-          switch(userRole) {
-            case 'merchant':
-              navigation.replace('MerchantHome');
-              break;
-            case 'driver':
-              navigation.replace('DriverHome');
-              break;
-            case 'admin':
-              navigation.replace('AdminHome');
-              break;
-            default:
-              navigation.replace('CustomerHome');
-          }
-        } else {
-          // لو مفيش، نروح لشاشة الدخول
-          navigation.replace('Login');
-        }
-      }, 2000); // 2 ثانية تأخير
-      
-    } catch (error) {
-      console.error('خطأ في التحقق من الجلسة:', error);
-      navigation.replace('Login');
-    }
-  };
-
   return (
-    <View style={styles.container}>
-      <Image source={appIcon} style={styles.logo} />
-      <Text style={styles.title}>ZAYED ID</Text>
-      <Text style={styles.subtitle}>كل الخدمات في مكان واحد</Text>
-      <ActivityIndicator size="large" color="#4F46E5" style={styles.loader} />
-    </View>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.content}>
+        <Image source={appIcon} style={styles.logo} />
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#4F46E5',
-    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  content: {
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   logo: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 4,
-    borderColor: '#FFF',
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#FFF',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 30,
-  },
-  loader: {
-    marginTop: 20,
+    width: 216, // 120 * 1.8 = 216 (زيادة 80%)
+    height: 216,
+    resizeMode: 'contain',
   },
 });

@@ -15,9 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
-
-const SERVER_URL = 'https://zayedid-production.up.railway.app';
+import { createOrder, uploadFile, SERVICE_TYPES } from '../services/orderService';
 
 export default function PharmacyScreen({ navigation }) {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -41,12 +39,11 @@ export default function PharmacyScreen({ navigation }) {
 
   const loadSavedData = async () => {
     const savedPhone = await AsyncStorage.getItem('zayed_phone');
-    if (savedPhone) setPhoneNumber(savedPhone);
     const savedAddress = await AsyncStorage.getItem('zayed_address');
+    if (savedPhone) setPhoneNumber(savedPhone);
     if (savedAddress) setAddress(savedAddress);
   };
 
-  // ========== كاميرا ==========
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -81,7 +78,6 @@ export default function PharmacyScreen({ navigation }) {
     }
   };
 
-  // ========== تسجيل صوتي ==========
   const startRecording = async () => {
     try {
       const permission = await Audio.requestPermissionsAsync();
@@ -146,47 +142,6 @@ export default function PharmacyScreen({ navigation }) {
     setIsPlaying(false);
   };
 
-  // ========== رفع الصور والصوت ==========
-  const uploadImage = async (uri) => {
-    try {
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      const response = await fetch(`${SERVER_URL}/upload-image`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64 }),
-      });
-
-      const data = await response.json();
-      return data.success ? data.url : null;
-    } catch (error) {
-      console.error('❌ فشل رفع الصورة:', error);
-      return null;
-    }
-  };
-
-  const uploadVoice = async (uri) => {
-    try {
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      const response = await fetch(`${SERVER_URL}/upload-voice`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audio: base64 }),
-      });
-
-      const data = await response.json();
-      return data.success ? data.url : null;
-    } catch (error) {
-      console.error('❌ فشل رفع الصوت:', error);
-      return null;
-    }
-  };
-
   const sendOrder = async () => {
     if (!phoneNumber) return Alert.alert('تنبيه', 'أدخل رقم الموبايل');
 
@@ -194,36 +149,41 @@ export default function PharmacyScreen({ navigation }) {
     setUploading(true);
 
     try {
-      let imageUrl = null;
-      let voiceUrl = null;
+      let voiceFileId = null;
+      let imageFileId = null;
 
+      // رفع الصورة إذا وجدت
       if (prescriptionImage) {
-        imageUrl = await uploadImage(prescriptionImage);
+        const uploadResult = await uploadFile(prescriptionImage, `prescription_${Date.now()}.jpg`);
+        if (uploadResult.success) {
+          imageFileId = uploadResult.fileId;
+        }
       }
 
+      // رفع الصوت إذا وجد
       if (recordedUri) {
-        voiceUrl = await uploadVoice(recordedUri);
+        const uploadResult = await uploadFile(recordedUri, `voice_${Date.now()}.m4a`);
+        if (uploadResult.success) {
+          voiceFileId = uploadResult.fileId;
+        }
       }
 
+      // إنشاء الطلب
       const orderData = {
-        phone: phoneNumber,
-        address: address,
+        customerPhone: phoneNumber,
+        customerAddress: address,
+        serviceType: SERVICE_TYPES.PHARMACY,
+        serviceName: 'صيدلية',
         items: notes ? [notes] : ['طلب روشتة'],
         rawText: notes || 'طلب روشتة',
-        imageUrl: imageUrl,
-        voiceUrl: voiceUrl,
-        serviceName: 'صيدلية',
+        voiceFileId,
+        imageFileIds: imageFileId ? [imageFileId] : [],
+        notes: notes,
       };
 
       console.log('📤 إرسال طلب صيدلية:', orderData);
 
-      const response = await fetch(`${SERVER_URL}/send-order`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderData),
-      });
-
-      const result = await response.json();
+      const result = await createOrder(orderData);
 
       if (result.success) {
         await AsyncStorage.setItem('zayed_phone', phoneNumber);
@@ -235,7 +195,7 @@ export default function PharmacyScreen({ navigation }) {
           [{ text: 'ممتاز', onPress: () => navigation.goBack() }]
         );
       } else {
-        Alert.alert('⚠️', 'حدث خطأ في الإرسال');
+        Alert.alert('⚠️', 'حدث خطأ في الإرسال: ' + result.error);
       }
     } catch (e) {
       console.error('❌ خطأ:', e);
@@ -278,10 +238,9 @@ export default function PharmacyScreen({ navigation }) {
           />
         </View>
 
-        {/* قسم صورة الروشتة */}
         <View style={styles.imageSection}>
           <Text style={styles.label}>📸 صورة الروشتة (مطلوبة)</Text>
-          
+
           {!prescriptionImage ? (
             <View style={styles.imageButtons}>
               <TouchableOpacity style={styles.imageButton} onPress={takePhoto}>
@@ -306,7 +265,6 @@ export default function PharmacyScreen({ navigation }) {
           )}
         </View>
 
-        {/* ملاحظات إضافية */}
         <View style={styles.notesSection}>
           <Text style={styles.label}>📝 ملاحظات إضافية (اختياري)</Text>
           <TextInput
@@ -320,7 +278,6 @@ export default function PharmacyScreen({ navigation }) {
           />
         </View>
 
-        {/* تسجيل صوتي */}
         <View style={styles.voiceSection}>
           <Text style={styles.label}>🎤 تسجيل صوتي (اختياري)</Text>
 

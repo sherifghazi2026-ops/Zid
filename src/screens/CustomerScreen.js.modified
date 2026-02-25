@@ -1,0 +1,24 @@
+// ... (نفس الكود الموجود) ...
+
+// قم بتعديل الـ bottomBar ليصبح كالتالي:
+<View style={styles.bottomBar}>
+  <TouchableOpacity
+    style={styles.bottomItem}
+    onPress={() => navigation.navigate('ServiceProvider')}
+  >
+    <Ionicons name="people-outline" size={24} color="#4F46E5" />
+    <Text style={[styles.bottomText, { color: '#4F46E5' }]}>مقدمي الخدمة</Text>
+  </TouchableOpacity>
+
+  <View style={styles.bottomDivider} />
+
+  <TouchableOpacity
+    style={styles.bottomItem}
+    onPress={() => setAdminPasswordModal(true)}
+  >
+    <Ionicons name="shield-outline" size={24} color="#EF4444" />
+    <Text style={[styles.bottomText, { color: '#EF4444' }]}>أدمن</Text>
+  </TouchableOpacity>
+</View>
+
+// ... (باقي الكود) ...

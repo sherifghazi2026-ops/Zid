@@ -16,8 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-
-const SERVER_URL = 'https://zayedid-production.up.railway.app';
+import { createOrder, uploadFile, SERVICE_TYPES } from '../services/orderService';
 
 export default function KitchenScreen({ navigation }) {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -25,8 +24,7 @@ export default function KitchenScreen({ navigation }) {
   const [description, setDescription] = useState('');
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
-  
-  // حالات التسجيل الصوتي
+
   const [isRecording, setIsRecording] = useState(false);
   const [recording, setRecording] = useState(null);
   const [recordedUri, setRecordedUri] = useState(null);
@@ -48,7 +46,6 @@ export default function KitchenScreen({ navigation }) {
     if (savedAddress) setAddress(savedAddress);
   };
 
-  // ========== دوال الصور ==========
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -89,7 +86,6 @@ export default function KitchenScreen({ navigation }) {
     setImages(newImages);
   };
 
-  // ========== دوال التسجيل الصوتي ==========
   const startRecording = async () => {
     try {
       const permission = await Audio.requestPermissionsAsync();
@@ -154,91 +150,40 @@ export default function KitchenScreen({ navigation }) {
     setIsPlaying(false);
   };
 
-  // ========== رفع الصور ==========
-  const uploadImage = async (uri) => {
-    try {
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      const response = await fetch(`${SERVER_URL}/upload-image`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64 }),
-      });
-
-      const data = await response.json();
-      return data.success ? data.url : null;
-    } catch (error) {
-      console.error('❌ فشل رفع الصورة:', error);
-      return null;
-    }
-  };
-
-  // ========== رفع الصوت ==========
-  const uploadVoice = async (uri) => {
-    try {
-      setUploadingVoice(true);
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      const response = await fetch(`${SERVER_URL}/upload-voice`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audio: base64 }),
-      });
-
-      const data = await response.json();
-      return data.success ? data.url : null;
-    } catch (error) {
-      console.error('❌ فشل رفع الصوت:', error);
-      return null;
-    } finally {
-      setUploadingVoice(false);
-    }
-  };
-
-  // ========== إرسال الطلب ==========
   const sendOrder = async () => {
     if (!phoneNumber) return Alert.alert('تنبيه', 'أدخل رقم الموبايل');
     if (!description) return Alert.alert('تنبيه', 'اكتب وصف الطلب');
 
     setLoading(true);
     try {
-      // رفع الصور
-      const uploadedImages = [];
-      for (const uri of images) {
-        const url = await uploadImage(uri);
-        if (url) uploadedImages.push(url);
+      let voiceFileId = null;
+      if (recordedUri) {
+        setUploadingVoice(true);
+        const uploadResult = await uploadFile(recordedUri, `voice_${Date.now()}.m4a`);
+        if (uploadResult.success) voiceFileId = uploadResult.fileId;
+        setUploadingVoice(false);
       }
 
-      // رفع الصوت إن وجد
-      let voiceUrl = null;
-      if (recordedUri) {
-        voiceUrl = await uploadVoice(recordedUri);
+      const imageFileIds = [];
+      for (const uri of images) {
+        const uploadResult = await uploadFile(uri, `image_${Date.now()}.jpg`);
+        if (uploadResult.success) imageFileIds.push(uploadResult.fileId);
       }
 
       const orderData = {
-        phone: phoneNumber,
-        address: address,
-        rawText: description,
-        items: [description],
-        imageUrl: uploadedImages.length > 0 ? uploadedImages[0] : null,
-        images: uploadedImages,
-        voiceUrl: voiceUrl,
+        customerPhone: phoneNumber,
+        customerAddress: address,
+        serviceType: SERVICE_TYPES.KITCHEN,
         serviceName: 'مطابخ',
+        items: [description],
+        rawText: description,
+        description,
+        imageFileIds,
+        voiceFileId,
+        notes: '',
       };
 
-      console.log('📤 إرسال طلب مطابخ:', orderData);
-
-      const response = await fetch(`${SERVER_URL}/send-order`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderData),
-      });
-
-      const result = await response.json();
+      const result = await createOrder(orderData);
 
       if (result.success) {
         await AsyncStorage.setItem('zayed_phone', phoneNumber);
@@ -250,7 +195,7 @@ export default function KitchenScreen({ navigation }) {
           [{ text: 'ممتاز', onPress: () => navigation.goBack() }]
         );
       } else {
-        Alert.alert('⚠️', 'حدث خطأ في الإرسال');
+        Alert.alert('⚠️', 'حدث خطأ في الإرسال: ' + result.error);
       }
     } catch (e) {
       console.error('❌ خطأ:', e);
@@ -305,10 +250,9 @@ export default function KitchenScreen({ navigation }) {
           />
         </View>
 
-        {/* قسم الصور */}
         <View style={styles.imagesSection}>
           <Text style={styles.label}>🖼️ صور توضيحية (اختياري)</Text>
-          
+
           <View style={styles.imageButtons}>
             <TouchableOpacity style={styles.imageButton} onPress={takePhoto}>
               <Ionicons name="camera" size={32} color="#10B981" />
@@ -337,7 +281,6 @@ export default function KitchenScreen({ navigation }) {
           )}
         </View>
 
-        {/* قسم التسجيل الصوتي */}
         <View style={styles.voiceSection}>
           <Text style={styles.label}>🎤 تسجيل صوتي (اختياري)</Text>
 

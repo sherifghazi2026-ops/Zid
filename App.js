@@ -1,5 +1,5 @@
 import 'react-native-gesture-handler';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -7,11 +7,24 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { View, Text } from 'react-native';
 
-// شاشات المصادقة والترحيب
+// شاشات
+import SplashScreen from './src/screens/SplashScreen';
 import CustomerScreen from './src/screens/CustomerScreen';
 import CustomerAuthScreen from './src/screens/CustomerAuthScreen';
-import MerchantLoginScreen from './src/screens/auth/LoginScreen';
-import DriverLoginScreen from './src/screens/auth/DriverLoginScreen';
+import ServiceProviderScreen from './src/screens/ServiceProviderScreen';
+import CompleteProfileScreen from './src/screens/CompleteProfileScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
+import MyOrdersScreen from './src/screens/MyOrdersScreen';
+import MerchantDashboard from './src/screens/merchant/MerchantDashboard';
+import DriverDashboard from './src/screens/driver/DriverDashboard';
+import OrderTracking from './src/screens/customer/OrderTracking';
+import AdminHomeScreen from './src/screens/AdminHomeScreen';
+import UserManagement from './src/screens/admin/UserManagement';
+import AdminOrdersScreen from './src/screens/admin/AdminOrdersScreen';
+import AddUserScreen from './src/screens/admin/AddUserScreen';
+import ServicesManagementScreen from './src/screens/admin/ServicesManagementScreen';
+import ManageOffersScreen from './src/screens/admin/ManageOffersScreen';
+import OffersScreen from './src/screens/OffersScreen';
 
 // شاشات العميل
 import RestaurantScreen from './src/screens/RestaurantScreen';
@@ -21,8 +34,9 @@ import KitchenScreen from './src/screens/KitchenScreen';
 import PharmacyScreen from './src/screens/PharmacyScreen';
 import ServiceScreen from './src/screens/ServiceScreen';
 
-// شاشات الأدمن
-import AdminHomeScreen from './src/screens/AdminHomeScreen';
+// خدمات
+import { initializeServices } from './src/services/servicesService';
+import { debugServices } from './src/debugServices';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -43,18 +57,6 @@ function CustomerStack() {
       <Stack.Screen name="Plumbing" component={ServiceScreen} initialParams={{ serviceType: 'plumbing' }} />
       <Stack.Screen name="Carpentry" component={ServiceScreen} initialParams={{ serviceType: 'carpentry' }} />
     </Stack.Navigator>
-  );
-}
-
-function OffersScreen() {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' }}>
-      <Ionicons name="pricetag-outline" size={80} color="#F59E0B" />
-      <Text style={{ fontSize: 20, fontWeight: 'bold', marginTop: 20, color: '#1F2937' }}>العروض</Text>
-      <Text style={{ fontSize: 14, color: '#6B7280', marginTop: 10, textAlign: 'center', paddingHorizontal: 30 }}>
-        قريباً ... عروض حصرية من ZAYED ID
-      </Text>
-    </View>
   );
 }
 
@@ -83,18 +85,49 @@ function MainTabs() {
 
 function RootStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="CustomerScreen">
+    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Splash">
+      {/* شاشات البداية */}
+      <Stack.Screen name="Splash" component={SplashScreen} />
       <Stack.Screen name="CustomerScreen" component={CustomerScreen} />
       <Stack.Screen name="CustomerAuth" component={CustomerAuthScreen} />
-      <Stack.Screen name="MerchantLogin" component={MerchantLoginScreen} />
-      <Stack.Screen name="DriverLogin" component={DriverLoginScreen} />
-      <Stack.Screen name="MainTabs" component={MainTabs} />
+      
+      {/* شاشات الدخول الموحدة لمقدمي الخدمة */}
+      <Stack.Screen name="ServiceProvider" component={ServiceProviderScreen} />
+      <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
+      
+      {/* شاشات العميل المسجل */}
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="MyOrders" component={MyOrdersScreen} />
+      
+      {/* لوحات التحكم */}
+      <Stack.Screen name="MerchantDashboard" component={MerchantDashboard} />
+      <Stack.Screen name="DriverDashboard" component={DriverDashboard} />
+      <Stack.Screen name="OrderTracking" component={OrderTracking} />
+      
+      {/* شاشات الأدمن */}
       <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
+      <Stack.Screen name="UserManagement" component={UserManagement} />
+      <Stack.Screen name="AdminOrders" component={AdminOrdersScreen} />
+      <Stack.Screen name="AddUser" component={AddUserScreen} />
+      <Stack.Screen name="ServicesManagement" component={ServicesManagementScreen} />
+      <Stack.Screen name="ManageOffers" component={ManageOffersScreen} />
+      
+      {/* الشاشة الرئيسية للعميل (تاب) */}
+      <Stack.Screen name="MainTabs" component={MainTabs} />
     </Stack.Navigator>
   );
 }
 
 export default function App() {
+  // تهيئة الخدمات عند بدء التطبيق
+  useEffect(() => {
+    const init = async () => {
+      await initializeServices();
+      await debugServices();
+    };
+    init();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <NavigationContainer>

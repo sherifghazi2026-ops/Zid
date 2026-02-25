@@ -1,59 +1,52 @@
 import React, { useState } from 'react';
-import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity,
-  Alert, ActivityIndicator, Image, SafeAreaView
-} from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loginUser } from '../../firebase/users';
-
-const appIcon = require('../../../assets/icons/Zidicon.png');
+import { loginUser } from '../../appwrite/userService';
 
 export default function LoginScreen({ navigation }) {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
     if (!phone || !password) {
       Alert.alert('تنبيه', 'أدخل رقم التليفون وكلمة المرور');
       return;
     }
+
     setLoading(true);
-    try {
-      const result = await loginUser(phone, password);
-      if (result.success) {
-        await AsyncStorage.setItem('userToken', 'logged_in');
-        await AsyncStorage.setItem('userData', JSON.stringify(result.data));
-        await AsyncStorage.setItem('userRole', result.data.role);
-        
-        if (result.data.role === 'admin') {
-          navigation.replace('AdminHome');
-        } else {
-          navigation.replace('MainTabs');
-        }
+    const result = await loginUser(phone, password);
+    
+    if (result.success) {
+      const user = result.data;
+      await AsyncStorage.setItem('userData', JSON.stringify(user));
+      
+      if (user.role === 'merchant') {
+        navigation.replace('MerchantDashboard');
+      } else if (user.role === 'driver') {
+        navigation.replace('DriverDashboard');
+      } else if (user.role === 'admin') {
+        navigation.replace('AdminHome');
       } else {
-        Alert.alert('خطأ', result.error);
+        Alert.alert('خطأ', 'غير مصرح بالدخول');
       }
-    } catch (error) {
-      Alert.alert('خطأ', 'حدث خطأ في الاتصال');
-    } finally {
-      setLoading(false);
+    } else {
+      Alert.alert('خطأ', result.error);
     }
+    setLoading(false);
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={28} color="#1F2937" />
+          <Ionicons name="arrow-forward" size={28} color="#4F46E5" />
         </TouchableOpacity>
-        <Image source={appIcon} style={styles.logo} />
+
         <Text style={styles.title}>دخول التجار والمناديب</Text>
-        
-        <View style={styles.inputContainer}>
-          <Ionicons name="call-outline" size={20} color="#9CA3AF" />
+
+        <View style={styles.form}>
           <TextInput
             style={styles.input}
             placeholder="رقم التليفون"
@@ -61,54 +54,57 @@ export default function LoginScreen({ navigation }) {
             onChangeText={setPhone}
             keyboardType="phone-pad"
           />
-        </View>
 
-        <View style={styles.inputContainer}>
-          <Ionicons name="lock-closed-outline" size={20} color="#9CA3AF" />
           <TextInput
-            style={[styles.input, { flex: 1 }]}
+            style={styles.input}
             placeholder="كلمة المرور"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry={!showPassword}
+            secureTextEntry
           />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#9CA3AF" />
-          </TouchableOpacity>
-        </View>
 
-        <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={loading}>
-          {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.loginText}>دخول</Text>}
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={loading}>
+            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.loginText}>دخول</Text>}
+          </TouchableOpacity>
+
+          <View style={styles.registerContainer}>
+            <Text style={styles.registerText}>ليس لديك حساب؟</Text>
+            <View style={styles.registerButtons}>
+              <TouchableOpacity 
+                style={[styles.registerButton, styles.merchantButton]}
+                onPress={() => navigation.navigate('MerchantRegister', { role: 'merchant' })}
+              >
+                <Text style={styles.registerButtonText}>تسجيل تاجر</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.registerButton, styles.driverButton]}
+                onPress={() => navigation.navigate('MerchantRegister', { role: 'driver' })}
+              >
+                <Text style={styles.registerButtonText}>تسجيل مندوب</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  content: { flex: 1, padding: 20, justifyContent: 'center' },
-  backButton: { position: 'absolute', top: 40, left: 20 },
-  logo: { width: 100, height: 100, alignSelf: 'center', marginBottom: 30 },
-  title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 30 },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 15,
-    gap: 10,
-  },
-  input: { flex: 1, paddingVertical: 15, fontSize: 16 },
-  loginButton: {
-    backgroundColor: '#4F46E5',
-    padding: 15,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  content: { flex: 1, padding: 24, justifyContent: 'center' },
+  backButton: { position: 'absolute', top: 20, right: 20 },
+  title: { fontSize: 22, fontWeight: 'bold', textAlign: 'center', color: '#1F2937', marginBottom: 30 },
+  form: { width: '100%' },
+  input: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 14, marginBottom: 16, fontSize: 16 },
+  loginButton: { backgroundColor: '#4F46E5', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 20 },
   loginText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  registerContainer: { marginTop: 20, alignItems: 'center' },
+  registerText: { fontSize: 14, color: '#6B7280', marginBottom: 10 },
+  registerButtons: { flexDirection: 'row', gap: 10 },
+  registerButton: { flex: 1, padding: 12, borderRadius: 8, alignItems: 'center' },
+  merchantButton: { backgroundColor: '#F59E0B' },
+  driverButton: { backgroundColor: '#3B82F6' },
+  registerButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
 });

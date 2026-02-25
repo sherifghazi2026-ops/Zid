@@ -40,14 +40,16 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-av",
+      "expo-audio",
       "expo-image-picker",
       "expo-location",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      "expo-font",
+      "expo-video"
     ],
     "extra": {
       "eas": {
-        "projectId": "22fc55ea-116f-45f3-88fd-cf26d613a4ae"
+        "projectId": "99672a87-4209-4952-9d39-248b58ed3610"
       }
     }
   }

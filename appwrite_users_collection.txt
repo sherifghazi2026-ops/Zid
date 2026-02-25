@@ -1,0 +1,17 @@
+الحقول المطلوبة في Collection users:
+
+1. name (string, size 255, required)
+2. phone (string, size 20, required)
+3. password (string, size 255, required)
+4. role (string, size 50, required)
+5. active (boolean, required)
+6. profileCompleted (boolean, required)
+7. createdAt (datetime, required)
+8. merchantType (string, size 100, optional)
+9. serviceArea (string, size 100, optional)
+10. maxDeliveryRadius (float, optional)
+11. isAvailable (boolean, optional)
+12. address (string, size 500, optional)
+13. locationLat (float, optional)
+14. locationLng (float, optional)
+15. createdBy (string, size 255, optional)

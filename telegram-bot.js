@@ -3,7 +3,6 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 
-// دعم fetch للإصدارات الحديثة
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const app = express();
@@ -19,7 +18,6 @@ app.use((req, res, next) => {
 
 // ==================== البوتات (12 بوت - مع بوت العروض) ====================
 const BOTS = {
-  // بوتات الخدمات (11 بوت)
   supermarket: { token: "8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A", api: "https://api.telegram.org/bot8216105936:AAFAj-b0HZdUMHXHhb-PtnW-y7ZOgoyNC7A" },
   restaurant: { token: "8529394963:AAGKZYTeAUwsnK9RJF-sbOmIj6e7F7XmJdw", api: "https://api.telegram.org/bot8529394963:AAGKZYTeAUwsnK9RJF-sbOmIj6e7F7XmJdw" },
   ironing: { token: "8216174777:AAERldfUvyWcDsXWPHLrnvz4bmmkcQiTzus", api: "https://api.telegram.org/bot8216174777:AAERldfUvyWcDsXWPHLrnvz4bmmkcQiTzus" },
@@ -31,8 +29,6 @@ const BOTS = {
   plumbing: { token: "8514986529:AAF50RKZgQjXymrv4Y6Sd9Uw-UVBC3bCK4Y", api: "https://api.telegram.org/bot8514986529:AAF50RKZgQjXymrv4Y6Sd9Uw-UVBC3bCK4Y" },
   carpentry: { token: "8328607450:AAFR_fCtlFq4nPEdx5az27fsdpTg0rFi1Bs", api: "https://api.telegram.org/bot8328607450:AAFR_fCtlFq4nPEdx5az27fsdpTg0rFi1Bs" },
   kitchen: { token: "8036001015:AAFLp3P1pzHgtiUyPQqNyheKLRqF2VrQxdU", api: "https://api.telegram.org/bot8036001015:AAFLp3P1pzHgtiUyPQqNyheKLRqF2VrQxdU" },
-  
-  // بوت العروض (منفصل)
   offers: { token: "8367864849:AAEgn5GdgBZZgVH0RP3h_QfqLEOdEkRGLS4", api: "https://api.telegram.org/bot8367864849:AAEgn5GdgBZZgVH0RP3h_QfqLEOdEkRGLS4" }
 };
 
@@ -48,7 +44,7 @@ const sendMessage = async (chatId, text, keyboard = null, botType = 'supermarket
   try {
     const payload = { chat_id: chatId, text: text, parse_mode: 'HTML' };
     if (keyboard) payload.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
-    
+
     const response = await fetch(`${BOTS[botType].api}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -89,7 +85,7 @@ const editMessage = async (chatId, messageId, text, keyboard = null, botType = '
   try {
     const payload = { chat_id: chatId, message_id: messageId, text: text, parse_mode: 'HTML' };
     if (keyboard) payload.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
-    
+
     await fetch(`${BOTS[botType].api}/editMessageText`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -143,7 +139,7 @@ app.use('/uploads', express.static('/tmp', {
 
 // ==================== نظام العروض ====================
 app.get('/api/offers', (req, res) => {
-  const sortedOffers = [...offers].sort((a, b) =>
+  const sortedOffers = [...offers].sort((a, b) => 
     new Date(b.createdAt) - new Date(a.createdAt)
   );
   res.json({ success: true, offers: sortedOffers });
@@ -172,6 +168,7 @@ app.get('/active-orders', (req, res) => {
         status: o.status,
         date: o.date,
         driverPhone: o.driverPhone || null,
+        accepted: o.accepted || false,
         itemsPrice: o.itemsPrice || 0,
         deliveryFee: o.deliveryFee || 0,
         totalPrice: o.totalPrice || 0,
@@ -194,6 +191,7 @@ app.get('/order-status/:orderId', (req, res) => {
         phone: order.phone,
         address: order.address,
         driverPhone: order.driverPhone || null,
+        accepted: order.accepted || false,
         itemsPrice: order.itemsPrice || 0,
         deliveryFee: order.deliveryFee || 0,
         totalPrice: order.totalPrice || 0
@@ -272,6 +270,7 @@ app.post('/send-order', async (req, res) => {
     totalPrice: 0,
     driverPhone: null,
     accepted: false,
+    groupMessageId: null,
     images: uploadedImages,
     voiceUrl: voiceUrl || null,
     location: location || null
@@ -353,7 +352,11 @@ app.post('/send-order', async (req, res) => {
     { text: '✅ قبول الطلب', callback_data: `accept_${orderId}` }
   ]];
 
-  await sendMessage(DRIVER_CHANNEL_ID, message, keyboard, botType);
+  const groupResult = await sendMessage(DRIVER_CHANNEL_ID, message, keyboard, botType);
+  
+  if (groupResult && groupResult.ok) {
+    newOrder.groupMessageId = groupResult.result.message_id;
+  }
 
   for (const img of uploadedImages) {
     await sendPhoto(DRIVER_CHANNEL_ID, img, '🖼️ صورة الطلب', botType);
@@ -363,6 +366,50 @@ app.post('/send-order', async (req, res) => {
   if (voiceUrl) await sendVoice(DRIVER_CHANNEL_ID, voiceUrl, botType);
 
   res.json({ success: true, orderId });
+});
+
+// ==================== قبول الطلب من التطبيق (جديد) ====================
+app.post('/accept-order', async (req, res) => {
+  const { orderId, merchantId, merchantName } = req.body;
+  
+  const order = orders.find(o => o.id === orderId);
+  if (!order) {
+    return res.json({ success: false, error: 'الطلب غير موجود' });
+  }
+  
+  if (order.accepted) {
+    return res.json({ success: false, error: 'الطلب تم قبوله بالفعل' });
+  }
+  
+  order.accepted = true;
+  order.acceptedBy = merchantId;
+  order.acceptedByName = merchantName;
+  
+  if (order.groupMessageId) {
+    await editMessage(
+      DRIVER_CHANNEL_ID, 
+      order.groupMessageId, 
+      `✅ تم قبول الطلب ${orderId} بواسطة ${merchantName}`,
+      [],
+      order.botType
+    );
+  }
+  
+  res.json({ success: true });
+});
+
+// ==================== تحديث حالة الطلب من التطبيق (جديد) ====================
+app.post('/update-order-status', async (req, res) => {
+  const { orderId, status } = req.body;
+  
+  const order = orders.find(o => o.id === orderId);
+  if (!order) {
+    return res.json({ success: false, error: 'الطلب غير موجود' });
+  }
+  
+  order.status = status;
+  
+  res.json({ success: true });
 });
 
 // ==================== ويب هوك للعروض ====================
@@ -683,7 +730,6 @@ app.post('/webhook', async (req, res) => {
   res.sendStatus(200);
 });
 
-// ==================== الصفحة الرئيسية ====================
 app.get('/', (req, res) => {
   res.json({
     status: '✅ جميع الأنظمة شغالة',
@@ -701,3 +747,4 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📢 قناة المندوبين: ${DRIVER_CHANNEL_ID}`);
   console.log(`🔗 رابط العروض: /api/offers`);
 });
+
