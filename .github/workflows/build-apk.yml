@@ -1,9 +1,16 @@
-name: Build Zid APK
+name: Build Optimized Zid APK
 
 on:
-  workflow_dispatch:  # يتيح لك تشغيل البناء يدوياً من موقع GitHub
   push:
-    branches: [ main ]  # أو master حسب اسم الفرع الرئيسي
+    branches: [ main ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version name'
+        required: false
+        default: '1.0.0'
 
 jobs:
   build:
@@ -57,14 +64,41 @@ jobs:
       - name: 🚀 Prebuild
         run: npx expo prebuild --clean
 
-      - name: 🔨 Build APK
+      - name: 🔨 Build Optimized APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease
+          # بناء APK مع تحسين الحجم
+          ./gradlew assembleRelease \
+            -Pandroid.enableR8=true \
+            -Pandroid.enableR8.fullMode=true
 
-      - name: 📤 Upload APK
+      - name: 📦 Get APK size
+        run: |
+          APK_SIZE=$(ls -lh android/app/build/outputs/apk/release/app-release.apk | awk '{print $5}')
+          echo "APK_SIZE=$APK_SIZE" >> $GITHUB_ENV
+
+      - name: 📤 Upload APK as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Zid-APK
+          name: Zid-APK-${{ github.run_number }}
           path: android/app/build/outputs/apk/release/app-release.apk
+
+      - name: 🏷️ Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/release/app-release.apk
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          body: |
+            📱 **Zid App APK**
+            - 📦 حجم الملف: ${{ env.APK_SIZE }}
+            - 🔢 رقم الإصدار: ${{ github.ref_name }}
+            - 📅 تاريخ البناء: $(date +'%Y-%m-%d')
+            
+            ### ✅ مميزات هذا الإصدار
+            - تم تحسين حجم APK
+            - أحدث التحديثات من فرع main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
