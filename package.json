@@ -17,6 +17,7 @@
     "@react-navigation/bottom-tabs": "^7.15.3",
     "@react-navigation/native": "^7.1.31",
     "@react-navigation/stack": "^7.8.2",
+    "@revopush/react-native-code-push": "^1.5.1",
     "appwrite": "^22.4.1",
     "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
@@ -52,6 +53,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
+    "@urql/core": "^4.2.0",
     "node-appwrite": "^22.1.3"
   }
 }
