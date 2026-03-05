@@ -1,71 +1,29 @@
-name: Build Zid APK
+name: Build APK
 
 on:
-  workflow_dispatch:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
     steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-
-      - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 18
-
-      - name: 📦 Install dependencies
-        run: |
-          npm install -g expo-cli
-          npm install
-
-      - name: ☕ Setup Java 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
-      - name: 🏗️ Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: 🔐 Create .env file
-        run: |
-          echo "EXPO_PUBLIC_APPWRITE_ENDPOINT=${{ secrets.EXPO_PUBLIC_APPWRITE_ENDPOINT }}" >> .env
-          echo "EXPO_PUBLIC_APPWRITE_PROJECT_ID=${{ secrets.EXPO_PUBLIC_APPWRITE_PROJECT_ID }}" >> .env
-          echo "EXPO_PUBLIC_DATABASE_ID=${{ secrets.EXPO_PUBLIC_DATABASE_ID }}" >> .env
-          echo "EXPO_PUBLIC_ORDERS_COLLECTION_ID=${{ secrets.EXPO_PUBLIC_ORDERS_COLLECTION_ID }}" >> .env
-          echo "EXPO_PUBLIC_USERS_COLLECTION_ID=${{ secrets.EXPO_PUBLIC_USERS_COLLECTION_ID }}" >> .env
-          echo "EXPO_PUBLIC_SERVICES_COLLECTION_ID=${{ secrets.EXPO_PUBLIC_SERVICES_COLLECTION_ID }}" >> .env
-          echo "EXPO_PUBLIC_LAUNDRY_ITEMS_COLLECTION_ID=${{ secrets.EXPO_PUBLIC_LAUNDRY_ITEMS_COLLECTION_ID }}" >> .env
-          echo "EXPO_PUBLIC_ITEMS_SERVICES_COLLECTION_ID=${{ secrets.EXPO_PUBLIC_ITEMS_SERVICES_COLLECTION_ID }}" >> .env
-          echo "EXPO_PUBLIC_RESTAURANTS_COLLECTION_ID=${{ secrets.EXPO_PUBLIC_RESTAURANTS_COLLECTION_ID }}" >> .env
-          echo "EXPO_PUBLIC_PLACES_COLLECTION_ID=${{ secrets.EXPO_PUBLIC_PLACES_COLLECTION_ID }}" >> .env
-          echo "EXPO_PUBLIC_PRODUCTS_COLLECTION_ID=${{ secrets.EXPO_PUBLIC_PRODUCTS_COLLECTION_ID }}" >> .env
-          echo "EXPO_PUBLIC_PRODUCT_CATEGORIES_COLLECTION_ID=${{ secrets.EXPO_PUBLIC_PRODUCT_CATEGORIES_COLLECTION_ID }}" >> .env
-          echo "EXPO_PUBLIC_OFFERS_COLLECTION_ID=${{ secrets.EXPO_PUBLIC_OFFERS_COLLECTION_ID }}" >> .env
-          echo "EXPO_PUBLIC_DISHES_COLLECTION_ID=${{ secrets.EXPO_PUBLIC_DISHES_COLLECTION_ID }}" >> .env
-          echo "EXPO_PUBLIC_HOME_CHEFS_COLLECTION_ID=${{ secrets.EXPO_PUBLIC_HOME_CHEFS_COLLECTION_ID }}" >> .env
-          echo "EXPO_PUBLIC_HOME_CHEF_DISHES_COLLECTION_ID=${{ secrets.EXPO_PUBLIC_HOME_CHEF_DISHES_COLLECTION_ID }}" >> .env
-          echo "EXPO_PUBLIC_BUCKET_ID=${{ secrets.EXPO_PUBLIC_BUCKET_ID }}" >> .env
-          echo "EXPO_PUBLIC_AZURE_ENDPOINT=${{ secrets.EXPO_PUBLIC_AZURE_ENDPOINT }}" >> .env
-          echo "EXPO_PUBLIC_AZURE_KEY=${{ secrets.EXPO_PUBLIC_AZURE_KEY }}" >> .env
-
-      - name: 🚀 Expo prebuild
-        run: npx expo prebuild --clean
-
-      - name: 🔨 Build APK
-        run: |
+      - run: npm install
+      - run: npx expo prebuild --clean
+      - run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleRelease
-
-      - name: 📤 Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: Zid-APK
+          name: app-release
           path: android/app/build/outputs/apk/release/app-release.apk
