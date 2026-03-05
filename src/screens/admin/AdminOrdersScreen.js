@@ -195,7 +195,7 @@ export default function AdminOrdersScreen({ navigation }) {
         <Ionicons name="search-outline" size={20} color="#9CA3AF" />
         <TextInput
           style={styles.searchInput}
-          placeholder="بحث برقم الهاتف أو العنوان..."
+          placeholder="بحث برقم الهاتف أو العنوان..." placeholderTextColor="#9CA3AF"
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
@@ -384,7 +384,7 @@ export default function AdminOrdersScreen({ navigation }) {
             {newStatus === ORDER_STATUS.CANCELLED && (
               <TextInput
                 style={styles.reasonInput}
-                placeholder="سبب الإلغاء (اختياري)"
+                placeholder="سبب الإلغاء (اختياري)" placeholderTextColor="#9CA3AF"
                 value={cancellationReason}
                 onChangeText={setCancellationReason}
                 multiline

@@ -1,19 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput,
-  Alert, ActivityIndicator, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Alert,
+  ActivityIndicator,
+  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { account, databases, DATABASE_ID, USERS_COLLECTION_ID } from '../appwrite/config';
+import { databases, DATABASE_ID, USERS_COLLECTION_ID } from '../appwrite/config';
 import { ID, Query } from 'appwrite';
+
+const appIcon = require('../../assets/icon.png');
 
 export default function CustomerAuthScreen({ navigation }) {
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isLogin, setIsLogin] = useState(true); // true = تسجيل دخول, false = تسجيل جديد
+  const [isLogin, setIsLogin] = useState(true);
 
   useEffect(() => {
     loadSavedData();
@@ -26,7 +38,6 @@ export default function CustomerAuthScreen({ navigation }) {
     if (savedPhone) setPhone(savedPhone);
   };
 
-  // ========== تسجيل الدخول ==========
   const handleLogin = async () => {
     if (!phone || !password) {
       Alert.alert('تنبيه', 'أدخل رقم الهاتف وكلمة المرور');
@@ -35,7 +46,6 @@ export default function CustomerAuthScreen({ navigation }) {
 
     setLoading(true);
     try {
-      // البحث عن المستخدم في Collection users
       const users = await databases.listDocuments(
         DATABASE_ID,
         USERS_COLLECTION_ID,
@@ -53,15 +63,13 @@ export default function CustomerAuthScreen({ navigation }) {
       }
 
       const user = users.documents[0];
-      
-      // التحقق من أن الحساب نشط
+
       if (!user.active) {
         Alert.alert('خطأ', 'هذا الحساب غير نشط. تواصل مع الإدارة');
         setLoading(false);
         return;
       }
 
-      // حفظ بيانات المستخدم
       await AsyncStorage.setItem('userData', JSON.stringify(user));
       await AsyncStorage.setItem('userRole', user.role);
       await AsyncStorage.setItem('userPhone', phone);
@@ -69,15 +77,16 @@ export default function CustomerAuthScreen({ navigation }) {
 
       Alert.alert('مرحباً', `تم تسجيل الدخول بنجاح`);
 
-      // التوجيه حسب الدور
       if (user.role === 'admin') {
         navigation.replace('AdminHome');
       } else if (user.role === 'merchant') {
         navigation.replace('MerchantDashboard');
+      } else if (user.role === 'home_chef') {
+        navigation.replace('HomeChefDashboard');
       } else if (user.role === 'driver') {
         navigation.replace('DriverDashboard');
       } else {
-        navigation.replace('MainTabs'); // عميل عادي
+        navigation.replace('MainTabs');
       }
 
     } catch (error) {
@@ -88,7 +97,6 @@ export default function CustomerAuthScreen({ navigation }) {
     }
   };
 
-  // ========== تسجيل جديد ==========
   const handleRegister = async () => {
     if (!name || !phone || !password) {
       Alert.alert('تنبيه', 'الرجاء إدخال جميع البيانات');
@@ -97,7 +105,6 @@ export default function CustomerAuthScreen({ navigation }) {
 
     setLoading(true);
     try {
-      // التحقق من عدم تكرار رقم الهاتف
       const existing = await databases.listDocuments(
         DATABASE_ID,
         USERS_COLLECTION_ID,
@@ -110,12 +117,11 @@ export default function CustomerAuthScreen({ navigation }) {
         return;
       }
 
-      // إنشاء حساب جديد
       const userData = {
         name,
         phone,
         password,
-        role: 'customer', // المستخدم الجديد دائماً عميل
+        role: 'customer',
         active: true,
         profileCompleted: true,
         createdAt: new Date().toISOString(),
@@ -128,7 +134,6 @@ export default function CustomerAuthScreen({ navigation }) {
         userData
       );
 
-      // حفظ البيانات محلياً
       await AsyncStorage.setItem('userData', JSON.stringify(response));
       await AsyncStorage.setItem('userRole', 'customer');
       await AsyncStorage.setItem('userName', name);
@@ -145,7 +150,6 @@ export default function CustomerAuthScreen({ navigation }) {
     }
   };
 
-  // ========== الدخول كزائر ==========
   const handleVisitor = () => {
     AsyncStorage.setItem('userRole', 'visitor');
     navigation.replace('MainTabs');
@@ -155,49 +159,56 @@ export default function CustomerAuthScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.content}>
-          
+
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-forward" size={28} color="#4F46E5" />
           </TouchableOpacity>
 
+          <View style={styles.logoContainer}>
+            <Image source={appIcon} style={styles.logo} />
+          </View>
+
           <Text style={styles.title}>
             {isLogin ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}
           </Text>
-          
+
           <Text style={styles.subtitle}>
             {isLogin ? 'أدخل بياناتك للدخول' : 'أدخل بياناتك للتسجيل'}
           </Text>
 
           <View style={styles.form}>
-            
+
             {!isLogin && (
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: "#1F2937" }]}
                 placeholder="الاسم الكامل"
+                placeholderTextColor="#9CA3AF"
                 value={name}
                 onChangeText={setName}
               />
             )}
 
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: "#1F2937" }]}
               placeholder="رقم الهاتف"
+              placeholderTextColor="#9CA3AF"
               value={phone}
               onChangeText={setPhone}
               keyboardType="phone-pad"
             />
 
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: "#1F2937" }]}
               placeholder="كلمة المرور"
+              placeholderTextColor="#9CA3AF"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
             />
 
-            <TouchableOpacity 
-              style={styles.primaryButton} 
-              onPress={isLogin ? handleLogin : handleRegister} 
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={isLogin ? handleLogin : handleRegister}
               disabled={loading}
             >
               {loading ? (
@@ -219,6 +230,16 @@ export default function CustomerAuthScreen({ navigation }) {
               <Text style={styles.visitorButtonText}>الدخول كزائر</Text>
             </TouchableOpacity>
 
+            <View style={styles.providerSection}>
+              <Text style={styles.providerTitle}>للتجار والشيفات والمناديب</Text>
+              <TouchableOpacity 
+                style={styles.providerButton}
+                onPress={() => navigation.navigate('ServiceProvider')}
+              >
+                <Ionicons name="arrow-back" size={20} color="#4F46E5" />
+                <Text style={styles.providerButtonText}>دخول مقدمي الخدمة</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -229,7 +250,16 @@ export default function CustomerAuthScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   content: { padding: 24, paddingTop: 40 },
-  backButton: { marginBottom: 24, alignSelf: 'flex-start' },
+  backButton: { marginBottom: 20, alignSelf: 'flex-start' },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  logo: {
+    width: 120,
+    height: 60,
+    resizeMode: 'contain',
+  },
   title: { fontSize: 28, fontWeight: 'bold', color: '#1F2937', marginBottom: 8, textAlign: 'center' },
   subtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 32 },
   form: { width: '100%' },
@@ -275,5 +305,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
     textDecorationLine: 'underline',
+  },
+  providerSection: {
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    alignItems: 'center',
+  },
+  providerTitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 10,
+  },
+  providerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    gap: 8,
+  },
+  providerButtonText: {
+    color: '#4F46E5',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

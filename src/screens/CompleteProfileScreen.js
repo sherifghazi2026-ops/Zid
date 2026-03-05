@@ -143,18 +143,18 @@ export default function CompleteProfileScreen({ navigation, route }) {
         <View style={styles.form}>
           <Text style={styles.label}>الاسم الكامل</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { color: "#1F2937" }]}
             value={name}
             onChangeText={setName}
-            placeholder="الاسم"
+            placeholder="الاسم" placeholderTextColor="#9CA3AF"
           />
 
           <Text style={styles.label}>رقم الهاتف</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { color: "#1F2937" }]}
             value={phone}
             onChangeText={setPhone}
-            placeholder="رقم الهاتف"
+            placeholder="رقم الهاتف" placeholderTextColor="#9CA3AF"
             keyboardType="phone-pad"
           />
 
@@ -174,7 +174,7 @@ export default function CompleteProfileScreen({ navigation, route }) {
             style={[styles.input, styles.textArea]}
             value={address}
             onChangeText={setAddress}
-            placeholder="العنوان"
+            placeholder="العنوان" placeholderTextColor="#9CA3AF"
             multiline
             numberOfLines={3}
           />
@@ -184,10 +184,10 @@ export default function CompleteProfileScreen({ navigation, route }) {
             <>
               <Text style={styles.label}>نوع النشاط التجاري</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: "#1F2937" }]}
                 value={merchantType}
                 onChangeText={setMerchantType}
-                placeholder="مثال: مطاعم، سوبر ماركت، صيدلية"
+                placeholder="مثال: مطاعم، سوبر ماركت، صيدلية" placeholderTextColor="#9CA3AF"
               />
             </>
           )}
@@ -197,15 +197,15 @@ export default function CompleteProfileScreen({ navigation, route }) {
             <>
               <Text style={styles.label}>منطقة الخدمة</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: "#1F2937" }]}
                 value={serviceArea}
                 onChangeText={setServiceArea}
-                placeholder="مثال: الشيخ زايد"
+                placeholder="مثال: الشيخ زايد" placeholderTextColor="#9CA3AF"
               />
 
               <Text style={styles.label}>أقصى مسافة توصيل (كم)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: "#1F2937" }]}
                 value={maxRadius}
                 onChangeText={setMaxRadius}
                 keyboardType="numeric"

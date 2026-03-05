@@ -12,10 +12,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const appIcon = require('../../assets/icons/Zidicon.png');
+const appIcon = require('../../assets/icon.png');
 
 export default function CustomDrawer({ isLoggedIn, userData, onClose, navigation, onOpenAdminModal }) {
-  
+
   const handleLogout = async () => {
     Alert.alert(
       'تسجيل الخروج',
@@ -32,7 +32,7 @@ export default function CustomDrawer({ isLoggedIn, userData, onClose, navigation
             onClose();
             navigation.reset({
               index: 0,
-              routes: [{ name: 'MainTabs' }],
+              routes: [{ name: 'HomeScreen' }],
             });
           }
         }
@@ -72,14 +72,18 @@ export default function CustomDrawer({ isLoggedIn, userData, onClose, navigation
   // عناصر القائمة للتجار
   const merchantMenuItems = [
     { icon: 'home-outline', title: 'الرئيسية', screen: 'MerchantDashboard', color: '#4F46E5' },
+    { icon: 'restaurant-outline', title: 'إدارة قائمة الطعام', screen: 'ManageMenuScreen', color: '#F59E0B' },
+    { icon: 'cart-outline', title: 'الطلبات الواردة', screen: 'MerchantOrdersScreen', color: '#10B981' },
     { icon: 'person-outline', title: 'الملف الشخصي', screen: 'Profile', color: '#4F46E5' },
-    { icon: 'cart-outline', title: 'طلباتي', screen: 'MyOrders', color: '#F59E0B' },
     { icon: 'logo-whatsapp', title: 'تواصل معنا', action: handleContact, color: '#25D366' },
     { icon: 'log-out-outline', title: 'تسجيل الخروج', action: handleLogout, color: '#EF4444' },
   ];
 
   // عناصر القائمة للمناديب
   const driverMenuItems = [
+    { icon: 'home-outline', title: 'الرئيسية', screen: 'DriverDashboard', color: '#4F46E5' },
+    { icon: 'bicycle-outline', title: 'التوصيلات', screen: 'DriverDeliveries', color: '#10B981' },
+    { icon: 'person-outline', title: 'الملف الشخصي', screen: 'Profile', color: '#4F46E5' },
     { icon: 'logo-whatsapp', title: 'تواصل معنا', action: handleContact, color: '#25D366' },
     { icon: 'log-out-outline', title: 'تسجيل الخروج', action: handleLogout, color: '#EF4444' },
   ];
@@ -89,7 +93,9 @@ export default function CustomDrawer({ isLoggedIn, userData, onClose, navigation
     { icon: 'home-outline', title: 'الرئيسية', screen: 'AdminHome', color: '#4F46E5' },
     { icon: 'people-outline', title: 'المستخدمين', screen: 'UserManagement', color: '#F59E0B' },
     { icon: 'cart-outline', title: 'الطلبات', screen: 'AdminOrders', color: '#10B981' },
-    { icon: 'person-add-outline', title: 'إضافة مستخدم', screen: 'AddUser', color: '#8B5CF6' },
+    { icon: 'business-outline', title: 'الأماكن', screen: 'ManagePlacesScreen', color: '#8B5CF6' },
+    { icon: 'restaurant-outline', title: 'المطاعم', screen: 'ManageRestaurants', color: '#EC4899' },
+    { icon: 'person-add-outline', title: 'إضافة مستخدم', screen: 'AddUser', color: '#3B82F6' },
     { icon: 'logo-whatsapp', title: 'تواصل معنا', action: handleContact, color: '#25D366' },
     { icon: 'log-out-outline', title: 'تسجيل الخروج', action: handleLogout, color: '#EF4444' },
   ];
@@ -116,8 +122,8 @@ export default function CustomDrawer({ isLoggedIn, userData, onClose, navigation
             <>
               <Text style={styles.userName}>{userData?.name || 'مستخدم'}</Text>
               <Text style={styles.userRole}>
-                {userData?.role === 'merchant' ? 'تاجر' : 
-                 userData?.role === 'driver' ? 'مندوب' : 
+                {userData?.role === 'merchant' ? 'تاجر' :
+                 userData?.role === 'driver' ? 'مندوب' :
                  userData?.role === 'admin' ? 'مدير النظام' : 'عميل'}
               </Text>
             </>
@@ -143,11 +149,7 @@ export default function CustomDrawer({ isLoggedIn, userData, onClose, navigation
                 item.action();
               } else if (item.screen) {
                 onClose();
-                if (navigation && navigation.navigate) {
-                  navigation.navigate(item.screen);
-                } else {
-                  console.error('navigation غير متوفر');
-                }
+                navigation.navigate(item.screen);
               }
             }}
           >
@@ -158,7 +160,7 @@ export default function CustomDrawer({ isLoggedIn, userData, onClose, navigation
       </ScrollView>
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>ZAYED ID © 2026</Text>
+        <Text style={styles.footerText}>Zid © 2026</Text>
         <Text style={styles.footerVersion}>الإصدار 1.0.0</Text>
       </View>
     </View>
@@ -180,11 +182,12 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 30,
   },
   logo: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: '#FFF',
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 3,
+    borderColor: '#000',
+    backgroundColor: '#FFFFFF',
   },
   userInfo: {
     flex: 1,

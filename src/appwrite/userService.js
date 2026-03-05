@@ -1,11 +1,10 @@
-import { databases, DATABASE_ID, USERS_COLLECTION_ID, storage, BUCKET_ID } from './config';
+import { databases, DATABASE_ID, USERS_COLLECTION_ID } from './config';
 import { ID, Query } from 'appwrite';
 
-// تسجيل الدخول
 export const loginUser = async (phone, password) => {
   try {
     console.log('🔍 البحث عن مستخدم برقم:', phone);
-    
+
     if (!phone || phone.length < 10) {
       return { success: false, error: 'رقم الهاتف غير صحيح' };
     }
@@ -40,7 +39,6 @@ export const loginUser = async (phone, password) => {
   }
 };
 
-// تسجيل عميل جديد
 export const registerCustomer = async (name, phone, password) => {
   try {
     const existing = await databases.listDocuments(
@@ -58,6 +56,7 @@ export const registerCustomer = async (name, phone, password) => {
       phone,
       password,
       role: 'customer',
+      userType: 'customer',
       active: true,
       profileCompleted: true,
       createdAt: new Date().toISOString(),
@@ -78,7 +77,6 @@ export const registerCustomer = async (name, phone, password) => {
   }
 };
 
-// إنشاء مستخدم بواسطة الأدمن
 export const createUserByAdmin = async (userData) => {
   try {
     const existing = await databases.listDocuments(
@@ -96,13 +94,33 @@ export const createUserByAdmin = async (userData) => {
       phone: userData.phone,
       password: userData.password,
       role: userData.role,
+      userType: userData.role,
       active: userData.active !== undefined ? userData.active : true,
       profileCompleted: false,
       createdAt: new Date().toISOString(),
     };
 
-    if (userData.merchantType) {
+    // حقول مشتركة للتجار
+    if (userData.role === 'merchant') {
       newUser.merchantType = userData.merchantType;
+      
+      // حقول المطاعم
+      if (userData.merchantType === 'restaurant') {
+        newUser.placeId = userData.placeId;
+        newUser.placeName = userData.placeName;
+        // إضافة وقت ورسوم التوصيل للمطاعم
+        newUser.deliveryTime = userData.deliveryTime || 30;
+        newUser.deliveryFee = userData.deliveryFee || 0;
+      }
+      
+      // حقول الشيف المنزلي
+      if (userData.merchantType === 'home_chef') {
+        newUser.specialties = userData.specialties || [];
+        newUser.deliveryFee = userData.deliveryFee || 0;
+        newUser.deliveryRadius = userData.deliveryRadius || 10;
+        newUser.healthCertUrl = userData.healthCertUrl || null;
+        newUser.isVerified = false;
+      }
     }
 
     if (userData.role === 'driver') {
@@ -126,7 +144,6 @@ export const createUserByAdmin = async (userData) => {
   }
 };
 
-// جلب جميع المستخدمين
 export const getAllUsers = async () => {
   try {
     const response = await databases.listDocuments(
@@ -141,39 +158,48 @@ export const getAllUsers = async () => {
   }
 };
 
-// جلب المستخدمين حسب الدور
 export const getUsersByRole = async (role) => {
-  try {
-    const response = await databases.listDocuments(
-      DATABASE_ID,
-      USERS_COLLECTION_ID,
-      [Query.equal('role', role), Query.limit(100)]
-    );
-    return { success: true, data: response.documents };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-};
-
-// جلب المستخدمين حسب الدور ونوع النشاط
-export const getUsersByRoleAndType = async (role, merchantType) => {
   try {
     const response = await databases.listDocuments(
       DATABASE_ID,
       USERS_COLLECTION_ID,
       [
         Query.equal('role', role),
-        Query.equal('merchantType', merchantType),
         Query.limit(100)
       ]
     );
     return { success: true, data: response.documents };
   } catch (error) {
+    console.error(`خطأ في جلب ${role}:`, error);
     return { success: false, error: error.message };
   }
 };
 
-// تفعيل/تعطيل المستخدم
+// ✅ الدالة المطلوبة لإشعار التجار والمناديب حسب نوع الخدمة
+export const getUsersByRoleAndType = async (role, merchantType) => {
+  try {
+    console.log(`🔍 جلب المستخدمين: role=${role}, merchantType=${merchantType}`);
+    
+    const queries = [Query.equal('role', role)];
+    
+    if (merchantType) {
+      queries.push(Query.equal('merchantType', merchantType));
+    }
+    
+    const response = await databases.listDocuments(
+      DATABASE_ID,
+      USERS_COLLECTION_ID,
+      queries
+    );
+    
+    console.log(`✅ تم العثور على ${response.documents.length} مستخدم`);
+    return { success: true, data: response.documents };
+  } catch (error) {
+    console.error(`خطأ في جلب ${role} من نوع ${merchantType}:`, error);
+    return { success: false, error: error.message };
+  }
+};
+
 export const toggleUserStatus = async (userId, active) => {
   try {
     const response = await databases.updateDocument(
@@ -189,7 +215,6 @@ export const toggleUserStatus = async (userId, active) => {
   }
 };
 
-// حذف المستخدم
 export const deleteUser = async (userId) => {
   try {
     console.log('🔍 محاولة حذف المستخدم:', userId);
@@ -206,7 +231,21 @@ export const deleteUser = async (userId) => {
   }
 };
 
-// تحديث حالة التوفر للمندوب
+export const verifyChef = async (userId, isVerified) => {
+  try {
+    const response = await databases.updateDocument(
+      DATABASE_ID,
+      USERS_COLLECTION_ID,
+      userId,
+      { isVerified }
+    );
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('Error verifying chef:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 export const updateDriverAvailability = async (driverId, isAvailable) => {
   try {
     const response = await databases.updateDocument(
@@ -222,5 +261,24 @@ export const updateDriverAvailability = async (driverId, isAvailable) => {
   }
 };
 
-// ملاحظة: تم تعطيل دالة رفع الصور مؤقتاً لتجنب مشكلة التكرار
-// يمكن إضافتها لاحقاً عند الحاجة
+export const updateUserLocation = async (userId, location) => {
+  try {
+    const response = await databases.updateDocument(
+      DATABASE_ID,
+      USERS_COLLECTION_ID,
+      userId,
+      {
+        locationLat: location.latitude,
+        locationLng: location.longitude,
+      }
+    );
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('Error updating user location:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const updateAvailability = async (userId, isAvailable) => {
+  return updateDriverAvailability(userId, isAvailable);
+};

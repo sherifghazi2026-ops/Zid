@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -31,7 +31,12 @@ export default function DriverDashboard({ navigation }) {
   const [updatingOrder, setUpdatingOrder] = useState(null);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [activeTab, setActiveTab] = useState('pending');
-  const [lastOrderIds, setLastOrderIds] = useState(new Set());
+  const lastOrderIds = useRef(new Set());
+
+  // حالات الصوت
+  const [playingVoice, setPlayingVoice] = useState(null);
+  const [sound, setSound] = useState(null);
+
   const [isAvailable, setIsAvailable] = useState(true);
   const [updatingAvailability, setUpdatingAvailability] = useState(false);
 
@@ -52,6 +57,32 @@ export default function DriverDashboard({ navigation }) {
     }
   }, 7000);
 
+  const playVoice = async (voiceUrl) => {
+    try {
+      if (sound) {
+        await sound.unloadAsync();
+        setSound(null);
+      }
+
+      console.log('🔊 تشغيل الصوت:', voiceUrl);
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: voiceUrl },
+        { shouldPlay: true }
+      );
+      setSound(newSound);
+      setPlayingVoice(voiceUrl);
+
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
+          setPlayingVoice(null);
+        }
+      });
+    } catch (error) {
+      console.error('خطأ في تشغيل الصوت:', error);
+      Alert.alert('خطأ', 'فشل تشغيل التسجيل الصوتي');
+    }
+  };
+
   const loadDriverData = async () => {
     const data = await AsyncStorage.getItem('userData');
     if (data) {
@@ -64,12 +95,11 @@ export default function DriverDashboard({ navigation }) {
   const toggleAvailability = async () => {
     setUpdatingAvailability(true);
     const newStatus = !isAvailable;
-    
+
     const result = await updateDriverAvailability(driverData.$id, newStatus);
-    
+
     if (result.success) {
       setIsAvailable(newStatus);
-      // تحديث البيانات المحفوظة
       const updatedData = { ...driverData, isAvailable: newStatus };
       await AsyncStorage.setItem('userData', JSON.stringify(updatedData));
       setDriverData(updatedData);
@@ -83,7 +113,7 @@ export default function DriverDashboard({ navigation }) {
   const loadOrders = async () => {
     try {
       let statusFilter;
-      
+
       if (activeTab === 'pending') {
         statusFilter = ORDER_STATUS.PREPARING;
       } else if (activeTab === 'active') {
@@ -92,23 +122,25 @@ export default function DriverDashboard({ navigation }) {
         statusFilter = ORDER_STATUS.DELIVERED;
       }
 
-      const result = await getOrders({ 
+      const result = await getOrders({
         driverId: driverData?.$id,
         status: statusFilter
       });
-      
+
       if (result.success) {
         const newOrders = result.data;
         const newOrderIds = new Set(newOrders.map(o => o.$id));
-        
+
         if (activeTab === 'pending' && newOrders.length > 0) {
-          const hasNewOrder = newOrders.some(order => !lastOrderIds.has(order.$id));
+          const hasNewOrder = newOrders.some(order => !lastOrderIds.current.has(order.$id));
           if (hasNewOrder) {
             playNotificationSound();
             setTimeout(() => stopNotificationSound(), 20000);
           }
         }
-        
+
+        lastOrderIds.current = newOrderIds;
+
         if (activeTab === 'pending') {
           setPendingOrders(newOrders);
         } else if (activeTab === 'active') {
@@ -116,8 +148,6 @@ export default function DriverDashboard({ navigation }) {
         } else {
           setCompletedOrders(newOrders);
         }
-        
-        setLastOrderIds(newOrderIds);
       }
     } catch (error) {
       console.error('Error loading orders:', error);
@@ -138,7 +168,7 @@ export default function DriverDashboard({ navigation }) {
           onPress: async () => {
             setUpdatingOrder(orderId);
             stopNotificationSound();
-            
+
             const result = await startDelivery(orderId);
             if (result.success) {
               setPendingOrders(pendingOrders.filter(o => o.$id !== orderId));
@@ -167,7 +197,7 @@ export default function DriverDashboard({ navigation }) {
           text: 'نعم، تم',
           onPress: async () => {
             setUpdatingOrder(orderId);
-            
+
             const result = await completeDelivery(orderId);
             if (result.success) {
               setActiveOrders(activeOrders.filter(o => o.$id !== orderId));
@@ -243,13 +273,12 @@ export default function DriverDashboard({ navigation }) {
         <TouchableOpacity onPress={() => setDrawerVisible(true)} style={styles.menuButton}>
           <Ionicons name="menu" size={28} color="#1F2937" />
         </TouchableOpacity>
-        
+
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>مرحباً، {driverData?.name || 'مندوب'}</Text>
           <Text style={styles.headerSub}>{driverData?.serviceArea || 'منطقة الخدمة'}</Text>
         </View>
 
-        {/* زر متاح/غير متاح في أعلى الشاشة */}
         <View style={styles.availabilityContainer}>
           {updatingAvailability ? (
             <ActivityIndicator size="small" color="#3B82F6" />
@@ -270,7 +299,6 @@ export default function DriverDashboard({ navigation }) {
         </View>
       </View>
 
-      {/* ثلاثة تبويبات */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'pending' && styles.activeTab]}
@@ -280,7 +308,7 @@ export default function DriverDashboard({ navigation }) {
             جاهزة ({pendingOrders.length})
           </Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity
           style={[styles.tab, activeTab === 'active' && styles.activeTab]}
           onPress={() => setActiveTab('active')}
@@ -304,7 +332,6 @@ export default function DriverDashboard({ navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={styles.ordersContainer}
       >
-        {/* طلبات جاهزة للتوصيل */}
         {activeTab === 'pending' && (
           pendingOrders.length === 0 ? (
             <View style={styles.emptyContainer}>
@@ -324,7 +351,7 @@ export default function DriverDashboard({ navigation }) {
                 </View>
 
                 <View style={styles.orderDetails}>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.detailRow}
                     onPress={() => makePhoneCall(order.customerPhone)}
                   >
@@ -332,7 +359,7 @@ export default function DriverDashboard({ navigation }) {
                     <Text style={styles.detailText}>العميل: {order.customerPhone}</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.detailRow}
                     onPress={() => makePhoneCall(order.merchantPhone)}
                   >
@@ -344,6 +371,22 @@ export default function DriverDashboard({ navigation }) {
                     <Ionicons name="location-outline" size={16} color="#6B7280" />
                     <Text style={styles.detailText}>{order.customerAddress}</Text>
                   </View>
+
+                  {order.voiceUrl && (
+                    <TouchableOpacity
+                      style={styles.voiceButton}
+                      onPress={() => playVoice(order.voiceUrl)}
+                    >
+                      <Ionicons
+                        name={playingVoice === order.voiceUrl ? "pause" : "play"}
+                        size={20}
+                        color="#FFF"
+                      />
+                      <Text style={styles.voiceButtonText}>
+                        {playingVoice === order.voiceUrl ? 'جاري التشغيل' : 'استمع للتسجيل'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
 
                   {order.totalPrice > 0 && (
                     <View style={styles.priceContainer}>
@@ -378,7 +421,6 @@ export default function DriverDashboard({ navigation }) {
           )
         )}
 
-        {/* طلبات جاري التوصيل */}
         {activeTab === 'active' && (
           activeOrders.length === 0 ? (
             <View style={styles.emptyContainer}>
@@ -398,7 +440,7 @@ export default function DriverDashboard({ navigation }) {
                 </View>
 
                 <View style={styles.orderDetails}>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.detailRow}
                     onPress={() => makePhoneCall(order.customerPhone)}
                   >
@@ -410,6 +452,22 @@ export default function DriverDashboard({ navigation }) {
                     <Ionicons name="location-outline" size={16} color="#6B7280" />
                     <Text style={styles.detailText}>{order.customerAddress}</Text>
                   </View>
+
+                  {order.voiceUrl && (
+                    <TouchableOpacity
+                      style={styles.voiceButton}
+                      onPress={() => playVoice(order.voiceUrl)}
+                    >
+                      <Ionicons
+                        name={playingVoice === order.voiceUrl ? "pause" : "play"}
+                        size={20}
+                        color="#FFF"
+                      />
+                      <Text style={styles.voiceButtonText}>
+                        {playingVoice === order.voiceUrl ? 'جاري التشغيل' : 'استمع للتسجيل'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
 
                   {order.totalPrice > 0 && (
                     <View style={styles.priceContainer}>
@@ -441,7 +499,6 @@ export default function DriverDashboard({ navigation }) {
           )
         )}
 
-        {/* طلبات مكتملة (سابقة) */}
         {activeTab === 'completed' && (
           completedOrders.length === 0 ? (
             <View style={styles.emptyContainer}>
@@ -464,7 +521,7 @@ export default function DriverDashboard({ navigation }) {
                   <Text style={styles.completedDate}>
                     {formatDate(order.deliveredAt || order.createdAt)}
                   </Text>
-                  
+
                   {order.totalPrice > 0 && (
                     <Text style={styles.completedPrice}>
                       الإجمالي: {order.totalPrice + (order.deliveryFee || 0)} ج
@@ -480,9 +537,9 @@ export default function DriverDashboard({ navigation }) {
       <Modal visible={drawerVisible} transparent animationType="slide">
         <View style={styles.drawerOverlay}>
           <View style={styles.drawerContent}>
-            <CustomDrawer 
-              userData={driverData} 
-              onClose={() => setDrawerVisible(false)} 
+            <CustomDrawer
+              userData={driverData}
+              onClose={() => setDrawerVisible(false)}
               navigation={navigation}
             />
           </View>
@@ -510,8 +567,6 @@ const styles = StyleSheet.create({
   headerTitleContainer: { flex: 1, alignItems: 'center' },
   headerTitle: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
   headerSub: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  
-  // زر متاح/غير متاح
   availabilityContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -525,7 +580,7 @@ const styles = StyleSheet.create({
   availabilitySwitch: {
     transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }],
   },
-  
+
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
@@ -544,11 +599,11 @@ const styles = StyleSheet.create({
   activeTab: { backgroundColor: '#3B82F6' },
   tabText: { fontSize: 12, color: '#6B7280' },
   activeTabText: { color: '#FFFFFF', fontWeight: '600' },
-  
+
   ordersContainer: { padding: 16 },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
   emptyText: { marginTop: 12, fontSize: 14, color: '#6B7280' },
-  
+
   orderCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -565,6 +620,21 @@ const styles = StyleSheet.create({
   orderDetails: { marginBottom: 12 },
   detailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 8 },
   detailText: { fontSize: 14, color: '#4B5563', flex: 1 },
+  voiceButton: {
+    backgroundColor: '#3B82F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 8,
+    gap: 4,
+  },
+  voiceButtonText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -576,7 +646,7 @@ const styles = StyleSheet.create({
   },
   priceLabel: { fontSize: 14, color: '#4B5563' },
   priceValue: { fontSize: 14, fontWeight: '600', color: '#F59E0B' },
-  
+
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -586,7 +656,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   actionButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-  
+
   completedCard: {
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
@@ -599,7 +669,7 @@ const styles = StyleSheet.create({
   completedAddress: { fontSize: 14, color: '#4B5563', marginBottom: 4 },
   completedDate: { fontSize: 12, color: '#9CA3AF', marginBottom: 4 },
   completedPrice: { fontSize: 14, fontWeight: '600', color: '#10B981', marginTop: 4 },
-  
+
   drawerOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

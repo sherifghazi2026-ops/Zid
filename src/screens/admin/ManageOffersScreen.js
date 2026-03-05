@@ -166,8 +166,8 @@ export default function ManageOffersScreen({ navigation }) {
             <ScrollView>
               <Text style={styles.label}>عنوان العرض</Text>
               <TextInput
-                style={styles.input}
-                placeholder="مثال: خصم 20% على أول طلب"
+                style={[styles.input, { color: "#1F2937" }]}
+                placeholder="مثال: خصم 20% على أول طلب" placeholderTextColor="#9CA3AF"
                 value={title}
                 onChangeText={setTitle}
               />
@@ -175,7 +175,7 @@ export default function ManageOffersScreen({ navigation }) {
               <Text style={styles.label}>وصف العرض</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
-                placeholder="تفاصيل العرض..."
+                placeholder="تفاصيل العرض..." placeholderTextColor="#9CA3AF"
                 value={description}
                 onChangeText={setDescription}
                 multiline

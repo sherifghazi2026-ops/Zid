@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   TextInput,
+  TouchableOpacity,
   Alert,
   ActivityIndicator,
   SafeAreaView,
@@ -12,28 +12,120 @@ import {
   Switch,
   Modal,
   FlatList,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { databases, DATABASE_ID, USERS_COLLECTION_ID } from '../../appwrite/config';
-import { ID, Query } from 'appwrite';
-import BUSINESS_TYPES from '../../constants/businessTypes';
+import * as ImagePicker from 'expo-image-picker';
+import { createUserByAdmin } from '../../appwrite/userService';
+import { uploadToImageKit } from '../../services/uploadService';
+
+const ROLES = [
+  { label: 'عميل', value: 'customer' },
+  { label: 'تاجر', value: 'merchant' },
+  { label: 'مندوب', value: 'driver' },
+  { label: 'أدمن', value: 'admin' },
+];
+
+const MERCHANT_TYPES = [
+  { label: 'مطاعم', value: 'restaurants', icon: 'restaurant-outline' },
+  { label: 'سوبر ماركت', value: 'supermarket', icon: 'cart-outline' },
+  { label: 'صيدلية', value: 'pharmacy', icon: 'medical-outline' },
+  { label: 'مغسلة', value: 'laundry', icon: 'water-outline' },
+  { label: 'كهربائي', value: 'electrician', icon: 'flash-outline' },
+  { label: 'سباك', value: 'plumber', icon: 'water-outline' },
+  { label: 'نجار', value: 'carpenter', icon: 'hammer-outline' },
+  { label: 'شيف منزلي', value: 'home_chef', icon: 'home-outline' }, // ✅ جديد
+];
+
+const SPECIALTIES = [
+  'مصري', 'إيطالي', 'صيني', 'هندي', 'مشاوي', 'حلويات', 'مأكولات بحرية', 'صحية', 'نباتي'
+];
 
 export default function AddUserScreen({ navigation }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('merchant');
-  const [selectedBusiness, setSelectedBusiness] = useState(null);
-  const [businessModalVisible, setBusinessModalVisible] = useState(false);
+  const [role, setRole] = useState('customer');
+  const [merchantType, setMerchantType] = useState('');
+  const [isActive, setIsActive] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const [showRolePicker, setShowRolePicker] = useState(false);
+  const [showMerchantTypePicker, setShowMerchantTypePicker] = useState(false);
+
+  // حقول المطاعم
+  const [places, setPlaces] = useState([]);
+  const [selectedPlace, setSelectedPlace] = useState(null);
+  const [showPlacePicker, setShowPlacePicker] = useState(false);
+  const [loadingPlaces, setLoadingPlaces] = useState(false);
+
+  // حقول المندوب
   const [serviceArea, setServiceArea] = useState('');
   const [maxDeliveryRadius, setMaxDeliveryRadius] = useState('10');
-  const [active, setActive] = useState(true);
   const [isAvailable, setIsAvailable] = useState(true);
-  const [loading, setLoading] = useState(false);
+
+  // حقول الشيف المنزلي
+  const [specialties, setSpecialties] = useState([]);
+  const [deliveryFee, setDeliveryFee] = useState('0');
+  const [deliveryRadius, setDeliveryRadius] = useState('10');
+  const [healthCert, setHealthCert] = useState(null);
+  const [healthCertUrl, setHealthCertUrl] = useState('');
+
+  useEffect(() => {
+    if (merchantType && role === 'merchant' && merchantType !== 'home_chef') {
+      loadPlaces(merchantType);
+    }
+  }, [merchantType, role]);
+
+  const loadPlaces = async (type) => {
+    setLoadingPlaces(true);
+    try {
+      const { getPlacesByType } = await import('../../services/placesService');
+      const result = await getPlacesByType(type);
+      if (result.success) {
+        setPlaces(result.data);
+      } else {
+        setPlaces([]);
+      }
+    } catch (error) {
+      console.error('خطأ في جلب الأماكن:', error);
+      setPlaces([]);
+    }
+    setLoadingPlaces(false);
+  };
+
+  const pickHealthCert = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('خطأ', 'يجب السماح بالوصول للمعرض');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+        allowsEditing: true,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setHealthCert(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert('خطأ', 'فشل في اختيار الصورة');
+    }
+  };
+
+  const toggleSpecialty = (specialty) => {
+    if (specialties.includes(specialty)) {
+      setSpecialties(specialties.filter(s => s !== specialty));
+    } else {
+      setSpecialties([...specialties, specialty]);
+    }
+  };
 
   const handleAddUser = async () => {
     if (!name || !phone || !password) {
-      Alert.alert('تنبيه', 'الرجاء إدخال جميع البيانات الأساسية');
+      Alert.alert('تنبيه', 'الرجاء إدخال الاسم ورقم الهاتف وكلمة المرور');
       return;
     }
 
@@ -42,25 +134,16 @@ export default function AddUserScreen({ navigation }) {
       return;
     }
 
-    if (role === 'merchant' && !selectedBusiness) {
-      Alert.alert('تنبيه', 'الرجاء اختيار نوع النشاط التجاري');
-      return;
-    }
-
     setLoading(true);
-    try {
-      console.log('🔍 التحقق من رقم الهاتف:', phone);
-      
-      const existing = await databases.listDocuments(
-        DATABASE_ID,
-        USERS_COLLECTION_ID,
-        [Query.equal('phone', phone)]
-      );
+    setUploading(true);
 
-      if (existing.documents.length > 0) {
-        Alert.alert('خطأ', 'رقم الهاتف موجود بالفعل');
-        setLoading(false);
-        return;
+    try {
+      let healthCertUrlFinal = null;
+      if (healthCert) {
+        const uploadResult = await uploadToImageKit(healthCert, `cert_${Date.now()}.jpg`, 'certificates');
+        if (uploadResult.success) {
+          healthCertUrlFinal = uploadResult.fileUrl;
+        }
       }
 
       const userData = {
@@ -68,67 +151,92 @@ export default function AddUserScreen({ navigation }) {
         phone,
         password,
         role,
-        active,
-        profileCompleted: false,
-        createdAt: new Date().toISOString(),
+        active: isActive,
       };
 
       if (role === 'merchant') {
-        userData.merchantType = selectedBusiness.id;
-      } 
-      
+        userData.merchantType = merchantType;
+        
+        if (merchantType === 'home_chef') {
+          userData.specialties = specialties;
+          userData.deliveryFee = parseFloat(deliveryFee);
+          userData.deliveryRadius = parseFloat(deliveryRadius);
+          userData.healthCertUrl = healthCertUrlFinal;
+        } else {
+          if (selectedPlace) {
+            userData.placeId = selectedPlace.$id;
+            userData.placeName = selectedPlace.name;
+          }
+        }
+      }
+
       if (role === 'driver') {
-        userData.merchantType = selectedBusiness ? selectedBusiness.id : 'delivery'; // ربط المندوب بنفس نوع النشاط
-        userData.serviceArea = serviceArea || 'الشيخ زايد';
-        userData.maxDeliveryRadius = parseFloat(maxDeliveryRadius) || 10;
+        userData.serviceArea = serviceArea;
+        userData.maxDeliveryRadius = parseFloat(maxDeliveryRadius);
         userData.isAvailable = isAvailable;
       }
 
-      console.log('📤 إنشاء مستخدم جديد:', userData);
+      const result = await createUserByAdmin(userData);
 
-      const response = await databases.createDocument(
-        DATABASE_ID,
-        USERS_COLLECTION_ID,
-        ID.unique(),
-        userData
-      );
-
-      console.log('✅ تم إنشاء المستخدم:', response.$id);
-
-      Alert.alert(
-        'تم بنجاح', 
-        `تم إضافة ${role === 'merchant' ? 'التاجر' : 'المندوب'} بنجاح`,
-        [{ text: 'حسناً', onPress: () => navigation.goBack() }]
-      );
-
+      if (result.success) {
+        Alert.alert('✅ تم', 'تم إضافة المستخدم بنجاح');
+        navigation.goBack();
+      } else {
+        Alert.alert('خطأ', result.error);
+      }
     } catch (error) {
-      console.error('❌ خطأ في إضافة المستخدم:', error);
-      Alert.alert('خطأ', error.message || 'فشل في إضافة المستخدم');
+      Alert.alert('خطأ', error.message);
     } finally {
       setLoading(false);
+      setUploading(false);
     }
   };
 
-  const renderBusinessItem = ({ item }) => (
-    <TouchableOpacity
-      style={[
-        styles.businessItem,
-        selectedBusiness?.id === item.id && styles.selectedBusinessItem
-      ]}
-      onPress={() => {
-        setSelectedBusiness(item);
-        setBusinessModalVisible(false);
-      }}
-    >
-      <Ionicons name={item.icon} size={24} color={item.color} />
-      <View style={styles.businessInfo}>
-        <Text style={styles.businessName}>{item.name}</Text>
-        <Text style={styles.businessId}>{item.id}</Text>
+  const renderPicker = (visible, setVisible, items, selectedValue, onSelect, title) => (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{title}</Text>
+            <TouchableOpacity onPress={() => setVisible(false)}>
+              <Ionicons name="close" size={24} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={items}
+            keyExtractor={(item) => item.value}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.pickerItem,
+                  selectedValue === item.value && styles.pickerItemSelected
+                ]}
+                onPress={() => {
+                  onSelect(item.value);
+                  setVisible(false);
+                }}
+              >
+                {item.icon && (
+                  <Ionicons
+                    name={item.icon}
+                    size={20}
+                    color={selectedValue === item.value ? '#4F46E5' : '#6B7280'}
+                    style={{ marginRight: 8 }}
+                  />
+                )}
+                <Text style={[
+                  styles.pickerItemText,
+                  selectedValue === item.value && styles.pickerItemTextSelected
+                ]}>{item.label}</Text>
+                {selectedValue === item.value && (
+                  <Ionicons name="checkmark" size={20} color="#4F46E5" />
+                )}
+              </TouchableOpacity>
+            )}
+          />
+        </View>
       </View>
-      {selectedBusiness?.id === item.id && (
-        <Ionicons name="checkmark-circle" size={24} color="#4F46E5" />
-      )}
-    </TouchableOpacity>
+    </Modal>
   );
 
   return (
@@ -143,13 +251,12 @@ export default function AddUserScreen({ navigation }) {
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.form}>
-          
-          <Text style={styles.label}>الاسم</Text>
+          <Text style={styles.label}>الاسم الكامل</Text>
           <TextInput
             style={styles.input}
             value={name}
             onChangeText={setName}
-            placeholder="الاسم الكامل"
+            placeholder="مثال: أحمد محمد"
           />
 
           <Text style={styles.label}>رقم الهاتف</Text>
@@ -157,7 +264,7 @@ export default function AddUserScreen({ navigation }) {
             style={styles.input}
             value={phone}
             onChangeText={setPhone}
-            placeholder="رقم الهاتف"
+            placeholder="01xxxxxxxxx"
             keyboardType="phone-pad"
           />
 
@@ -166,46 +273,114 @@ export default function AddUserScreen({ navigation }) {
             style={styles.input}
             value={password}
             onChangeText={setPassword}
-            placeholder="كلمة المرور"
             secureTextEntry
+            placeholder="********"
           />
 
-          <Text style={styles.label}>نوع المستخدم</Text>
-          <View style={styles.roleContainer}>
-            <TouchableOpacity
-              style={[styles.roleButton, role === 'merchant' && styles.roleButtonActive]}
-              onPress={() => setRole('merchant')}
-            >
-              <Text style={[styles.roleText, role === 'merchant' && styles.roleTextActive]}>
-                تاجر
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.roleButton, role === 'driver' && styles.roleButtonActive]}
-              onPress={() => setRole('driver')}
-            >
-              <Text style={[styles.roleText, role === 'driver' && styles.roleTextActive]}>
-                مندوب
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* اختيار نوع النشاط - للتاجر والمندوب معاً */}
-          <Text style={styles.label}>نوع النشاط</Text>
+          <Text style={styles.label}>الدور</Text>
           <TouchableOpacity
-            style={styles.pickerButton}
-            onPress={() => setBusinessModalVisible(true)}
+            style={styles.selector}
+            onPress={() => setShowRolePicker(true)}
           >
-            <Text style={selectedBusiness ? styles.pickerText : styles.pickerPlaceholder}>
-              {selectedBusiness ? selectedBusiness.name : 'اختر نوع النشاط'}
+            <Text style={role ? styles.selectorText : styles.selectorPlaceholder}>
+              {ROLES.find(r => r.value === role)?.label || 'اختر الدور'}
             </Text>
             <Ionicons name="chevron-down" size={20} color="#6B7280" />
           </TouchableOpacity>
 
+          {role === 'merchant' && (
+            <>
+              <Text style={styles.label}>نوع النشاط التجاري</Text>
+              <TouchableOpacity
+                style={styles.selector}
+                onPress={() => setShowMerchantTypePicker(true)}
+              >
+                <Text style={merchantType ? styles.selectorText : styles.selectorPlaceholder}>
+                  {MERCHANT_TYPES.find(t => t.value === merchantType)?.label || 'اختر نوع النشاط'}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#6B7280" />
+              </TouchableOpacity>
+
+              {merchantType === 'home_chef' && (
+                <>
+                  <Text style={styles.label}>التخصصات</Text>
+                  <View style={styles.specialtiesContainer}>
+                    {SPECIALTIES.map((item) => (
+                      <TouchableOpacity
+                        key={item}
+                        style={[
+                          styles.specialtyChip,
+                          specialties.includes(item) && styles.specialtyChipActive
+                        ]}
+                        onPress={() => toggleSpecialty(item)}
+                      >
+                        <Text style={[
+                          styles.specialtyText,
+                          specialties.includes(item) && styles.specialtyTextActive
+                        ]}>{item}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <View style={styles.row}>
+                    <View style={styles.half}>
+                      <Text style={styles.label}>رسوم التوصيل (ج)</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={deliveryFee}
+                        onChangeText={setDeliveryFee}
+                        keyboardType="numeric"
+                        placeholder="0"
+                      />
+                    </View>
+                    <View style={styles.half}>
+                      <Text style={styles.label}>نطاق التوصيل (كم)</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={deliveryRadius}
+                        onChangeText={setDeliveryRadius}
+                        keyboardType="numeric"
+                        placeholder="10"
+                      />
+                    </View>
+                  </View>
+
+                  <Text style={styles.label}>الشهادة الصحية</Text>
+                  <TouchableOpacity style={styles.certPicker} onPress={pickHealthCert}>
+                    {healthCert ? (
+                      <Image source={{ uri: healthCert }} style={styles.previewImage} />
+                    ) : (
+                      <View style={styles.certPlaceholder}>
+                        <Ionicons name="document-text" size={40} color="#9CA3AF" />
+                        <Text style={styles.certPlaceholderText}>رفع الشهادة الصحية</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {merchantType && merchantType !== 'home_chef' && (
+                <>
+                  <Text style={styles.label}>اختر المكان</Text>
+                  <TouchableOpacity
+                    style={styles.selector}
+                    onPress={() => setShowPlacePicker(true)}
+                  >
+                    {selectedPlace ? (
+                      <Text style={styles.selectorText}>{selectedPlace.name}</Text>
+                    ) : (
+                      <Text style={styles.selectorPlaceholder}>-- اختر --</Text>
+                    )}
+                    <Ionicons name="chevron-down" size={20} color="#6B7280" />
+                  </TouchableOpacity>
+                </>
+              )}
+            </>
+          )}
+
           {role === 'driver' && (
             <>
-              <Text style={styles.label}>منطقة الخدمة (اختياري)</Text>
+              <Text style={styles.label}>منطقة الخدمة</Text>
               <TextInput
                 style={styles.input}
                 value={serviceArea}
@@ -213,7 +388,7 @@ export default function AddUserScreen({ navigation }) {
                 placeholder="مثال: الشيخ زايد"
               />
 
-              <Text style={styles.label}>أقصى مسافة توصيل (كم) - اختياري</Text>
+              <Text style={styles.label}>أقصى مسافة توصيل (كم)</Text>
               <TextInput
                 style={styles.input}
                 value={maxDeliveryRadius}
@@ -224,10 +399,10 @@ export default function AddUserScreen({ navigation }) {
 
               <View style={styles.switchContainer}>
                 <Text style={styles.label}>متاح للتوصيل</Text>
-                <Switch 
-                  value={isAvailable} 
+                <Switch
+                  value={isAvailable}
                   onValueChange={setIsAvailable}
-                  trackColor={{ false: '#E5E7EB', true: '#3B82F6' }}
+                  trackColor={{ false: '#E5E7EB', true: '#4F46E5' }}
                 />
               </View>
             </>
@@ -235,51 +410,29 @@ export default function AddUserScreen({ navigation }) {
 
           <View style={styles.switchContainer}>
             <Text style={styles.label}>الحساب نشط</Text>
-            <Switch 
-              value={active} 
-              onValueChange={setActive}
+            <Switch
+              value={isActive}
+              onValueChange={setIsActive}
               trackColor={{ false: '#E5E7EB', true: '#4F46E5' }}
             />
           </View>
 
           <TouchableOpacity
-            style={[styles.addButton, loading && styles.disabled]}
+            style={[styles.addButton, (loading || uploading) && styles.disabled]}
             onPress={handleAddUser}
-            disabled={loading}
+            disabled={loading || uploading}
           >
-            {loading ? (
+            {(loading || uploading) ? (
               <ActivityIndicator color="#FFF" />
             ) : (
               <Text style={styles.addButtonText}>إضافة المستخدم</Text>
             )}
           </TouchableOpacity>
-
         </View>
       </ScrollView>
 
-      <Modal
-        visible={businessModalVisible}
-        transparent={true}
-        animationType="slide"
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>اختر نوع النشاط</Text>
-              <TouchableOpacity onPress={() => setBusinessModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#EF4444" />
-              </TouchableOpacity>
-            </View>
-            
-            <FlatList
-              data={BUSINESS_TYPES}
-              renderItem={renderBusinessItem}
-              keyExtractor={item => item.id}
-              contentContainerStyle={styles.businessList}
-            />
-          </View>
-        </View>
-      </Modal>
+      {renderPicker(showRolePicker, setShowRolePicker, ROLES, role, setRole, 'اختر الدور')}
+      {renderPicker(showMerchantTypePicker, setShowMerchantTypePicker, MERCHANT_TYPES, merchantType, setMerchantType, 'اختر نوع النشاط')}
     </SafeAreaView>
   );
 }
@@ -298,7 +451,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
   content: { padding: 20 },
   form: { backgroundColor: '#FFF', borderRadius: 12, padding: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: '#4B5563', marginBottom: 5 },
+  label: { fontSize: 14, fontWeight: '600', color: '#4B5563', marginBottom: 5, marginTop: 10 },
   input: {
     backgroundColor: '#F9FAFB',
     borderWidth: 1,
@@ -308,23 +461,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     fontSize: 14,
   },
-  roleContainer: { flexDirection: 'row', gap: 10, marginBottom: 15 },
-  roleButton: { 
-    flex: 1, 
-    padding: 12, 
-    borderRadius: 8, 
-    alignItems: 'center', 
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  roleButtonActive: { 
-    backgroundColor: '#4F46E5',
-    borderColor: '#4F46E5',
-  },
-  roleText: { fontSize: 14, color: '#4B5563' },
-  roleTextActive: { color: '#FFF', fontWeight: '600' },
-  pickerButton: {
+  selector: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -335,64 +472,97 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 15,
   },
-  pickerText: { fontSize: 14, color: '#1F2937' },
-  pickerPlaceholder: { fontSize: 14, color: '#9CA3AF' },
-  switchContainer: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
+  selectorText: { fontSize: 14, color: '#1F2937', flex: 1, marginLeft: 8 },
+  selectorPlaceholder: { fontSize: 14, color: '#9CA3AF' },
+  row: { flexDirection: 'row', gap: 10 },
+  half: { flex: 1 },
+  specialtiesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 15,
+  },
+  specialtyChip: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  specialtyChipActive: {
+    backgroundColor: '#EF4444',
+    borderColor: '#EF4444',
+  },
+  specialtyText: { fontSize: 12, color: '#4B5563' },
+  specialtyTextActive: { color: '#FFF', fontWeight: '600' },
+  certPicker: {
+    width: '100%',
+    height: 150,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    marginBottom: 15,
+    overflow: 'hidden',
+  },
+  previewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  certPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  certPlaceholderText: { marginTop: 8, fontSize: 14, color: '#9CA3AF' },
+  switchContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 20,
     paddingVertical: 10,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
   },
-  addButton: { 
-    backgroundColor: '#4F46E5', 
-    padding: 16, 
-    borderRadius: 8, 
+  addButton: {
+    backgroundColor: '#4F46E5',
+    padding: 16,
+    borderRadius: 8,
     alignItems: 'center',
     marginTop: 10,
   },
   disabled: { opacity: 0.6 },
   addButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: '#FFF',
-    borderRadius: 20,
-    width: '90%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
     maxHeight: '80%',
-    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    marginBottom: 20,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#F3F4F6',
   },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
-  businessList: { padding: 16 },
-  businessItem: {
+  pickerItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    marginBottom: 8,
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  selectedBusinessItem: {
-    borderColor: '#4F46E5',
-    borderWidth: 2,
-  },
-  businessInfo: { flex: 1, marginLeft: 12 },
-  businessName: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
-  businessId: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  pickerItemSelected: { backgroundColor: '#EEF2FF' },
+  pickerItemText: { fontSize: 16, color: '#1F2937', flex: 1 },
+  pickerItemTextSelected: { color: '#4F46E5', fontWeight: '600' },
 });

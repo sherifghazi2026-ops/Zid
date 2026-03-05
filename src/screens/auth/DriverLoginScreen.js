@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loginUser } from '../../appwrite/userService';
 
-const appIcon = require('../../../assets/icons/Zidicon.png');
+const appIcon = require('../../../assets/icon.png');
 
 export default function DriverLoginScreen({ navigation }) {
   const [phone, setPhone] = useState('');
@@ -72,7 +72,7 @@ export default function DriverLoginScreen({ navigation }) {
             <View style={styles.inputContainer}>
               <Ionicons name="call-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: "#1F2937" }]}
                 placeholder="رقم التليفون"
                 placeholderTextColor="#9CA3AF"
                 value={phone}
@@ -111,10 +111,20 @@ const styles = StyleSheet.create({
   scrollContainer: { flexGrow: 1, justifyContent: 'center', padding: 24, paddingTop: 40 },
   backButton: { position: 'absolute', top: 20, right: 20, zIndex: 10 },
   logoContainer: { alignItems: 'center', marginBottom: 30 },
-  logo: { width: 100, height: 100, borderRadius: 50 },
+  logo: { width: 150, height: 150, borderRadius: 75, marginBottom: 16 },
   title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', color: '#1F2937', marginBottom: 32 },
   form: { width: '100%' },
-  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 16, marginBottom: 16, height: 56 },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    height: 56,
+  },
   inputIcon: { marginRight: 12 },
   input: { flex: 1, fontSize: 16, color: '#1F2937' },
   loginButton: { backgroundColor: '#3B82F6', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 8, height: 56, justifyContent: 'center' },

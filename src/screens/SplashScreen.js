@@ -1,24 +1,59 @@
 import React, { useEffect } from 'react';
-import { View, Image, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
-const appIcon = require('../../assets/icons/Zidicon.png');
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SplashScreen({ navigation }) {
   useEffect(() => {
-    const timer = setTimeout(() => {
-      navigation.replace('CustomerScreen');
-    }, 3000); // 3 ثواني
+    const checkAuth = async () => {
+      try {
+        setTimeout(async () => {
+          const userData = await AsyncStorage.getItem('userData');
+          const userRole = await AsyncStorage.getItem('userRole');
 
-    return () => clearTimeout(timer);
+          console.log('Splash - userData:', userData ? 'موجود' : 'غير موجود');
+          console.log('Splash - userRole:', userRole);
+
+          if (userData && userRole) {
+            const parsed = JSON.parse(userData);
+            console.log('Splash - user role:', parsed.role);
+            
+            if (parsed.role === 'merchant') {
+              navigation.replace('MerchantDashboard');
+            } else if (parsed.role === 'driver') {
+              navigation.replace('DriverDashboard');
+            } else if (parsed.role === 'admin') {
+              navigation.replace('AdminHome');
+            } else {
+              navigation.replace('MainTabs');
+            }
+          } else {
+            console.log('Splash - لا يوجد مستخدم مسجل، التوجيه إلى HomeScreen');
+            navigation.replace('HomeScreen');
+          }
+        }, 2000);
+      } catch (error) {
+        console.log('خطأ في التحقق من الجلسة:', error);
+        navigation.replace('HomeScreen');
+      }
+    };
+
+    checkAuth();
   }, []);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Image source={appIcon} style={styles.logo} />
-      </View>
-    </SafeAreaView>
+    <View style={styles.container}>
+      <Image
+        source={require('../../assets/icons/ZidiconSP.png')}
+        style={styles.logo}
+        resizeMode="contain"
+      />
+      <Text style={styles.subtitle}>كل الخدمات في مكان واحد</Text>
+    </View>
   );
 }
 
@@ -26,15 +61,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-  },
-  content: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   logo: {
-    width: 216, // 120 * 1.8 = 216 (زيادة 80%)
-    height: 216,
-    resizeMode: 'contain',
+    width: 300,
+    height: 150,
+    marginBottom: 30,
+  },
+  subtitle: {
+    fontSize: 20,
+    fontWeight: '400',
+    color: '#333333',
+    textAlign: 'center',
+    paddingHorizontal: 30,
+    letterSpacing: 0.5,
+    lineHeight: 28,
   },
 });

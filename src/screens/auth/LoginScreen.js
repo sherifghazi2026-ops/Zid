@@ -48,16 +48,16 @@ export default function LoginScreen({ navigation }) {
 
         <View style={styles.form}>
           <TextInput
-            style={styles.input}
-            placeholder="رقم التليفون"
+            style={[styles.input, { color: "#1F2937" }]}
+            placeholder="رقم التليفون" placeholderTextColor="#9CA3AF"
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
           />
 
           <TextInput
-            style={styles.input}
-            placeholder="كلمة المرور"
+            style={[styles.input, { color: "#1F2937" }]}
+            placeholder="كلمة المرور" placeholderTextColor="#9CA3AF"
             value={password}
             onChangeText={setPassword}
             secureTextEntry

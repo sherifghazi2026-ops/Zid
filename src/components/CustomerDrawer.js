@@ -12,10 +12,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const appIcon = require('../../assets/icons/Zidicon.png');
+const appIcon = require('../../assets/icon.png');
 
 export default function CustomerDrawer({ isLoggedIn, userData, onClose, navigation, onOpenAdminModal }) {
-  
+
   const handleLogout = async () => {
     Alert.alert(
       'تسجيل الخروج',
@@ -32,7 +32,7 @@ export default function CustomerDrawer({ isLoggedIn, userData, onClose, navigati
             onClose();
             navigation.reset({
               index: 0,
-              routes: [{ name: 'MainTabs' }],
+              routes: [{ name: 'HomeScreen' }],
             });
           }
         }
@@ -53,7 +53,6 @@ export default function CustomerDrawer({ isLoggedIn, userData, onClose, navigati
     Linking.openURL('https://wa.me/201223369908');
   };
 
-  // ✅ عناصر القائمة للزوار (غير مسجل)
   const guestMenuItems = [
     { icon: 'log-in-outline', title: 'تسجيل الدخول', screen: 'CustomerAuth', color: '#4F46E5' },
     { icon: 'people-outline', title: 'مقدمو الخدمة', screen: 'ServiceProvider', color: '#10B981' },
@@ -61,20 +60,21 @@ export default function CustomerDrawer({ isLoggedIn, userData, onClose, navigati
     { icon: 'shield-outline', title: 'دخول الأدمن', action: handleAdminPress, color: '#EF4444' },
   ];
 
-  // ✅ عناصر القائمة للعملاء المسجلين (فقط)
-  const userMenuItems = [
+  const customerMenuItems = [
     { icon: 'person-outline', title: 'الملف الشخصي', screen: 'Profile', color: '#4F46E5' },
     { icon: 'cart-outline', title: 'طلباتي السابقة', screen: 'MyOrders', color: '#F59E0B' },
     { icon: 'logo-whatsapp', title: 'تواصل معنا', action: handleContact, color: '#25D366' },
     { icon: 'log-out-outline', title: 'تسجيل الخروج', action: handleLogout, color: '#EF4444' },
   ];
 
-  const menuItems = isLoggedIn ? userMenuItems : guestMenuItems;
+  const menuItems = isLoggedIn ? customerMenuItems : guestMenuItems;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Image source={appIcon} style={styles.logo} />
+        <View style={styles.logoContainer}>
+          <Image source={appIcon} style={styles.logo} />
+        </View>
         <View style={styles.userInfo}>
           {isLoggedIn ? (
             <>
@@ -114,7 +114,7 @@ export default function CustomerDrawer({ isLoggedIn, userData, onClose, navigati
       </ScrollView>
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>ZAYED ID © 2026</Text>
+        <Text style={styles.footerText}>Zid © 2026</Text>
         <Text style={styles.footerVersion}>الإصدار 1.0.0</Text>
       </View>
     </View>
@@ -135,12 +135,20 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
   },
-  logo: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  logoContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#FFF',
+    borderColor: '#000000',
+  },
+  logo: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
   },
   userInfo: {
     flex: 1,

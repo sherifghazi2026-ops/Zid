@@ -13,7 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Query } from 'appwrite';
 import { databases, DATABASE_ID, USERS_COLLECTION_ID, ORDERS_COLLECTION_ID } from '../appwrite/config';
 import CustomDrawer from '../components/CustomDrawer';
-import { initializeServices } from '../services/servicesService';
+import { initializeCoreServices } from '../services/servicesService';
 
 export default function AdminHomeScreen({ navigation }) {
   const [userData, setUserData] = useState(null);
@@ -30,7 +30,7 @@ export default function AdminHomeScreen({ navigation }) {
   useEffect(() => {
     loadUserData();
     loadStats();
-    initializeServices();
+    initializeCoreServices();
   }, []);
 
   const loadUserData = async () => {
@@ -116,8 +116,33 @@ export default function AdminHomeScreen({ navigation }) {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>القائمة الرئيسية</Text>
+          <Text style={styles.sectionTitle}>إدارة المتجر</Text>
 
+          {/* إدارة المنتجات */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => navigation.navigate('ManageProducts')}
+          >
+            <Ionicons name="cube-outline" size={24} color="#10B981" />
+            <Text style={styles.menuText}>إدارة المنتجات</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          {/* ✅ إدارة أقسام المنتجات (الجديد) */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => navigation.navigate('ManageProductCategories')}
+          >
+            <Ionicons name="grid-outline" size={24} color="#8B5CF6" />
+            <Text style={styles.menuText}>إدارة أقسام المنتجات</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <Text style={styles.sectionTitle}>إدارة النظام</Text>
+
+          {/* إدارة المستخدمين */}
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate('UserManagement')}
@@ -127,6 +152,7 @@ export default function AdminHomeScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
+          {/* إدارة الطلبات */}
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate('AdminOrders')}
@@ -136,7 +162,7 @@ export default function AdminHomeScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
-          {/* ✅ زر إدارة الخدمات */}
+          {/* إدارة الخدمات */}
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate('ServicesManagement')}
@@ -146,7 +172,7 @@ export default function AdminHomeScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
-          {/* ✅ زر إدارة العروض الجديد */}
+          {/* إدارة العروض */}
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate('ManageOffers')}
@@ -156,6 +182,7 @@ export default function AdminHomeScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
+          {/* إضافة مستخدم جديد */}
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate('AddUser')}
@@ -170,9 +197,9 @@ export default function AdminHomeScreen({ navigation }) {
       <Modal visible={drawerVisible} transparent animationType="slide">
         <View style={styles.drawerOverlay}>
           <View style={styles.drawerContent}>
-            <CustomDrawer 
-              userData={userData} 
-              onClose={() => setDrawerVisible(false)} 
+            <CustomDrawer
+              userData={userData}
+              onClose={() => setDrawerVisible(false)}
               navigation={navigation}
             />
           </View>
@@ -232,6 +259,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F3F4F6',
   },
   menuText: { flex: 1, fontSize: 16, color: '#1F2937', marginLeft: 12 },
+  divider: { height: 1, backgroundColor: '#E5E7EB', marginVertical: 16 },
   drawerOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

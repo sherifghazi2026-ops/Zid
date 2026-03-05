@@ -98,23 +98,23 @@ export default function MerchantRegisterScreen({ navigation, route }) {
 
         <View style={styles.form}>
           <TextInput
-            style={styles.input}
-            placeholder="الاسم"
+            style={[styles.input, { color: "#1F2937" }]}
+            placeholder="الاسم" placeholderTextColor="#9CA3AF"
             value={name}
             onChangeText={setName}
           />
 
           <TextInput
-            style={styles.input}
-            placeholder="رقم الهاتف"
+            style={[styles.input, { color: "#1F2937" }]}
+            placeholder="رقم الهاتف" placeholderTextColor="#9CA3AF"
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
           />
 
           <TextInput
-            style={styles.input}
-            placeholder="كلمة المرور"
+            style={[styles.input, { color: "#1F2937" }]}
+            placeholder="كلمة المرور" placeholderTextColor="#9CA3AF"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -136,23 +136,23 @@ export default function MerchantRegisterScreen({ navigation, route }) {
           </TouchableOpacity>
 
           <TextInput
-            style={styles.input}
-            placeholder="العنوان بالتفصيل"
+            style={[styles.input, { color: "#1F2937" }]}
+            placeholder="العنوان بالتفصيل" placeholderTextColor="#9CA3AF"
             value={address}
             onChangeText={setAddress}
             multiline
           />
 
           <TextInput
-            style={styles.input}
-            placeholder="منطقة الخدمة (مثال: الشيخ زايد)"
+            style={[styles.input, { color: "#1F2937" }]}
+            placeholder="منطقة الخدمة (مثال: الشيخ زايد)" placeholderTextColor="#9CA3AF"
             value={serviceArea}
             onChangeText={setServiceArea}
           />
 
           <TextInput
-            style={styles.input}
-            placeholder="أقصى مسافة توصيل (كم)"
+            style={[styles.input, { color: "#1F2937" }]}
+            placeholder="أقصى مسافة توصيل (كم)" placeholderTextColor="#9CA3AF"
             value={maxRadius}
             onChangeText={setMaxRadius}
             keyboardType="numeric"

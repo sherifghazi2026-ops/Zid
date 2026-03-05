@@ -1,220 +1,146 @@
-import { databases, DATABASE_ID, storage, BUCKET_ID } from '../appwrite/config';
+import { databases, DATABASE_ID } from '../appwrite/config';
 import { ID, Query } from 'appwrite';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const SERVICES_COLLECTION_ID = 'services';
 
-// أنواع الخدمات (لكل خدمة طريقة عرض مختلفة)
-export const SERVICE_TYPES = {
-  TEXT_ONLY: 'text_only',
-  ITEMS_WITH_COUNTER: 'items_counter',
-  WITH_IMAGES: 'with_images',
-  WITH_VOICE: 'with_voice',
-  PHARMACY: 'pharmacy',
-};
+// مفتاح تخزين الخدمات الأساسية
+const CORE_SERVICES_STORAGE_KEY = 'core_services_state';
 
-// الخدمات الافتراضية
-export const DEFAULT_SERVICES = [
-  { 
-    id: 'supermarket', 
-    name: 'سوبر ماركت', 
-    icon: 'basket-outline', 
-    screen: 'Grocery', 
-    isActive: true, 
+// الخدمات الأساسية (القيم الافتراضية)
+const DEFAULT_CORE_SERVICES = [
+  {
+    id: 'restaurant',
+    name: 'المطاعم',
+    type: 'ai',
+    icon: 'restaurant-outline',
+    color: '#F59E0B',
+    category: 'ai',
+    isActive: true,
     isVisible: true,
-    order: 1,
-    type: 'text_only',
-    hasVoice: true,
-    hasImages: false,
-    description: 'طلب منتجات السوبر ماركت',
-    color: '#F59E0B'
+    isCore: true,
+    maintenanceText: 'جاري التحديث',
   },
-  { 
-    id: 'restaurant', 
-    name: 'مطاعم', 
-    icon: 'restaurant-outline', 
-    screen: 'Restaurant', 
-    isActive: true, 
+  {
+    id: 'home_chef',
+    name: 'أكل بيتي',
+    type: 'ai',
+    icon: 'home-outline',
+    color: '#EF4444',
+    category: 'ai',
+    isActive: true,
     isVisible: true,
-    order: 2,
-    type: 'text_only',
-    hasVoice: true,
-    hasImages: false,
-    description: 'طلب من المطاعم',
-    color: '#EF4444'
-  },
-  { 
-    id: 'pharmacy', 
-    name: 'صيدليات', 
-    icon: 'medical-outline', 
-    screen: 'Pharmacy', 
-    isActive: true, 
-    isVisible: true,
-    order: 3,
-    type: 'pharmacy',
-    hasVoice: true,
-    hasImages: true,
-    requiresPrescription: true,
-    description: 'طلب أدوية بروشتة',
-    color: '#10B981'
-  },
-  { 
-    id: 'ironing', 
-    name: 'مكوجي', 
-    icon: 'shirt-outline', 
-    screen: 'Ironing', 
-    isActive: true, 
-    isVisible: true,
-    order: 4,
-    type: 'items_counter',
-    hasVoice: true,
-    hasImages: false,
-    description: 'خدمة كي الملابس',
-    color: '#3B82F6'
-  },
-  { 
-    id: 'plumbing', 
-    name: 'سباكة', 
-    icon: 'water-outline', 
-    screen: 'Plumbing', 
-    isActive: true, 
-    isVisible: true,
-    order: 5,
-    type: 'text_only',
-    hasVoice: true,
-    hasImages: true,
-    description: 'خدمات السباكة',
-    color: '#3B82F6'
-  },
-  { 
-    id: 'kitchen', 
-    name: 'مطابخ', 
-    icon: 'restaurant-outline', 
-    screen: 'Kitchen', 
-    isActive: true, 
-    isVisible: true,
-    order: 6,
-    type: 'text_only',
-    hasVoice: true,
-    hasImages: true,
-    description: 'تصميم وتصنيع المطابخ',
-    color: '#8B5CF6'
-  },
-  { 
-    id: 'carpentry', 
-    name: 'نجارة', 
-    icon: 'hammer-outline', 
-    screen: 'Carpentry', 
-    isActive: true, 
-    isVisible: true,
-    order: 7,
-    type: 'text_only',
-    hasVoice: true,
-    hasImages: true,
-    description: 'أعمال النجارة',
-    color: '#8B5CF6'
-  },
-  { 
-    id: 'marble', 
-    name: 'رخام', 
-    icon: 'apps-outline', 
-    screen: 'Marble', 
-    isActive: true, 
-    isVisible: true,
-    order: 8,
-    type: 'text_only',
-    hasVoice: true,
-    hasImages: true,
-    description: 'تركيب وتلميع الرخام',
-    color: '#EC4899'
-  },
-  { 
-    id: 'winch', 
-    name: 'ونش', 
-    icon: 'car-outline', 
-    screen: 'Winch', 
-    isActive: true, 
-    isVisible: true,
-    order: 9,
-    type: 'text_only',
-    hasVoice: true,
-    hasImages: true,
-    description: 'خدمات الونش والنقل',
-    color: '#EC4899'
-  },
-  { 
-    id: 'electrician', 
-    name: 'كهربائي', 
-    icon: 'flash-outline', 
-    screen: 'Electrician', 
-    isActive: true, 
-    isVisible: true,
-    order: 10,
-    type: 'text_only',
-    hasVoice: true,
-    hasImages: true,
-    description: 'أعمال الكهرباء',
-    color: '#F59E0B'
-  },
-  { 
-    id: 'moving', 
-    name: 'نقل اثاث', 
-    icon: 'cube-outline', 
-    screen: 'Moving', 
-    isActive: true, 
-    isVisible: true,
-    order: 11,
-    type: 'text_only',
-    hasVoice: true,
-    hasImages: true,
-    description: 'نقل الأثاث',
-    color: '#F59E0B'
-  },
+    isCore: true,
+    maintenanceText: 'جاري التحديث',
+  }
 ];
 
-// تهيئة الخدمات
-export const initializeServices = async () => {
+// دالة لجلب الخدمات الأساسية من AsyncStorage
+export const getCoreServices = async () => {
   try {
-    const existing = await databases.listDocuments(
-      DATABASE_ID,
-      SERVICES_COLLECTION_ID,
-      [Query.limit(1)]
-    );
-
-    if (existing.documents.length === 0) {
-      for (const service of DEFAULT_SERVICES) {
-        await databases.createDocument(
-          DATABASE_ID,
-          SERVICES_COLLECTION_ID,
-          ID.unique(),
-          {
-            ...service,
-            updatedAt: new Date().toISOString()
-          }
-        );
-      }
-      console.log('✅ تم تهيئة الخدمات الافتراضية');
+    const stored = await AsyncStorage.getItem(CORE_SERVICES_STORAGE_KEY);
+    if (stored) {
+      return { success: true, data: JSON.parse(stored) };
     }
+    // إذا لم تكن مخزنة، نخزن القيم الافتراضية
+    await AsyncStorage.setItem(CORE_SERVICES_STORAGE_KEY, JSON.stringify(DEFAULT_CORE_SERVICES));
+    return { success: true, data: DEFAULT_CORE_SERVICES };
   } catch (error) {
-    console.error('خطأ في تهيئة الخدمات:', error);
+    console.error('خطأ في جلب الخدمات الأساسية:', error);
+    return { success: false, error: error.message, data: DEFAULT_CORE_SERVICES };
   }
 };
 
-// جلب جميع الخدمات
-export const getAllServices = async () => {
+// دالة لتحديث خدمة أساسية
+export const updateCoreService = async (serviceId, updateData) => {
   try {
-    const response = await databases.listDocuments(
-      DATABASE_ID,
-      SERVICES_COLLECTION_ID,
-      [Query.orderAsc('order')]
+    // جلب الخدمات الحالية
+    const { data: currentServices } = await getCoreServices();
+    
+    // تحديث الخدمة المطلوبة
+    const updatedServices = currentServices.map(service => 
+      service.id === serviceId ? { ...service, ...updateData } : service
     );
-    return { success: true, data: response.documents };
+    
+    // حفظ في AsyncStorage
+    await AsyncStorage.setItem(CORE_SERVICES_STORAGE_KEY, JSON.stringify(updatedServices));
+    
+    return { success: true, data: updatedServices.find(s => s.id === serviceId) };
   } catch (error) {
-    console.error('خطأ في جلب الخدمات:', error);
+    console.error('خطأ في تحديث الخدمة الأساسية:', error);
     return { success: false, error: error.message };
   }
 };
 
-// جلب الخدمات الظاهرة فقط (للعملاء) - مع مراعاة isVisible
+// إعادة تعيين الخدمات الأساسية إلى الوضع الافتراضي
+export const resetCoreServices = async () => {
+  try {
+    await AsyncStorage.setItem(CORE_SERVICES_STORAGE_KEY, JSON.stringify(DEFAULT_CORE_SERVICES));
+    return { success: true, data: DEFAULT_CORE_SERVICES };
+  } catch (error) {
+    console.error('خطأ في إعادة تعيين الخدمات الأساسية:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const getAllServices = async () => {
+  try {
+    // جلب الخدمات من Appwrite
+    const response = await databases.listDocuments(
+      DATABASE_ID,
+      SERVICES_COLLECTION_ID,
+      [Query.orderAsc('order'), Query.orderAsc('name')]
+    );
+    
+    // جلب الخدمات الأساسية من AsyncStorage
+    const { data: coreServices } = await getCoreServices();
+    
+    // دمج الكل
+    const allServices = [...coreServices, ...response.documents];
+    
+    return { success: true, data: allServices };
+  } catch (error) {
+    console.error('خطأ في جلب الخدمات:', error);
+    // في حالة الفشل، نعيد الخدمات الأساسية على الأقل
+    const { data: coreServices } = await getCoreServices();
+    return { success: true, data: coreServices };
+  }
+};
+
+// للصفحة الرئيسية - تجلب الخدمات المرئية فقط
+export const getVisibleServicesForHome = async () => {
+  try {
+    // جلب الخدمات من Appwrite
+    const response = await databases.listDocuments(
+      DATABASE_ID,
+      SERVICES_COLLECTION_ID,
+      [
+        Query.equal('isVisible', true),
+        Query.orderAsc('order'),
+        Query.orderAsc('name')
+      ]
+    );
+    
+    // جلب الخدمات الأساسية من AsyncStorage
+    const { data: coreServices } = await getCoreServices();
+    
+    // تصفية الخدمات الأساسية المرئية
+    const visibleCoreServices = coreServices.filter(s => s.isVisible === true);
+    
+    return { 
+      success: true, 
+      data: [...visibleCoreServices, ...response.documents] 
+    };
+  } catch (error) {
+    console.error('خطأ في جلب الخدمات للصفحة الرئيسية:', error);
+    // في حالة الفشل، نعيد الخدمات الأساسية المرئية على الأقل
+    const { data: coreServices } = await getCoreServices();
+    const visibleCoreServices = coreServices.filter(s => s.isVisible === true);
+    return { success: true, data: visibleCoreServices };
+  }
+};
+
+// للاستخدام العام - تجلب الخدمات المرئية والنشطة فقط
 export const getVisibleServices = async () => {
   try {
     const response = await databases.listDocuments(
@@ -222,27 +148,46 @@ export const getVisibleServices = async () => {
       SERVICES_COLLECTION_ID,
       [
         Query.equal('isVisible', true),
-        Query.orderAsc('order')
+        Query.equal('isActive', true),
+        Query.orderAsc('order'),
+        Query.orderAsc('name')
       ]
     );
-    return { success: true, data: response.documents };
+    
+    // جلب الخدمات الأساسية من AsyncStorage
+    const { data: coreServices } = await getCoreServices();
+    
+    // تصفية الخدمات الأساسية النشطة والمرئية
+    const activeCoreServices = coreServices.filter(s => s.isActive === true && s.isVisible === true);
+    
+    return { 
+      success: true, 
+      data: [...activeCoreServices, ...response.documents] 
+    };
   } catch (error) {
-    console.error('خطأ في جلب الخدمات الظاهرة:', error);
+    console.error('خطأ في جلب الخدمات:', error);
     return { success: false, error: error.message };
   }
 };
 
-// جلب خدمة واحدة بالـ id
 export const getServiceById = async (serviceId) => {
   try {
+    // البحث في الخدمات الأساسية أولاً
+    const { data: coreServices } = await getCoreServices();
+    const coreService = coreServices.find(s => s.id === serviceId);
+    if (coreService) {
+      return { success: true, data: coreService };
+    }
+    
+    // ثم البحث في قاعدة البيانات
     const response = await databases.listDocuments(
       DATABASE_ID,
       SERVICES_COLLECTION_ID,
       [Query.equal('id', serviceId), Query.limit(1)]
     );
-    return { 
-      success: true, 
-      data: response.documents.length > 0 ? response.documents[0] : null 
+    return {
+      success: true,
+      data: response.documents.length > 0 ? response.documents[0] : null
     };
   } catch (error) {
     console.error('خطأ في جلب الخدمة:', error);
@@ -250,64 +195,6 @@ export const getServiceById = async (serviceId) => {
   }
 };
 
-// تحديث حالة الخدمة (تفعيل/تعطيل)
-export const toggleServiceStatus = async (serviceId, isActive) => {
-  try {
-    const response = await databases.updateDocument(
-      DATABASE_ID,
-      SERVICES_COLLECTION_ID,
-      serviceId,
-      { 
-        isActive,
-        updatedAt: new Date().toISOString()
-      }
-    );
-    return { success: true, data: response };
-  } catch (error) {
-    console.error('خطأ في تحديث حالة الخدمة:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-// تحديث حالة الظهور (إخفاء/إظهار)
-export const toggleServiceVisibility = async (serviceId, isVisible) => {
-  try {
-    const response = await databases.updateDocument(
-      DATABASE_ID,
-      SERVICES_COLLECTION_ID,
-      serviceId,
-      { 
-        isVisible,
-        updatedAt: new Date().toISOString()
-      }
-    );
-    return { success: true, data: response };
-  } catch (error) {
-    console.error('خطأ في تحديث ظهور الخدمة:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-// تحديث خدمة
-export const updateService = async (serviceDocId, updateData) => {
-  try {
-    const response = await databases.updateDocument(
-      DATABASE_ID,
-      SERVICES_COLLECTION_ID,
-      serviceDocId,
-      {
-        ...updateData,
-        updatedAt: new Date().toISOString()
-      }
-    );
-    return { success: true, data: response };
-  } catch (error) {
-    console.error('خطأ في تحديث الخدمة:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-// إنشاء خدمة جديدة
 export const createService = async (serviceData) => {
   try {
     const existing = await databases.listDocuments(
@@ -323,21 +210,22 @@ export const createService = async (serviceData) => {
     const newService = {
       id: serviceData.id,
       name: serviceData.name,
-      icon: serviceData.icon || 'construct-outline',
-      screen: 'DynamicService',
-      isActive: true,
-      isVisible: true,
-      order: serviceData.order || 999,
-      type: serviceData.type || 'text_only',
-      hasVoice: serviceData.hasVoice !== false,
-      hasImages: serviceData.hasImages || false,
-      requiresPrescription: serviceData.requiresPrescription || false,
-      description: serviceData.description || '',
+      type: serviceData.type || 'service',
+      screen: serviceData.screen || 'ServiceScreen',
+      icon: serviceData.icon || 'apps-outline',
       color: serviceData.color || '#6B7280',
+      category: serviceData.category || 'other',
+      isActive: serviceData.isActive !== false,
+      isVisible: serviceData.isVisible !== false,
+      isCore: false,
+      hasItems: serviceData.hasItems || false,
       imageUrl: serviceData.imageUrl || null,
+      maintenanceText: serviceData.maintenanceText || 'جاري التحديث',
+      order: serviceData.order || 0,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
     };
+
+    console.log('📦 بيانات الخدمة المحفوظة:', newService);
 
     const response = await databases.createDocument(
       DATABASE_ID,
@@ -353,7 +241,21 @@ export const createService = async (serviceData) => {
   }
 };
 
-// حذف خدمة
+export const updateService = async (serviceDocId, updateData) => {
+  try {
+    const response = await databases.updateDocument(
+      DATABASE_ID,
+      SERVICES_COLLECTION_ID,
+      serviceDocId,
+      updateData
+    );
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('خطأ في تحديث الخدمة:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 export const deleteService = async (serviceDocId) => {
   try {
     await databases.deleteDocument(
@@ -365,5 +267,24 @@ export const deleteService = async (serviceDocId) => {
   } catch (error) {
     console.error('خطأ في حذف الخدمة:', error);
     return { success: false, error: error.message };
+  }
+};
+
+export const toggleServiceStatus = async (serviceDocId, isActive) => {
+  return updateService(serviceDocId, { isActive });
+};
+
+export const toggleServiceVisibility = async (serviceDocId, isVisible) => {
+  return updateService(serviceDocId, { isVisible });
+};
+
+export const initializeCoreServices = async () => {
+  try {
+    const services = await getAllServices();
+    console.log('📋 الخدمات الموجودة:', services.data.map(s => s.id));
+    return { success: true };
+  } catch (error) {
+    console.error('خطأ في تهيئة الخدمات:', error);
+    return { success: false };
   }
 };

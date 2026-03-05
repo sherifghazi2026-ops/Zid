@@ -17,10 +17,10 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loginUser } from '../appwrite/userService';
 
-const appIcon = require('../../assets/icons/Zidicon.png');
+const appIcon = require('../../assets/icon.png');
 
 export default function ServiceProviderScreen({ navigation }) {
-  const [phone, setPhone] = useState(''); // 👈 اسم المتغير phone مش username
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -33,21 +33,23 @@ export default function ServiceProviderScreen({ navigation }) {
 
     setLoading(true);
     console.log('🔍 محاولة دخول برقم:', phone);
-    
-    const result = await loginUser(phone, password); // 👈 بنمرر phone مش username
-    
+
+    const result = await loginUser(phone, password);
+
     if (result.success) {
       const user = result.data;
       console.log('✅ تم العثور على المستخدم:', user.name, '- الدور:', user.role);
-      
+
       await AsyncStorage.setItem('userData', JSON.stringify(user));
       await AsyncStorage.setItem('userRole', user.role);
       await AsyncStorage.setItem('userPhone', phone);
-      
-      // التوجيه حسب الدور
+
       if (user.role === 'merchant') {
         console.log('🚀 توجيه إلى MerchantDashboard');
         navigation.replace('MerchantDashboard');
+      } else if (user.role === 'home_chef') {
+        console.log('🚀 توجيه إلى HomeChefDashboard');
+        navigation.replace('HomeChefDashboard');
       } else if (user.role === 'driver') {
         console.log('🚀 توجيه إلى DriverDashboard');
         navigation.replace('DriverDashboard');
@@ -60,7 +62,7 @@ export default function ServiceProviderScreen({ navigation }) {
     } else {
       Alert.alert('خطأ', result.error);
     }
-    
+
     setLoading(false);
   };
 
@@ -68,7 +70,7 @@ export default function ServiceProviderScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContainer}>
-          
+
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="arrow-forward" size={28} color="#4F46E5" />
           </TouchableOpacity>
@@ -76,16 +78,14 @@ export default function ServiceProviderScreen({ navigation }) {
           <View style={styles.logoContainer}>
             <Image source={appIcon} style={styles.logo} />
             <Text style={styles.title}>مقدمو الخدمة</Text>
-            <Text style={styles.subtitle}>للتجار والمناديب</Text>
+            <Text style={styles.subtitle}>للتجار والشيفات والمناديب</Text>
           </View>
 
           <View style={styles.form}>
-            
-            {/* حقل رقم الهاتف 👇 */}
             <View style={styles.inputContainer}>
               <Ionicons name="call-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: "#1F2937" }]}
                 placeholder="رقم الهاتف"
                 placeholderTextColor="#9CA3AF"
                 value={phone}
@@ -94,7 +94,6 @@ export default function ServiceProviderScreen({ navigation }) {
               />
             </View>
 
-            {/* حقل كلمة المرور 👇 */}
             <View style={styles.inputContainer}>
               <Ionicons name="lock-closed-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
               <TextInput
@@ -115,9 +114,8 @@ export default function ServiceProviderScreen({ navigation }) {
             </TouchableOpacity>
 
             <Text style={styles.hint}>
-              تم إنشاء الحساب بواسطة الإدارة. إذا لم يكن لديك حساب، تواصل مع مدير النظام.
+              يتم إنشاء الحسابات بواسطة الإدارة فقط. للاستفسار تواصل مع مدير النظام.
             </Text>
-
           </View>
 
         </ScrollView>
@@ -131,7 +129,7 @@ const styles = StyleSheet.create({
   scrollContainer: { flexGrow: 1, justifyContent: 'center', padding: 24, paddingTop: 40 },
   backButton: { position: 'absolute', top: 20, right: 20, zIndex: 10 },
   logoContainer: { alignItems: 'center', marginBottom: 40 },
-  logo: { width: 100, height: 100, borderRadius: 50, marginBottom: 16 },
+  logo: { width: 150, height: 150, borderRadius: 75, marginBottom: 16 },
   title: { fontSize: 24, fontWeight: 'bold', color: '#1F2937', marginBottom: 4 },
   subtitle: { fontSize: 14, color: '#6B7280' },
   form: { width: '100%' },

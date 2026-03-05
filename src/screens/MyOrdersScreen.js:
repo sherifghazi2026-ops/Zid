@@ -1,0 +1,58 @@
+// أضف هذه الدوال داخل MyOrdersScreen
+
+const formatInvoice = (order) => {
+  if (!order.items || order.items.length === 0) return null;
+
+  const itemsTotal = order.totalPrice || 0;
+  const deliveryFee = order.deliveryFee || 0;
+  const finalTotal = order.finalTotal || (itemsTotal + deliveryFee);
+
+  return (
+    <View style={styles.invoiceContainer}>
+      <View style={styles.invoiceRow}>
+        <Text style={styles.invoiceLabel}>إجمالي الأصناف:</Text>
+        <Text style={styles.invoiceValue}>{itemsTotal} ج</Text>
+      </View>
+      {deliveryFee > 0 && (
+        <View style={styles.invoiceRow}>
+          <Text style={styles.invoiceLabel}>التوصيل:</Text>
+          <Text style={styles.invoiceValue}>{deliveryFee} ج</Text>
+        </View>
+      )}
+      <View style={styles.invoiceTotal}>
+        <Text style={styles.totalLabel}>الإجمالي:</Text>
+        <Text style={styles.totalValue}>{finalTotal} ج</Text>
+      </View>
+    </View>
+  );
+};
+
+// ثم أضف داخل render item:
+{
+  order.totalPrice > 0 && formatInvoice(order)
+}
+
+// وأضف هذه الأنماط:
+invoiceContainer: {
+  marginTop: 8,
+  paddingTop: 8,
+  borderTopWidth: 1,
+  borderTopColor: '#F3F4F6',
+},
+invoiceRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginBottom: 4,
+},
+invoiceLabel: { fontSize: 12, color: '#6B7280' },
+invoiceValue: { fontSize: 12, fontWeight: '600', color: '#1F2937' },
+invoiceTotal: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginTop: 4,
+  paddingTop: 4,
+  borderTopWidth: 1,
+  borderTopColor: '#F59E0B',
+},
+totalLabel: { fontSize: 14, fontWeight: '600', color: '#92400E' },
+totalValue: { fontSize: 16, fontWeight: 'bold', color: '#F59E0B' },
