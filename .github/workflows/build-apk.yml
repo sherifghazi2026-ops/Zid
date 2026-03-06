@@ -24,11 +24,19 @@ jobs:
       - name: Clean Install Dependencies
         run: |
           rm -rf node_modules
-          rm -f package-lock.json
           npm install --force
 
       - name: Prebuild
         run: npx expo prebuild --platform android --clean
+
+      - name: Inject CodePush Key and Fix Strings
+        run: |
+          mkdir -p android/app/src/main/res/values
+          echo '<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">Zid</string>
+              <string name="CodePushDeploymentKey">dummy-key-for-build</string>
+          </resources>' > android/app/src/main/res/values/strings.xml
 
       - name: Build APK
         run: |
