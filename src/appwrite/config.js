@@ -2,7 +2,7 @@ import { Client, Account, Databases, Storage } from 'appwrite';
 import { Platform } from 'react-native';
 
 // استخدام المتغيرات البيئية مع قيم افتراضية
-const APPWRITE_ENDPOINT = process.env.EXPO_PUBLIC_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1';
+const APPWRITE_ENDPOINT = process.env.EXPO_PUBLIC_APPWRITE_ENDPOINT || 'https://sgp.cloud.appwrite.io/v1';
 const APPWRITE_PROJECT_ID = process.env.EXPO_PUBLIC_APPWRITE_PROJECT_ID || '699c510d00378e48ffbd';
 export const DATABASE_ID = process.env.EXPO_PUBLIC_DATABASE_ID || '699db754000ef283ad3c';
 
