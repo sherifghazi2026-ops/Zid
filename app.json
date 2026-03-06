@@ -13,7 +13,10 @@
       "backgroundColor": "#4F46E5"
     },
     "assetBundlePatterns": [
-      "**/*"
+      "**/*",
+      "assets/fonts/*.ttf",
+      "assets/fonts/*.otf",
+      "node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/*.ttf"
     ],
     "ios": {
       "supportsTablet": true,
@@ -41,7 +44,8 @@
       "expo-image-picker",
       "expo-location",
       "expo-font",
-      "expo-video"
+      "expo-video",
+      "expo-asset"
     ],
     "owner": "sherifghazi",
     "extra": {

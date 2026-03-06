@@ -1,11 +1,13 @@
 import 'react-native-gesture-handler';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity, View, Text } from 'react-native';
+import { TouchableOpacity, View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import * as Font from 'expo-font';
+import { loadFonts, fontFamily } from './src/utils/fonts';
 
 // شاشات البداية والأساسية
 import SplashScreen from './src/screens/SplashScreen';
@@ -53,7 +55,7 @@ import ManageServiceItemsScreen from './src/screens/admin/ManageServiceItemsScre
 import ReviewDishesScreen from './src/screens/admin/ReviewDishesScreen';
 import ManageHomeChefsScreen from './src/screens/admin/ManageHomeChefsScreen';
 
-// شاشات الشيف المنزلي (للتاجر والعرض)
+// شاشات الشيف المنزلي
 import HomeChefDashboard from './src/screens/merchant/HomeChefDashboard';
 import AddHomeChefDishScreen from './src/screens/merchant/AddHomeChefDishScreen';
 import HomeChefsScreen from './src/screens/homechef/HomeChefsScreen';
@@ -119,7 +121,7 @@ function MainTabs() {
         tabBarActiveTintColor: '#F59E0B',
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: { backgroundColor: '#FFF', borderTopColor: '#E5E7EB', paddingBottom: 5, height: 60 },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '500' },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '500', fontFamily: fontFamily.arabic },
         headerShown: false,
       })}
     >
@@ -153,7 +155,7 @@ function RootStack() {
           headerTitle: 'تسجيل الدخول',
           headerTitleAlign: 'center',
           headerStyle: { backgroundColor: '#FFFFFF' },
-          headerTitleStyle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
+          headerTitleStyle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', fontFamily: fontFamily.bold },
         })}
       />
 
@@ -166,7 +168,7 @@ function RootStack() {
           headerTitle: 'مقدمو الخدمة',
           headerTitleAlign: 'center',
           headerStyle: { backgroundColor: '#FFFFFF' },
-          headerTitleStyle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
+          headerTitleStyle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', fontFamily: fontFamily.bold },
         })}
       />
 
@@ -179,7 +181,7 @@ function RootStack() {
           headerTitle: 'دخول المندوبين',
           headerTitleAlign: 'center',
           headerStyle: { backgroundColor: '#FFFFFF' },
-          headerTitleStyle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
+          headerTitleStyle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', fontFamily: fontFamily.bold },
         })}
       />
 
@@ -218,7 +220,7 @@ function RootStack() {
           headerTitle: 'لوحة الأدمن',
           headerTitleAlign: 'center',
           headerStyle: { backgroundColor: '#FFFFFF' },
-          headerTitleStyle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
+          headerTitleStyle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', fontFamily: fontFamily.bold },
         })}
       />
 
@@ -252,18 +254,37 @@ function RootStack() {
 }
 
 export default function App() {
+  const [appIsReady, setAppIsReady] = useState(false);
+
   useEffect(() => {
-    const init = async () => {
-      console.log('🚀 بدء تهيئة الخدمات الأساسية...');
+    async function prepare() {
       try {
+        // تحميل الخطوط
+        await loadFonts();
+        
+        // تهيئة الخدمات
+        console.log('🚀 بدء تهيئة الخدمات الأساسية...');
         await initializeCoreServices();
         console.log('✅ تم تهيئة الخدمات الأساسية');
+        
       } catch (error) {
-        console.error('❌ خطأ في تهيئة الخدمات:', error);
+        console.error('❌ خطأ في التحميل:', error);
+      } finally {
+        setAppIsReady(true);
       }
-    };
-    init();
+    }
+
+    prepare();
   }, []);
+
+  if (!appIsReady) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4F46E5" />
+        <Text style={styles.loadingText}>جاري تحميل التطبيق...</Text>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaProvider>
@@ -273,3 +294,18 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#6B7280',
+    fontSize: 14,
+    fontFamily: fontFamily.arabic,
+  },
+});
