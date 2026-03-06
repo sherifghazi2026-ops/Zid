@@ -26,6 +26,10 @@ jobs:
           rm -rf node_modules
           npm install --force
 
+      - name: Restore .env from Base64
+        run: |
+          echo "${{ secrets.ENV_FILE_BASE64 }}" | base64 --decode > .env
+
       - name: Prebuild
         run: npx expo prebuild --platform android --clean
 
