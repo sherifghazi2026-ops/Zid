@@ -1,0 +1,64 @@
+# dependencies
+node_modules/
+yarn.lock
+
+# environment
+.env
+.env.local
+.env.production
+*.env
+
+# Expo
+.expo/
+.expo-shared/
+web-build/
+dist/
+
+# iOS
+ios/Pods/
+ios/build/
+ios/*.xcworkspace
+ios/*.xcodeproj/xcuserdata/
+
+# Android
+android/app/build/
+android/build/
+android/local.properties
+*.keystore
+*.jks
+*.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+*.apk
+*.aab
+*.ipa
+*.log
+
+# Large files
+*.zip
+*.tar
+*.gz
+*.rar
+commandlinetools-*.zip
+android-sdk/
+tools/
+
+# Secure backup
+secure_backup/
+.env
+.env.*
+.env
+.env.*
+.env
+.env
+.env.local

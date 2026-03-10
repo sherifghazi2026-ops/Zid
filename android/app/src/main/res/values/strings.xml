@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Zid</string>
+    <string name="CodePushDeploymentKey">dummy-key-for-build-purposes</string>
+</resources>
