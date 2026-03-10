@@ -2,63 +2,56 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build APK
     runs-on: ubuntu-latest
-
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🏗️ Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 18.x
           cache: 'npm'
-          cache-dependency-path: package-lock.json
 
-      - name: 📦 Setup Java 17
-        uses: actions/setup-java@v4
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create .env file
+        run: |
+          echo "EXPO_PUBLIC_APPWRITE_ENDPOINT=${{ secrets.EXPO_PUBLIC_APPWRITE_ENDPOINT }}" >> .env
+          echo "EXPO_PUBLIC_APPWRITE_PROJECT_ID=${{ secrets.EXPO_PUBLIC_APPWRITE_PROJECT_ID }}" >> .env
+          echo "EXPO_PUBLIC_DATABASE_ID=${{ secrets.EXPO_PUBLIC_DATABASE_ID }}" >> .env
+          echo "EXPO_PUBLIC_GROQ_API_KEY=${{ secrets.EXPO_PUBLIC_GROQ_API_KEY }}" >> .env
+          echo "EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY=${{ secrets.EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY }}" >> .env
+          echo "EXPO_PUBLIC_IMAGEKIT_ENDPOINT=${{ secrets.EXPO_PUBLIC_IMAGEKIT_ENDPOINT }}" >> .env
+          echo "EXPO_TOKEN=${{ secrets.EXPO_TOKEN }}" >> .env
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 🤖 Setup Android SDK
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: 📦 Install dependencies
-        run: npm ci
-
-      - name: 🔑 Install EAS CLI
+      - name: Install EAS CLI
         run: npm install -g eas-cli
 
-      - name: 🔓 Decode .env from secret
-        run: |
-          echo "${{ secrets.ENV_BASE64 }}" | base64 --decode > .env
-          echo "✅ .env file created!"
-          echo "📄 First line:"
-          head -n 1 .env
-          echo "📄 Total lines:"
-          wc -l .env
+      - name: Build APK
+        run: eas build --platform android --profile preview --local --non-interactive --output=./app-release.apk
 
-      - name: 🏗️ Prebuild Android project
-        run: npx expo prebuild --clean
-
-      - name: 🛠️ Build APK with EAS
-        run: eas build -p android --profile preview --non-interactive --local
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-
-      - name: 📎 Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-${{ github.sha }}
-          path: |
-            android/app/build/outputs/apk/**/*.apk
-            **/*.apk
-          retention-days: 30
-          if-no-files-found: warn
+          name: Zid-APK
+          path: ./app-release.apk
+          if-no-files-found: error
+          retention-days: 90
