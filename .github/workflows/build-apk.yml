@@ -3,15 +3,13 @@ name: Build Android APK
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -31,27 +29,12 @@ jobs:
           echo "EXPO_PUBLIC_GROQ_API_KEY=${{ secrets.EXPO_PUBLIC_GROQ_API_KEY }}" >> .env
           echo "EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY=${{ secrets.EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY }}" >> .env
           echo "EXPO_PUBLIC_IMAGEKIT_ENDPOINT=${{ secrets.EXPO_PUBLIC_IMAGEKIT_ENDPOINT }}" >> .env
-          echo "EXPO_TOKEN=${{ secrets.EXPO_TOKEN }}" >> .env
 
-      - name: Setup Java
-        uses: actions/setup-java@v3
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install EAS CLI
-        run: npm install -g eas-cli
-
-      - name: Build APK
-        run: eas build --platform android --profile preview --local --non-interactive --output=./app-release.apk
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Zid-APK
-          path: ./app-release.apk
-          if-no-files-found: error
-          retention-days: 90
+      - name: Build Android APK
+        run: eas build --platform android --profile preview --non-interactive --no-wait
