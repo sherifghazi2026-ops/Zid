@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22  # ✅ تأكد أنها 22
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -26,12 +26,18 @@ jobs:
           echo "EXPO_PUBLIC_APPWRITE_ENDPOINT=${{ secrets.EXPO_PUBLIC_APPWRITE_ENDPOINT }}" >> .env
           echo "EXPO_PUBLIC_APPWRITE_PROJECT_ID=${{ secrets.EXPO_PUBLIC_APPWRITE_PROJECT_ID }}" >> .env
           echo "EXPO_PUBLIC_DATABASE_ID=${{ secrets.EXPO_PUBLIC_DATABASE_ID }}" >> .env
+          echo "EXPO_PUBLIC_GEMINI_API_KEY=${{ secrets.EXPO_PUBLIC_GEMINI_API_KEY }}" >> .env
+          echo "EXPO_PUBLIC_GROQ_API_KEY=${{ secrets.EXPO_PUBLIC_GROQ_API_KEY }}" >> .env
+          echo "EXPO_PUBLIC_TELEGRAM_BOT_TOKEN=${{ secrets.EXPO_PUBLIC_TELEGRAM_BOT_TOKEN }}" >> .env
+          echo "EXPO_PUBLIC_TELEGRAM_CHAT_ID=${{ secrets.EXPO_PUBLIC_TELEGRAM_CHAT_ID }}" >> .env
 
       - name: Install EAS CLI globally
         run: npm install -g eas-cli
 
       - name: Build Android app
         run: eas build -p android --profile preview --non-interactive --local
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
