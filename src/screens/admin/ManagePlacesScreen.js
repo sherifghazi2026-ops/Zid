@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -24,117 +24,140 @@ export default function ManagePlacesScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  
+  // لضمان عدم تحديث الـ State بعد قفل الصفحة
+  const isMounted = useRef(true);
 
+  // فورم الإضافة
   const [name, setName] = useState('');
   const [type, setType] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
 
+  // 1. تحميل البيانات مرة واحدة عند الفتح
   useEffect(() => {
+    isMounted.current = true;
     loadData();
+    return () => { isMounted.current = false; };
   }, []);
 
   const loadData = async () => {
-    setLoading(true);
     try {
-      // جلب الأماكن
-      const placesResult = await getAllPlaces();
-      if (placesResult.success) {
-        setPlaces(placesResult.data);
-      }
+      if (!refreshing) setLoading(true);
+      
+      const [placesRes, servicesRes] = await Promise.all([
+        getAllPlaces(),
+        getAllServices()
+      ]);
 
-      // جلب الخدمات اللي ليها أصناف
-      const servicesResult = await getAllServices();
-      if (servicesResult.success) {
-        const servicesWithItems = servicesResult.data.filter(s => 
+      if (!isMounted.current) return;
+
+      if (placesRes.success) setPlaces(placesRes.data);
+      if (servicesRes.success) {
+        // تصفية الخدمات المهمة فقط
+        const filtered = servicesRes.data.filter(s => 
           s.hasItems || s.id === 'restaurant' || s.id === 'home_chef'
         );
-        setServices(servicesWithItems);
+        setServices(filtered);
       }
     } catch (error) {
-      console.error('خطأ في تحميل البيانات:', error);
+      console.error("Load Error:", error);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMounted.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
   const handleAddPlace = async () => {
-    if (!name.trim()) {
-      Alert.alert('تنبيه', 'اسم المكان مطلوب');
+    if (!name.trim() || !type) {
+      Alert.alert('تنبيه', 'برجاء ملء البيانات الأساسية');
       return;
     }
-
-    if (!type) {
-      Alert.alert('تنبيه', 'نوع النشاط مطلوب');
-      return;
-    }
-
+    
     setSubmitting(true);
     try {
-      const result = await createPlace({
-        name: name.trim(),
-        type,
-        address: address.trim(),
-        phone: phone.trim(),
+      const res = await createPlace({ 
+        name: name.trim(), 
+        type, 
+        address: address.trim(), 
+        phone: phone.trim() 
       });
-
-      if (result.success) {
-        Alert.alert('✅ تم', 'تم إضافة المكان بنجاح');
+      
+      if (res.success) {
         setModalVisible(false);
-        resetForm();
+        setName(''); setType(''); setAddress(''); setPhone('');
         loadData();
-      } else {
-        Alert.alert('خطأ', result.error);
+        Alert.alert('✅ تم', 'تم إضافة المكان بنجاح');
       }
-    } catch (error) {
-      Alert.alert('خطأ', error.message);
-    } finally {
-      setSubmitting(false);
+    } catch (e) { 
+      Alert.alert('خطأ', e.message); 
+    } finally { 
+      setSubmitting(false); 
     }
   };
 
-  const handleDeletePlace = (place) => {
-    if (place.merchantId && place.merchantId !== '') {
-      Alert.alert('لا يمكن الحذف', 'هذا المكان مرتبط بتاجر حالياً');
-      return;
-    }
-
-    Alert.alert(
-      'حذف المكان',
-      `هل أنت متأكد من حذف ${place.name}؟`,
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'حذف',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await deletePlace(place.$id);
-            if (result.success) {
-              Alert.alert('تم', 'تم حذف المكان');
-              loadData();
-            } else {
-              Alert.alert('خطأ', result.error);
-            }
-          }
+  const handleDelete = (id, name) => {
+    Alert.alert('حذف', `متأكد من حذف ${name}؟`, [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'حذف', style: 'destructive', onPress: async () => {
+        const res = await deletePlace(id);
+        if (res.success) {
+          loadData();
+          Alert.alert('تم', 'تم حذف المكان');
         }
-      ]
+      }}
+    ]);
+  };
+
+  const renderPlace = ({ item }) => {
+    const serviceName = services.find(s => s.id === item.type)?.name || item.type;
+    const isRestaurant = item.type === 'restaurant';
+    const badgeColor = isRestaurant ? '#F59E0B20' : '#EF444420';
+    const textColor = isRestaurant ? '#F59E0B' : '#EF4444';
+
+    return (
+      <View style={styles.placeCard}>
+        <View style={styles.placeHeader}>
+          <Text style={styles.placeName}>{item.name}</Text>
+          <View style={[styles.typeBadge, { backgroundColor: badgeColor }]}>
+            <Text style={[styles.typeText, { color: textColor }]}>{serviceName}</Text>
+          </View>
+        </View>
+        
+        {item.address ? (
+          <View style={styles.infoRow}>
+            <Ionicons name="location-outline" size={16} color="#6B7280" />
+            <Text style={styles.infoText}>{item.address}</Text>
+          </View>
+        ) : null}
+        
+        {item.phone ? (
+          <View style={styles.infoRow}>
+            <Ionicons name="call-outline" size={16} color="#6B7280" />
+            <Text style={styles.infoText}>{item.phone}</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.placeFooter}>
+          <View style={[styles.statusBadge, { backgroundColor: item.merchantId ? '#EF444420' : '#10B98120' }]}>
+            <Text style={[styles.statusText, { color: item.merchantId ? '#EF4444' : '#10B981' }]}>
+              {item.merchantId ? 'مرتبط بتاجر' : 'متاح'}
+            </Text>
+          </View>
+          
+          {!item.merchantId && (
+            <TouchableOpacity onPress={() => handleDelete(item.$id, item.name)}>
+              <Ionicons name="trash-outline" size={20} color="#EF4444" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
     );
   };
 
-  const resetForm = () => {
-    setName('');
-    setType('');
-    setAddress('');
-    setPhone('');
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadData();
-  };
-
-  if (loading) {
+  if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4F46E5" />
@@ -157,51 +180,14 @@ export default function ManagePlacesScreen({ navigation }) {
       <FlatList
         data={places}
         keyExtractor={item => item.$id}
-        renderItem={({ item }) => (
-          <View style={styles.placeCard}>
-            <View style={styles.placeHeader}>
-              <Text style={styles.placeName}>{item.name}</Text>
-              <View style={[styles.typeBadge, { backgroundColor: item.type === 'restaurant' ? '#F59E0B20' : '#EF444420' }]}>
-                <Text style={[styles.typeText, { color: item.type === 'restaurant' ? '#F59E0B' : '#EF4444' }]}>
-                  {services.find(s => s.id === item.type)?.name || item.type}
-                </Text>
-              </View>
-            </View>
-
-            {item.address ? (
-              <View style={styles.infoRow}>
-                <Ionicons name="location-outline" size={16} color="#6B7280" />
-                <Text style={styles.infoText}>{item.address}</Text>
-              </View>
-            ) : null}
-
-            {item.phone ? (
-              <View style={styles.infoRow}>
-                <Ionicons name="call-outline" size={16} color="#6B7280" />
-                <Text style={styles.infoText}>{item.phone}</Text>
-              </View>
-            ) : null}
-
-            <View style={styles.placeFooter}>
-              <View style={[styles.statusBadge, { backgroundColor: item.merchantId ? '#EF444420' : '#10B98120' }]}>
-                <Text style={[styles.statusText, { color: item.merchantId ? '#EF4444' : '#10B981' }]}>
-                  {item.merchantId ? 'مرتبط بتاجر' : 'متاح'}
-                </Text>
-              </View>
-
-              {!item.merchantId && (
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => handleDeletePlace(item)}
-                >
-                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        )}
+        renderItem={renderPlace}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={() => { setRefreshing(true); loadData(); }} 
+          />
+        }
         contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="business-outline" size={80} color="#E5E7EB" />
@@ -211,72 +197,69 @@ export default function ManagePlacesScreen({ navigation }) {
         }
       />
 
-      <Modal visible={modalVisible} transparent animationType="slide">
+      <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <ScrollView contentContainerStyle={styles.modalScrollContent}>
             <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>إضافة مكان جديد</Text>
-                <TouchableOpacity onPress={() => setModalVisible(false)}>
-                  <Ionicons name="close" size={24} color="#EF4444" />
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.label}>اسم المكان <Text style={styles.required}>*</Text></Text>
-              <TextInput
-                style={styles.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="مثال: مخبز البلدي - فرع الشيخ زايد"
+              <Text style={styles.modalTitle}>إضافة مكان جديد</Text>
+              
+              <Text style={styles.label}>اسم المكان *</Text>
+              <TextInput 
+                style={styles.input} 
+                placeholder="مثال: مخبز البلدي" 
+                value={name} 
+                onChangeText={setName} 
               />
 
-              <Text style={styles.label}>نوع النشاط <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.label}>نوع النشاط *</Text>
               <View style={styles.typesContainer}>
-                {services.map(service => (
-                  <TouchableOpacity
-                    key={service.id}
-                    style={[
-                      styles.typeChip,
-                      type === service.id && styles.typeChipActive
-                    ]}
-                    onPress={() => setType(service.id)}
+                {services.map(s => (
+                  <TouchableOpacity 
+                    key={s.id} 
+                    style={[styles.typeChip, type === s.id && styles.typeChipActive]}
+                    onPress={() => setType(s.id)}
                   >
-                    <Text style={[
-                      styles.typeChipText,
-                      type === service.id && styles.typeChipTextActive
-                    ]}>{service.name}</Text>
+                    <Text style={[styles.typeChipText, type === s.id && styles.typeChipTextActive]}>
+                      {s.name}
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
               <Text style={styles.label}>العنوان (اختياري)</Text>
-              <TextInput
-                style={styles.input}
-                value={address}
-                onChangeText={setAddress}
-                placeholder="العنوان بالتفصيل"
+              <TextInput 
+                style={styles.input} 
+                placeholder="العنوان بالتفصيل" 
+                value={address} 
+                onChangeText={setAddress} 
                 multiline
               />
 
               <Text style={styles.label}>رقم الهاتف (اختياري)</Text>
-              <TextInput
-                style={styles.input}
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="01234567890"
+              <TextInput 
+                style={styles.input} 
+                placeholder="01234567890" 
+                value={phone} 
+                onChangeText={setPhone} 
                 keyboardType="phone-pad"
               />
 
-              <TouchableOpacity
-                style={[styles.addButton, submitting && styles.disabled]}
-                onPress={handleAddPlace}
+              <TouchableOpacity 
+                style={[styles.addButton, submitting && styles.disabled]} 
+                onPress={handleAddPlace} 
                 disabled={submitting}
               >
-                {submitting ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
+                {submitting ? 
+                  <ActivityIndicator color="#FFF" /> : 
                   <Text style={styles.addButtonText}>إضافة المكان</Text>
-                )}
+                }
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                onPress={() => setModalVisible(false)} 
+                style={styles.cancelButton}
+              >
+                <Text style={styles.cancelButtonText}>إلغاء</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -291,114 +274,102 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
     padding: 20,
     backgroundColor: '#FFF',
+    alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
   list: { padding: 16 },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+  emptyContainer: { alignItems: 'center', padding: 40 },
   emptyText: { marginTop: 12, fontSize: 16, color: '#1F2937', fontWeight: '600' },
   emptySubText: { marginTop: 4, fontSize: 14, color: '#9CA3AF' },
 
-  placeCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+  placeCard: { 
+    backgroundColor: '#FFF', 
+    padding: 16, 
+    borderRadius: 12, 
+    marginBottom: 12, 
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  placeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  placeHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
     marginBottom: 8,
+    alignItems: 'center',
   },
-  placeName: { fontSize: 16, fontWeight: '600', color: '#1F2937', flex: 1 },
+  placeName: { fontWeight: '600', fontSize: 16, color: '#1F2937', flex: 1 },
   typeBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   typeText: { fontSize: 12, fontWeight: '600' },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-    gap: 8,
-  },
+  infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 8 },
   infoText: { fontSize: 14, color: '#4B5563', flex: 1 },
-  placeFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  placeFooter: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginTop: 8, 
+    paddingTop: 8, 
+    borderTopWidth: 1, 
+    borderColor: '#F3F4F6',
     alignItems: 'center',
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
   },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   statusText: { fontSize: 12, fontWeight: '600' },
-  deleteButton: { padding: 4 },
 
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+  modalOverlay: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0,0,0,0.5)', 
+    justifyContent: 'flex-end' 
   },
   modalScrollContent: { paddingBottom: 20, paddingTop: 60 },
-  modalContent: {
-    backgroundColor: '#FFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
+  modalContent: { 
+    backgroundColor: '#FFF', 
+    padding: 20, 
+    borderTopLeftRadius: 20, 
+    borderTopRightRadius: 20 
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1F2937' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, color: '#1F2937' },
   label: { fontSize: 14, fontWeight: '600', color: '#4B5563', marginBottom: 5, marginTop: 10 },
-  required: { color: '#EF4444' },
-  input: {
-    backgroundColor: '#F9FAFB',
+  input: { 
+    backgroundColor: '#F9FAFB', 
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 8,
-    padding: 12,
-    marginBottom: 15,
+    padding: 12, 
+    marginBottom: 10,
     fontSize: 14,
   },
-  typesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 10,
+  typesContainer: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 8, 
+    marginBottom: 10 
   },
-  typeChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+  typeChip: { 
+    paddingHorizontal: 16, 
+    paddingVertical: 8, 
+    borderRadius: 20, 
     backgroundColor: '#F3F4F6',
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  typeChipActive: {
-    backgroundColor: '#4F46E5',
+  typeChipActive: { 
+    backgroundColor: '#4F46E5', 
     borderColor: '#4F46E5',
   },
   typeChipText: { fontSize: 12, color: '#4B5563' },
   typeChipTextActive: { color: '#FFF', fontWeight: '600' },
-  addButton: {
-    backgroundColor: '#4F46E5',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 20,
+  addButton: { 
+    backgroundColor: '#4F46E5', 
+    padding: 16, 
+    borderRadius: 8, 
+    alignItems: 'center', 
+    marginTop: 20 
   },
   disabled: { opacity: 0.6 },
   addButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  cancelButton: { marginTop: 10, alignItems: 'center' },
+  cancelButtonText: { color: '#EF4444', fontSize: 16, fontWeight: '600' },
 });

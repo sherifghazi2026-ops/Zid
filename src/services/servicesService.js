@@ -12,7 +12,7 @@ export const CORE_SERVICES = [
     isActive: true,
     isVisible: true,
     hasItems: true,
-    itemsCollection: 'dishes', // collection مخصص للمطاعم
+    itemsCollection: 'dishes',
     merchantRole: 'merchant',
     merchantType: 'restaurant',
     order: 1,
@@ -27,7 +27,7 @@ export const CORE_SERVICES = [
     isActive: true,
     isVisible: true,
     hasItems: true,
-    itemsCollection: 'home_chef_dishes', // collection مخصص للشيفات
+    itemsCollection: 'home_chef_dishes',
     merchantRole: 'merchant',
     merchantType: 'home_chef',
     order: 2,
@@ -137,14 +137,6 @@ export const createService = async (serviceData) => {
       return { success: false, error: 'هذا المعرف موجود بالفعل' };
     }
 
-    // إنشاء collection للمنتجات إذا كانت الخدمة ليها منتجات
-    let itemsCollection = null;
-    if (serviceData.hasItems) {
-      itemsCollection = `service_${serviceData.id}_items`;
-      // هنا هنحتاج ننشئ collection في Appwrite يدوياً أو عن طريق API
-      console.log(`📦 محتاج تنشئ collection: ${itemsCollection}`);
-    }
-
     const newService = {
       id: serviceData.id,
       name: serviceData.name,
@@ -155,13 +147,16 @@ export const createService = async (serviceData) => {
       isActive: serviceData.isActive !== false,
       isVisible: serviceData.isVisible !== false,
       hasItems: serviceData.hasItems || false,
-      itemsCollection: itemsCollection,
-      merchantRole: serviceData.merchantRole || 'merchant',
-      merchantType: serviceData.merchantType || null,
       screen: serviceData.screen || 'ServiceScreen',
       imageUrl: serviceData.imageUrl || null,
       maintenanceText: serviceData.maintenanceText || 'جاري التحديث',
       order: serviceData.order || 0,
+      // حقول إضافية للخدمات بأصناف ومنتجات
+      itemsCollection: serviceData.itemsCollection || null,
+      merchantRole: serviceData.merchantRole || 'merchant',
+      merchantType: serviceData.merchantType || null,
+      // 👇 الخدمات الفرعية (مهم جداً)
+      subServices: serviceData.subServices || [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

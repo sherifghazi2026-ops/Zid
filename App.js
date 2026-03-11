@@ -6,9 +6,12 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { CartProvider } from './src/context/CartContext';
 import { loadFonts, fontFamily } from './src/utils/fonts';
 import { loadSounds } from './src/utils/SoundHelper';
+import { initializeCoreServices } from './src/services/servicesService';
 
 // شاشات البداية والأساسية
 import SplashScreen from './src/screens/SplashScreen';
@@ -24,8 +27,6 @@ import OrderTracking from './src/screens/customer/OrderTracking';
 import ServiceScreen from './src/screens/ServiceScreen';
 import ItemsServiceScreen from './src/screens/ItemsServiceScreen';
 import IroningScreen from './src/screens/IroningScreen';
-
-// شاشة المنتجات الجديدة
 import ServiceItemsScreen from './src/screens/ServiceItemsScreen';
 import ProductDetailsScreen from './src/screens/customer/ProductDetailsScreen';
 
@@ -60,6 +61,8 @@ import EshopScreen from './src/screens/EshopScreen';
 
 // شاشات الدخول
 import DriverLoginScreen from './src/screens/auth/DriverLoginScreen';
+import LoginScreen from './src/screens/auth/LoginScreen';
+import MerchantRegisterScreen from './src/screens/auth/MerchantRegisterScreen';
 
 // شاشات الأدمن
 import AdminHomeScreen from './src/screens/admin/AdminHomeScreen';
@@ -71,8 +74,6 @@ import ServicesManagementScreen from './src/screens/admin/ServicesManagementScre
 import AddServiceScreen from './src/screens/admin/AddServiceScreen';
 import AdminAssistantsScreen from './src/screens/admin/AdminAssistantsScreen';
 import EditServiceScreen from './src/screens/admin/EditServiceScreen';
-import ProvidersListScreen from './src/screens/ProvidersListScreen';
-import ProviderProductsScreen from './src/screens/ProviderProductsScreen';
 import ManageOffersScreen from './src/screens/admin/ManageOffersScreen';
 import ManageProductsScreen from './src/screens/admin/ManageProductsScreen';
 import ManageProductCategoriesScreen from './src/screens/admin/ManageProductCategoriesScreen';
@@ -81,7 +82,6 @@ import ManageRestaurantsScreen from './src/screens/admin/ManageRestaurantsScreen
 import AddRestaurantScreen from './src/screens/admin/AddRestaurantScreen';
 import EditRestaurantScreen from './src/screens/admin/EditRestaurantScreen';
 import ManagePlacesScreen from './src/screens/admin/ManagePlacesScreen';
-import ManageServiceItemsScreen from './src/screens/admin/ManageServiceItemsScreen';
 import ReviewDishesScreen from './src/screens/admin/ReviewDishesScreen';
 import ManageHomeChefsScreen from './src/screens/admin/ManageHomeChefsScreen';
 import AdminProductsReviewScreen from './src/screens/admin/AdminProductsReviewScreen';
@@ -90,9 +90,14 @@ import AdminProductsReviewScreen from './src/screens/admin/AdminProductsReviewSc
 import MerchantOrdersScreen from './src/screens/merchant/MerchantOrdersScreen';
 import MyProductsScreen from './src/screens/merchant/MyProductsScreen';
 import AddProductScreen from './src/screens/merchant/AddProductScreen';
+import OrderDetailsScreen from './src/screens/merchant/OrderDetailsScreen';
 
-// خدمات
-import { initializeCoreServices } from './src/services/servicesService';
+// شاشات التجار والمنتجات
+import ProvidersListScreen from './src/screens/ProvidersListScreen';
+import ProviderProductsScreen from './src/screens/ProviderProductsScreen';
+
+// شاشة تتبع الطلب للعميل
+import OrderTrackingScreen from './src/screens/customer/OrderTrackingScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -110,17 +115,17 @@ function CustomerStack() {
       <Stack.Screen name="HomeChefsScreen" component={HomeChefsScreen} />
       <Stack.Screen name="HomeChefDishesScreen" component={HomeChefDishesScreen} />
       <Stack.Screen name="DishDetails" component={DishDetailsScreen} />
-<Stack.Screen name="ProvidersListScreen" component={ProvidersListScreen} />
-<Stack.Screen name="ProviderProductsScreen" component={ProviderProductsScreen} />
       <Stack.Screen name="Cart" component={CartScreen} />
       <Stack.Screen name="AddHomeChefDishScreen" component={AddHomeChefDishScreen} />
       <Stack.Screen name="MyChefDishesScreen" component={HomeChefDishesScreen} />
       <Stack.Screen name="AddDishScreen" component={AddDishScreen} />
       <Stack.Screen name="MyDishesScreen" component={MyDishesScreen} />
       <Stack.Screen name="EditDishScreen" component={EditDishScreen} />
-      {/* 👇 شاشات المنتجات الجديدة داخل CustomerStack */}
       <Stack.Screen name="ServiceItemsScreen" component={ServiceItemsScreen} />
       <Stack.Screen name="ProductDetailsScreen" component={ProductDetailsScreen} />
+      <Stack.Screen name="ProvidersListScreen" component={ProvidersListScreen} />
+      <Stack.Screen name="ProviderProductsScreen" component={ProviderProductsScreen} />
+      <Stack.Screen name="OrderTrackingScreen" component={OrderTrackingScreen} />
     </Stack.Navigator>
   );
 }
@@ -166,25 +171,26 @@ function RootStack() {
       <Stack.Screen name="CustomerAuth" component={CustomerAuthScreen} />
       <Stack.Screen name="ServiceProvider" component={ServiceProviderScreen} />
       <Stack.Screen name="DriverLogin" component={DriverLoginScreen} />
+      <Stack.Screen name="LoginScreen" component={LoginScreen} />
+      <Stack.Screen name="MerchantRegister" component={MerchantRegisterScreen} />
       <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="MyOrders" component={MyOrdersScreen} />
 
       <Stack.Screen name="MerchantDashboard" component={MerchantDashboard} />
       <Stack.Screen name="MerchantOrdersScreen" component={MerchantOrdersScreen} />
+      <Stack.Screen name="OrderDetailsScreen" component={OrderDetailsScreen} />
       <Stack.Screen name="MyProductsScreen" component={MyProductsScreen} />
       <Stack.Screen name="AddProductScreen" component={AddProductScreen} />
 
       <Stack.Screen name="DriverDashboard" component={DriverDashboard} />
       <Stack.Screen name="DriverDeliveries" component={DriverDeliveriesScreen} />
-      <Stack.Screen name="OrderTracking" component={OrderTracking} />
 
+      <Stack.Screen name="OrderTracking" component={OrderTracking} />
       <Stack.Screen name="ItemsServiceScreen" component={ItemsServiceScreen} />
       <Stack.Screen name="IroningScreen" component={IroningScreen} />
-      {/* 👇 تم نقل ServiceItemsScreen من هنا إلى CustomerStack */}
-      {/* <Stack.Screen name="ServiceItemsScreen" component={ServiceItemsScreen} /> */}
-      {/* <Stack.Screen name="ProductDetailsScreen" component={ProductDetailsScreen} /> */}
-      <Stack.Screen name="ManageServiceItemsScreen" component={ManageServiceItemsScreen} />
+      <Stack.Screen name="ServiceItemsScreen" component={ServiceItemsScreen} />
+      <Stack.Screen name="ProductDetailsScreen" component={ProductDetailsScreen} />
       <Stack.Screen name="ManageLaundryItemsScreen" component={ManageLaundryItemsScreen} />
 
       <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
@@ -218,7 +224,11 @@ export default function App() {
     async function prepare() {
       try {
         await loadFonts();
+        console.log('✅ تم تحميل الخطوط');
+        
         await loadSounds();
+        console.log('✅ تم تحميل الأصوات');
+        
         console.log('🚀 بدء تهيئة الخدمات الأساسية...');
         await initializeCoreServices();
         console.log('✅ تم تهيئة الخدمات الأساسية');
@@ -228,6 +238,7 @@ export default function App() {
         setAppIsReady(true);
       }
     }
+
     prepare();
   }, []);
 
@@ -235,7 +246,9 @@ export default function App() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4F46E5" />
-        <Text style={styles.loadingText}>جاري تحميل التطبيق...</Text>
+        <Text style={[styles.loadingText, { fontFamily: fontFamily.arabic }]}>
+          جاري تحميل التطبيق...
+        </Text>
       </View>
     );
   }
@@ -259,9 +272,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 12,
     color: '#6B7280',
     fontSize: 14,
-    fontFamily: fontFamily.arabic,
   },
 });

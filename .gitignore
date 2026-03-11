@@ -62,3 +62,8 @@ secure_backup/
 .env
 .env
 .env.local
+.env
+secrets/
+*.keystore
+*.jks
+google-services.json

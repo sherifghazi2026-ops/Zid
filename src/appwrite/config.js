@@ -16,6 +16,9 @@ export const HOME_CHEF_DISHES_COLLECTION_ID = process.env.EXPO_PUBLIC_HOME_CHEF_
 export const ASSISTANTS_COLLECTION_ID = process.env.EXPO_PUBLIC_ASSISTANTS_COLLECTION_ID || 'assistants';
 export const BUCKET_ID = process.env.EXPO_PUBLIC_BUCKET_ID || 'files';
 
+// Service Items Collection
+export const SERVICE_ITEMS_COLLECTION_ID = 'serviceitems';
+
 // تهيئة العميل
 const client = new Client()
     .setEndpoint(APPWRITE_ENDPOINT)
@@ -31,3 +34,6 @@ console.log('✅ Appwrite initialized with:', {
   projectId: APPWRITE_PROJECT_ID,
   databaseId: DATABASE_ID
 });
+
+// Item Prices Collection (للأسعار المتعددة)
+export const ITEM_PRICES_COLLECTION_ID = 'item_prices';

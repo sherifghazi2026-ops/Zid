@@ -1,248 +1,210 @@
-import { databases, DATABASE_ID } from '../appwrite/config';
+import { databases, DATABASE_ID, SERVICE_ITEMS_COLLECTION_ID } from '../appwrite/config';
 import { ID, Query } from 'appwrite';
 
-// جلب منتجات خدمة معينة (مع فلتر اختياري)
-export const getItemsByService = async (collectionName, filters = {}) => {
+// جلب أصناف خدمة معينة
+export const getItemsByService = async (serviceId) => {
   try {
-    if (!collectionName) {
-      return { success: false, error: 'لا يوجد collection مخصص', data: [] };
-    }
-
-    const queries = [];
-    
-    if (filters.status) {
-      queries.push(Query.equal('status', filters.status));
-    }
-    
-    if (filters.isAvailable !== undefined) {
-      queries.push(Query.equal('isAvailable', filters.isAvailable));
-    }
-    
-    queries.push(Query.limit(100));
-
-    const response = await databases.listDocuments(
-      DATABASE_ID,
-      collectionName,
-      queries
-    );
-    
-    // إضافة collectionName لكل منتج
-    const productsWithCollection = response.documents.map(product => ({
-      ...product,
-      collectionName: collectionName
-    }));
-    
-    return { success: true, data: productsWithCollection };
-  } catch (error) {
-    console.error(`❌ خطأ في جلب المنتجات:`, error);
-    return { success: false, error: error.message, data: [] };
-  }
-};
-
-// جلب منتجات تاجر معين
-export const getItemsByProvider = async (collectionName, providerId) => {
-  try {
-    if (!collectionName) {
-      return { success: false, error: 'لا يوجد collection مخصص', data: [] };
+    if (!serviceId) {
+      return { success: false, error: 'serviceId مطلوب', data: [] };
     }
 
     const response = await databases.listDocuments(
       DATABASE_ID,
-      collectionName,
+      SERVICE_ITEMS_COLLECTION_ID,
       [
-        Query.equal('providerId', providerId),
+        Query.equal('serviceId', serviceId),
         Query.limit(100)
       ]
     );
     
-    const productsWithCollection = response.documents.map(product => ({
-      ...product,
-      collectionName: collectionName
-    }));
+    // تحويل النص المخزن إلى كائن إذا كان موجوداً
+    const processedData = response.documents.map(item => {
+      if (item.pricesData) {
+        try {
+          item.prices = JSON.parse(item.pricesData);
+        } catch (e) {
+          item.prices = [];
+        }
+      } else {
+        item.prices = [];
+      }
+      return item;
+    });
     
-    return { success: true, data: productsWithCollection };
+    return { success: true, data: processedData };
   } catch (error) {
-    console.error('❌ خطأ في جلب منتجات التاجر:', error);
+    console.error(`❌ خطأ في جلب الأصناف:`, error);
     return { success: false, error: error.message, data: [] };
   }
 };
 
-// جلب جميع المنتجات المعلقة (لأي خدمة)
-export const getAllPendingItems = async (collectionsList) => {
+// إنشاء صنف جديد
+export const createItem = async (serviceId, itemData) => {
   try {
-    let allPending = [];
+    if (!serviceId) {
+      return { success: false, error: 'serviceId مطلوب' };
+    }
+
+    console.log(`📦 إنشاء صنف للخدمة: ${serviceId}`);
+    console.log('📦 البيانات المستلمة:', JSON.stringify(itemData, null, 2));
+
+    // استخراج السعر الأول
+    let firstPrice = 0;
+    const pricesArray = [];
     
-    for (const collection of collectionsList) {
-      const result = await getItemsByService(collection, { status: 'pending' });
-      if (result.success && result.data.length > 0) {
-        allPending = [...allPending, ...result.data];
+    if (itemData.subServices) {
+      Object.entries(itemData.subServices).forEach(([subService, data]) => {
+        pricesArray.push({
+          subService: subService,
+          price: parseFloat(data.price || 0),
+          qty: parseInt(data.qty || 0)
+        });
+      });
+      
+      if (pricesArray.length > 0) {
+        firstPrice = pricesArray[0].price;
       }
     }
-    
-    return { success: true, data: allPending };
-  } catch (error) {
-    console.error('❌ خطأ في جلب المنتجات المعلقة:', error);
-    return { success: false, error: error.message, data: [] };
-  }
-};
 
-// جلب المنتجات المقبولة (للعملاء)
-export const getApprovedItems = async (collectionName) => {
-  try {
-    if (!collectionName) {
-      return { success: false, error: 'لا يوجد collection مخصص', data: [] };
-    }
+    // تحويل المصفوفة إلى نص JSON
+    const pricesDataString = JSON.stringify(pricesArray);
 
-    const response = await databases.listDocuments(
-      DATABASE_ID,
-      collectionName,
-      [
-        Query.equal('status', 'approved'),
-        Query.equal('isAvailable', true),
-        Query.limit(100)
-      ]
-    );
-    
-    const productsWithCollection = response.documents.map(product => ({
-      ...product,
-      collectionName: collectionName
-    }));
-    
-    return { success: true, data: productsWithCollection };
-  } catch (error) {
-    console.error('❌ خطأ في جلب المنتجات المقبولة:', error);
-    return { success: false, error: error.message, data: [] };
-  }
-};
-
-// إنشاء منتج جديد
-export const createItem = async (collectionName, itemData) => {
-  try {
-    if (!collectionName) {
-      return { success: false, error: 'collectionName مطلوب' };
-    }
-
-    console.log('📦 إنشاء منتج في collection:', collectionName);
-
-    let imagesArray = [];
-    if (itemData.images && Array.isArray(itemData.images)) {
-      imagesArray = itemData.images.map(url => {
-        if (url.length > 500) {
-          return url.substring(0, 500);
-        }
-        return url;
-      });
-    }
-
+    // ✅ استخدام الحقول الموجودة فقط في قاعدة البيانات
     const newItem = {
+      serviceId: serviceId,
       name: itemData.name,
-      price: Number(itemData.price),
-      description: itemData.description || '',
-      images: imagesArray,
-      providerId: itemData.providerId,
-      providerName: itemData.providerName,
-      providerType: itemData.providerType,
-      serviceId: itemData.serviceId,
-      status: 'pending',
-      isAvailable: itemData.isAvailable !== undefined ? itemData.isAvailable : true,
+      price: firstPrice,
+      imageUrl: itemData.imageUrl || null,
+      isActive: itemData.isAvailable !== undefined ? itemData.isAvailable : true,
+      pricesData: pricesDataString,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      // ❌ تم إزالة updatedAt - Appwrite يديره تلقائياً
     };
+
+    console.log('📦 البيانات المرسلة إلى Appwrite:', JSON.stringify(newItem, null, 2));
 
     const response = await databases.createDocument(
       DATABASE_ID,
-      collectionName,
+      SERVICE_ITEMS_COLLECTION_ID,
       ID.unique(),
       newItem
     );
 
+    // إضافة حقل prices للرد
+    response.prices = pricesArray;
+
     return { success: true, data: response };
   } catch (error) {
-    console.error('❌ خطأ في إنشاء المنتج:', error);
+    console.error('❌ خطأ في إنشاء الصنف:', error);
     return { success: false, error: error.message };
   }
 };
 
-// تحديث منتج
-export const updateItem = async (collectionName, itemId, updateData) => {
+// تحديث صنف
+export const updateItem = async (itemId, updateData) => {
   try {
+    console.log(`📦 تحديث صنف: ${itemId}`);
+    
+    // تحويل البيانات إلى مصفوفة
+    let firstPrice = 0;
+    const pricesArray = [];
+    
+    if (updateData.subServices) {
+      Object.entries(updateData.subServices).forEach(([subService, data]) => {
+        pricesArray.push({
+          subService: subService,
+          price: parseFloat(data.price || 0),
+          qty: parseInt(data.qty || 0)
+        });
+      });
+      
+      if (pricesArray.length > 0) {
+        firstPrice = pricesArray[0].price;
+      }
+    }
+
+    // تحويل المصفوفة إلى نص JSON
+    const pricesDataString = JSON.stringify(pricesArray);
+
+    // ✅ استخدام الحقول الموجودة فقط - بدون updatedAt
+    const updateFields = {
+      name: updateData.name,
+      price: firstPrice,
+      imageUrl: updateData.imageUrl || null,
+      isActive: updateData.isAvailable !== undefined ? updateData.isAvailable : true,
+      pricesData: pricesDataString,
+    };
+
+    // إزالة الحقول الفارغة
+    Object.keys(updateFields).forEach(key => {
+      if (updateFields[key] === undefined) {
+        delete updateFields[key];
+      }
+    });
+
+    console.log('📦 بيانات التحديث:', JSON.stringify(updateFields, null, 2));
+
     const response = await databases.updateDocument(
       DATABASE_ID,
-      collectionName,
+      SERVICE_ITEMS_COLLECTION_ID,
       itemId,
-      {
-        ...updateData,
-        updatedAt: new Date().toISOString()
-      }
+      updateFields
     );
+
+    // إضافة حقل prices للرد
+    response.prices = pricesArray;
+
     return { success: true, data: response };
   } catch (error) {
-    console.error('❌ خطأ في تحديث المنتج:', error);
+    console.error('❌ خطأ في تحديث الصنف:', error);
     return { success: false, error: error.message };
   }
 };
 
-// حذف منتج
-export const deleteItem = async (collectionName, itemId) => {
+// حذف صنف
+export const deleteItem = async (itemId) => {
   try {
     await databases.deleteDocument(
       DATABASE_ID,
-      collectionName,
+      SERVICE_ITEMS_COLLECTION_ID,
       itemId
     );
     return { success: true };
   } catch (error) {
-    console.error('❌ خطأ في حذف المنتج:', error);
+    console.error('❌ خطأ في حذف الصنف:', error);
     return { success: false, error: error.message };
   }
 };
 
-// مراجعة منتج (موافقة/رفض)
-export const reviewItem = async (collectionId, itemId, status, reviewNotes = '') => {
+// جلب الأصناف المتاحة للعملاء
+export const getAvailableItemsByService = async (serviceId) => {
   try {
-    if (!collectionId) {
-      console.error('❌ collectionId مطلوب');
-      return { success: false, error: 'collectionId مطلوب' };
-    }
-    
-    if (!itemId) {
-      console.error('❌ itemId مطلوب');
-      return { success: false, error: 'itemId مطلوب' };
-    }
-
-    console.log(`📝 مراجعة المنتج:`, { collectionId, itemId, status, reviewNotes });
-
-    // تحديث الحقول المطلوبة فقط
-    const updateData = {
-      status: status,
-      updatedAt: new Date().toISOString()
-    };
-
-    // إذا كانت موافقة، نخلي isAvailable = true
-    if (status === 'approved') {
-      updateData.isAvailable = true;
-    }
-    
-    // إضافة reviewNotes و reviewedAt لو موجودين
-    if (reviewNotes) {
-      updateData.reviewNotes = reviewNotes;
-    }
-    
-    // دايماً نضيف reviewedAt عند الرفض أو الموافقة
-    updateData.reviewedAt = new Date().toISOString();
-
-    console.log('📦 تحديث المنتج ببيانات:', updateData);
-
-    const response = await databases.updateDocument(
+    const response = await databases.listDocuments(
       DATABASE_ID,
-      collectionId,
-      itemId,
-      updateData
+      SERVICE_ITEMS_COLLECTION_ID,
+      [
+        Query.equal('serviceId', serviceId),
+        Query.equal('isActive', true),
+        Query.limit(100)
+      ]
     );
     
-    return { success: true, data: response };
+    // تحويل النص المخزن إلى كائن
+    const processedData = response.documents.map(item => {
+      if (item.pricesData) {
+        try {
+          item.prices = JSON.parse(item.pricesData);
+        } catch (e) {
+          item.prices = [];
+        }
+      } else {
+        item.prices = [];
+      }
+      return item;
+    });
+    
+    return { success: true, data: processedData };
   } catch (error) {
-    console.error('❌ خطأ في مراجعة المنتج:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message, data: [] };
   }
 };

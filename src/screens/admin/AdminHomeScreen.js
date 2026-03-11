@@ -7,25 +7,102 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { databases, DATABASE_ID } from '../../appwrite/config';
+import { COLLECTIONS } from '../../constants/collections';
+import { Query } from 'appwrite';
 import { getAllServices } from '../../services/servicesService';
-import { getAllAssistants } from '../../services/assistantService';
 
 export default function AdminHomeScreen({ navigation }) {
-  const [pendingProductsCount, setPendingProductsCount] = useState(0);
-  const [pendingAssistantsCount, setPendingAssistantsCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    users: 0,
+    todayOrders: 0,
+    services: 0,
+    pendingProducts: 0,
+    pendingAssistants: 0,
+    restaurants: 0,
+    homeChefs: 0,
+  });
 
   useEffect(() => {
-    loadCounts();
+    loadStats();
   }, []);
 
-  const loadCounts = async () => {
-    // هنا هتجيب عدد المنتجات المعلقة من كل خدمة
-    // حالياً هنخليها 0 مؤقتاً
-    setPendingProductsCount(0);
-    setPendingAssistantsCount(0);
+  const loadStats = async () => {
+    setLoading(true);
+    try {
+      // جلب عدد المستخدمين
+      const usersRes = await databases.listDocuments(
+        DATABASE_ID,
+        COLLECTIONS.USERS,
+        [Query.limit(1)]
+      );
+
+      // جلب عدد طلبات اليوم
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const ordersRes = await databases.listDocuments(
+        DATABASE_ID,
+        COLLECTIONS.ORDERS,
+        [
+          Query.greaterThan('createdAt', today.toISOString()),
+          Query.limit(1)
+        ]
+      );
+
+      // جلب عدد الخدمات
+      const servicesRes = await databases.listDocuments(
+        DATABASE_ID,
+        COLLECTIONS.SERVICES,
+        [Query.limit(1)]
+      );
+
+      // جلب عدد المطاعم
+      const restaurantsRes = await databases.listDocuments(
+        DATABASE_ID,
+        COLLECTIONS.RESTAURANTS,
+        [Query.limit(1)]
+      );
+
+      // جلب عدد شيفات المنزل
+      const chefsRes = await databases.listDocuments(
+        DATABASE_ID,
+        COLLECTIONS.HOME_CHEFS,
+        [Query.limit(1)]
+      );
+
+      // جلب المنتجات المعلقة (لو عندك collection للمنتجات)
+      let pendingProducts = 0;
+      try {
+        const productsRes = await databases.listDocuments(
+          DATABASE_ID,
+          COLLECTIONS.PRODUCTS,
+          [Query.equal('status', 'pending'), Query.limit(1)]
+        );
+        pendingProducts = productsRes.total || 0;
+      } catch (e) {
+        console.log('لا يوجد collection للمنتجات');
+      }
+
+      setStats({
+        users: usersRes.total || 0,
+        todayOrders: ordersRes.total || 0,
+        services: servicesRes.total || 0,
+        pendingProducts: pendingProducts,
+        pendingAssistants: 0,
+        restaurants: restaurantsRes.total || 0,
+        homeChefs: chefsRes.total || 0,
+      });
+    } catch (error) {
+      console.error('خطأ في تحميل الإحصائيات:', error);
+      Alert.alert('خطأ', 'فشل في تحميل الإحصائيات');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -55,42 +132,42 @@ export default function AdminHomeScreen({ navigation }) {
       color: '#4F46E5',
       title: 'إدارة المستخدمين',
       screen: 'UserManagement',
-      count: 0
+      count: stats.users
     },
     {
       icon: 'cart',
       color: '#F59E0B',
       title: 'الطلبات',
       screen: 'AdminOrders',
-      count: 0
+      count: stats.todayOrders
     },
     {
       icon: 'apps',
       color: '#10B981',
       title: 'إدارة الخدمات',
       screen: 'ServicesManagement',
-      count: 0
+      count: stats.services
     },
     {
       icon: 'checkmark-done-circle',
       color: '#10B981',
       title: 'مراجعة المنتجات',
       screen: 'AdminProductsReview',
-      count: pendingProductsCount
+      count: stats.pendingProducts
     },
     {
       icon: 'restaurant',
       color: '#EF4444',
       title: 'إدارة المطاعم',
       screen: 'ManageRestaurants',
-      count: 0
+      count: stats.restaurants
     },
     {
       icon: 'home',
       color: '#8B5CF6',
       title: 'إدارة الشيفات',
       screen: 'ManageHomeChefs',
-      count: 0
+      count: stats.homeChefs
     },
     {
       icon: 'pricetag',
@@ -111,7 +188,7 @@ export default function AdminHomeScreen({ navigation }) {
       color: '#8B5CF6',
       title: 'المساعدين',
       screen: 'AdminAssistants',
-      count: pendingAssistantsCount
+      count: stats.pendingAssistants
     },
     {
       icon: 'location',
@@ -136,6 +213,15 @@ export default function AdminHomeScreen({ navigation }) {
     }
   ];
 
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4F46E5" />
+        <Text style={styles.loadingText}>جاري تحميل الإحصائيات...</Text>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -143,23 +229,28 @@ export default function AdminHomeScreen({ navigation }) {
           <Text style={styles.welcome}>لوحة التحكم</Text>
           <Text style={styles.subtitle}>مرحباً بك في لوحة إدارة النظام</Text>
         </View>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Ionicons name="log-out-outline" size={24} color="#EF4444" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={loadStats} style={styles.refreshButton}>
+            <Ionicons name="refresh" size={22} color="#4F46E5" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <Ionicons name="log-out-outline" size={24} color="#EF4444" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.statsContainer}>
           <View style={[styles.statCard, { backgroundColor: '#EEF2FF' }]}>
-            <Text style={styles.statNumber}>12</Text>
+            <Text style={styles.statNumber}>{stats.users}</Text>
             <Text style={styles.statLabel}>المستخدمين</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: '#FEF3C7' }]}>
-            <Text style={styles.statNumber}>5</Text>
-            <Text style={styles.statLabel}>الطلبات اليوم</Text>
+            <Text style={styles.statNumber}>{stats.todayOrders}</Text>
+            <Text style={styles.statLabel}>طلبات اليوم</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: '#D1FAE5' }]}>
-            <Text style={styles.statNumber}>8</Text>
+            <Text style={styles.statNumber}>{stats.services}</Text>
             <Text style={styles.statLabel}>الخدمات</Text>
           </View>
         </View>
@@ -195,6 +286,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -213,6 +314,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  refreshButton: {
+    padding: 8,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 8,
   },
   logoutButton: {
     padding: 8,

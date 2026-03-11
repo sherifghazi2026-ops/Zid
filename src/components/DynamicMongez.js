@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
 import MongezChat, { MongezButton } from './Mongez';
 import { getAssistantsForScreen } from '../services/assistantService';
@@ -7,21 +7,51 @@ export default function DynamicMongez({ screen, navigation, contextData = {} }) 
   const [assistants, setAssistants] = useState([]);
   const [selectedAssistant, setSelectedAssistant] = useState(null);
   const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
+  const screenRef = useRef(screen);
+  const loadedRef = useRef(false);
 
   useEffect(() => {
-    loadAssistants();
-  }, [screen]);
+    mountedRef.current = true;
+    
+    // تحميل المساعدين مرة واحدة فقط
+    if (!loadedRef.current) {
+      loadAssistants();
+    }
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []); // مصفوفة فارغة - يشتغل مرة واحدة فقط عند تحميل المكون
+
+  // لا نستخدم useEffect مع screen لأننا لا نريد إعادة التحميل
 
   const loadAssistants = async () => {
+    if (!mountedRef.current || loadedRef.current) return;
+    
     setLoading(true);
     
-    // نجيب المساعدين للشاشة الحالية
-    const result = await getAssistantsForScreen(screen);
-    if (result.success) {
-      setAssistants(result.data);
+    try {
+      const result = await getAssistantsForScreen(screen);
+      
+      if (!mountedRef.current) return;
+      
+      if (result.success) {
+        setAssistants(result.data);
+        loadedRef.current = true; // نضع علامة أنه تم التحميل
+      } else {
+        setAssistants([]);
+      }
+    } catch (error) {
+      console.log('خطأ في تحميل المساعدين:', error);
+      if (mountedRef.current) {
+        setAssistants([]);
+      }
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
-    
-    setLoading(false);
   };
 
   const openAssistant = (assistant) => {
@@ -52,7 +82,7 @@ export default function DynamicMongez({ screen, navigation, contextData = {} }) 
 
   return (
     <>
-      {Object.entries(buttonsByPosition).map(([position, positionAssistants]) => 
+      {Object.entries(buttonsByPosition).map(([position, positionAssistants]) =>
         positionAssistants.length > 0 && (
           <View key={position} style={[styles.container, styles[position]]}>
             {positionAssistants.map((assistant, index) => (

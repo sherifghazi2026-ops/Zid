@@ -1,0 +1,62 @@
+name: Build Android App
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # إنشاء ملف .env من الـ secrets
+      - name: Create .env file
+        run: |
+          echo "EXPO_PUBLIC_APPWRITE_ENDPOINT=${{ secrets.EXPO_PUBLIC_APPWRITE_ENDPOINT }}" >> .env
+          echo "EXPO_PUBLIC_APPWRITE_PROJECT_ID=${{ secrets.EXPO_PUBLIC_APPWRITE_PROJECT_ID }}" >> .env
+          echo "EXPO_PUBLIC_DATABASE_ID=${{ secrets.EXPO_PUBLIC_DATABASE_ID }}" >> .env
+          echo "EXPO_PUBLIC_USERS_COLLECTION_ID=users" >> .env
+          echo "EXPO_PUBLIC_ORDERS_COLLECTION_ID=orders" >> .env
+          echo "EXPO_PUBLIC_SERVICES_COLLECTION_ID=services" >> .env
+          echo "EXPO_PUBLIC_RESTAURANTS_COLLECTION_ID=restaurants" >> .env
+          echo "EXPO_PUBLIC_DISHES_COLLECTION_ID=dishes" >> .env
+          echo "EXPO_PUBLIC_HOME_CHEF_DISHES_COLLECTION_ID=home_chef_dishes" >> .env
+          echo "EXPO_PUBLIC_BUCKET_ID=files" >> .env
+          echo "EXPO_PUBLIC_ASSISTANTS_COLLECTION_ID=assistants" >> .env
+          echo "EXPO_PUBLIC_GEMINI_API_KEY=${{ secrets.EXPO_PUBLIC_GEMINI_API_KEY }}" >> .env
+          echo "EXPO_PUBLIC_GEMINI_MODEL=gemini-1.5-flash" >> .env
+          echo "EXPO_PUBLIC_GROQ_API_KEY=${{ secrets.EXPO_PUBLIC_GROQ_API_KEY }}" >> .env
+          echo "EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY=${{ secrets.EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY }}" >> .env
+          echo "EXPO_PUBLIC_IMAGEKIT_PRIVATE_KEY=${{ secrets.EXPO_PUBLIC_IMAGEKIT_PRIVATE_KEY }}" >> .env
+          echo "EXPO_PUBLIC_IMAGEKIT_ENDPOINT=${{ secrets.EXPO_PUBLIC_IMAGEKIT_ENDPOINT }}" >> .env
+          echo "EXPO_PUBLIC_TELEGRAM_BOT_TOKEN=${{ secrets.EXPO_PUBLIC_TELEGRAM_BOT_TOKEN }}" >> .env
+          echo "EXPO_PUBLIC_TELEGRAM_CHAT_ID=${{ secrets.EXPO_PUBLIC_TELEGRAM_CHAT_ID }}" >> .env
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Android app
+        run: eas build -p android --profile preview --non-interactive
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-release
+          path: |
+            *.apk
+            *.aab

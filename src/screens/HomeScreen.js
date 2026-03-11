@@ -37,12 +37,35 @@ const appIcon = require('../../assets/icons/ZidiconSP.png');
 const restaurantImage = require('../../assets/icons/restaurant-8k.png');
 const chefImage = require('../../assets/icons/Chef.png');
 
+// تعريف التصنيفات وترتيبها
+const CATEGORY_ORDER = {
+  'express': 1,
+  'pro': 2,
+  'ai': 3,
+  'other': 4
+};
+
+const CATEGORY_TITLES = {
+  'express': 'Zid Express',
+  'pro': 'Zid Pro',
+  'ai': 'خدمات AI',
+  'other': 'خدمات أخرى'
+};
+
+const CATEGORY_COLORS = {
+  'express': '#F59E0B',
+  'pro': '#3B82F6',
+  'ai': '#8B5CF6',
+  'other': '#6B7280'
+};
+
 export default function HomeScreen({ navigation }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userData, setUserData] = useState(null);
   const [userPhone, setUserPhone] = useState('');
   const [activeOrders, setActiveOrders] = useState([]);
   const [services, setServices] = useState([]);
+  const [groupedServices, setGroupedServices] = useState({});
   const [chefsCount, setChefsCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -92,6 +115,7 @@ export default function HomeScreen({ navigation }) {
     if (result.success) {
       console.log('✅ تم جلب', result.data.length, 'خدمة');
 
+      // ترتيب الخدمات حسب الطلب
       const sortedServices = result.data.sort((a, b) => {
         if (a.isActive && !b.isActive) return -1;
         if (!a.isActive && b.isActive) return 1;
@@ -99,6 +123,18 @@ export default function HomeScreen({ navigation }) {
       });
 
       setServices(sortedServices);
+      
+      // تجميع الخدمات حسب التصنيف
+      const grouped = {};
+      sortedServices.forEach(service => {
+        const category = service.category || 'other';
+        if (!grouped[category]) {
+          grouped[category] = [];
+        }
+        grouped[category].push(service);
+      });
+      
+      setGroupedServices(grouped);
     } else {
       console.log('❌ فشل جلب الخدمات:', result.error);
     }
@@ -166,7 +202,7 @@ export default function HomeScreen({ navigation }) {
       navigation.navigate('HomeChefsScreen');
     }
     // الخدمات الجديدة ذات المنتجات (مثل milk, bakery, drinks)
-    else if (service.hasItems && service.itemsCollection) {
+    else if (service.hasItems && service.itemsCollection && service.type === 'items') {
       console.log('📦 توجيه إلى ProvidersListScreen:', service.name);
       navigation.navigate('ProvidersListScreen', {
         serviceId: service.id,
@@ -175,7 +211,7 @@ export default function HomeScreen({ navigation }) {
       });
     }
     // الخدمات القديمة اللي ليها أصناف (مثل مكوجي)
-    else if (service.hasItems) {
+    else if (service.hasItems && service.type === 'items_service') {
       navigation.navigate('ItemsServiceScreen', {
         serviceId: service.id,
         serviceName: service.name,
@@ -252,7 +288,8 @@ export default function HomeScreen({ navigation }) {
     return service.type === 'ai' || service.id === 'restaurant' || service.id === 'home_chef';
   };
 
-  const renderServices = () => {
+  // عرض الخدمات حسب التصنيف
+  const renderServicesByCategory = () => {
     if (services.length === 0) {
       return (
         <View style={styles.emptyContainer}>
@@ -265,89 +302,110 @@ export default function HomeScreen({ navigation }) {
       );
     }
 
+    // ترتيب التصنيفات
+    const sortedCategories = Object.keys(groupedServices).sort((a, b) => {
+      return (CATEGORY_ORDER[a] || 999) - (CATEGORY_ORDER[b] || 999);
+    });
+
     return (
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View style={[styles.sectionIcon, { backgroundColor: '#F59E0B20' }]}>
-            <Ionicons name="rocket-outline" size={24} color="#F59E0B" />
-          </View>
-          <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>Zid Express</Text>
-          <View style={styles.aiBadge}>
-            <Ionicons name="flash" size={12} color="#FFF" />
-            <Text style={[styles.aiBadgeText, { fontFamily: fontFamily.arabic }]}>AI</Text>
-          </View>
-        </View>
+      <>
+        {sortedCategories.map(category => {
+          const categoryServices = groupedServices[category];
+          if (!categoryServices || categoryServices.length === 0) return null;
+          
+          const categoryColor = CATEGORY_COLORS[category] || '#6B7280';
+          const categoryTitle = CATEGORY_TITLES[category] || category;
 
-        <View style={styles.grid}>
-          {services.map((service) => {
-            const key = service.$id ? service.$id : service.id;
-            const serviceImage = getServiceImage(service);
-            const isActive = service.isActive === true;
-            const isAI = isAIService(service);
-
-            return (
-              <TouchableOpacity
-                key={key}
-                style={[
-                  styles.card,
-                  { width: CARD_SIZE },
-                  !isActive && styles.disabledCard
-                ]}
-                onPress={() => navigateToService(service)}
-                activeOpacity={0.8}
-                disabled={!isActive}
-              >
-                {serviceImage ? (
-                  <Image
-                    source={serviceImage}
-                    style={[
-                      styles.cardImage,
-                      !isActive && styles.disabledImage
-                    ]}
-                  />
-                ) : (
-                  <View style={[
-                    styles.cardImage,
-                    styles.placeholderImage,
-                    { backgroundColor: (service.color || '#6B7280') + (isActive ? '30' : '15') }
-                  ]}>
-                    <Ionicons
-                      name={service.icon || 'apps-outline'}
-                      size={40}
-                      color={(service.color || '#6B7280') + (isActive ? '' : '80')}
-                    />
+          return (
+            <View key={category} style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={[styles.sectionIcon, { backgroundColor: categoryColor + '20' }]}>
+                  <Ionicons name="apps-outline" size={24} color={categoryColor} />
+                </View>
+                <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic, color: categoryColor }]}>
+                  {categoryTitle}
+                </Text>
+                {category === 'ai' && (
+                  <View style={styles.aiBadge}>
+                    <Ionicons name="flash" size={12} color="#FFF" />
+                    <Text style={[styles.aiBadgeText, { fontFamily: fontFamily.arabic }]}>AI</Text>
                   </View>
                 )}
-                <View style={[
-                  styles.overlay,
-                  !isActive && styles.disabledOverlay
-                ]}>
-                  <Text style={[
-                    styles.cardTitle,
-                    { fontFamily: fontFamily.arabic },
-                    !isActive && styles.disabledCardTitle
-                  ]}>{service.name}</Text>
+              </View>
 
-                  {isActive && isAI && (
-                    <View style={styles.cardAIBadge}>
-                      <Ionicons name="flash" size={10} color="#FFF" />
-                      <Text style={[styles.cardAIBadgeText, { fontFamily: fontFamily.arabic }]}>AI</Text>
-                    </View>
-                  )}
+              <View style={styles.grid}>
+                {categoryServices.map((service) => {
+                  const key = service.$id ? service.$id : service.id;
+                  const serviceImage = getServiceImage(service);
+                  const isActive = service.isActive === true;
+                  const isAI = isAIService(service);
 
-                  {!isActive && (
-                    <View style={styles.maintenanceBadge}>
-                      <Text style={[styles.maintenanceText, { fontFamily: fontFamily.arabic }]}>
-                        {service.maintenanceText || 'غير متاح'}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={[
+                        styles.card,
+                        { width: CARD_SIZE },
+                        !isActive && styles.disabledCard
+                      ]}
+                      onPress={() => navigateToService(service)}
+                      activeOpacity={0.8}
+                      disabled={!isActive}
+                    >
+                      {serviceImage ? (
+                        <Image
+                          source={serviceImage}
+                          style={[
+                            styles.cardImage,
+                            !isActive && styles.disabledImage
+                          ]}
+                        />
+                      ) : (
+                        <View style={[
+                          styles.cardImage,
+                          styles.placeholderImage,
+                          { backgroundColor: (service.color || categoryColor) + (isActive ? '30' : '15') }
+                        ]}>
+                          <Ionicons
+                            name={service.icon || 'apps-outline'}
+                            size={40}
+                            color={(service.color || categoryColor) + (isActive ? '' : '80')}
+                          />
+                        </View>
+                      )}
+                      <View style={[
+                        styles.overlay,
+                        !isActive && styles.disabledOverlay
+                      ]}>
+                        <Text style={[
+                          styles.cardTitle,
+                          { fontFamily: fontFamily.arabic },
+                          !isActive && styles.disabledCardTitle
+                        ]}>{service.name}</Text>
+
+                        {isActive && isAI && (
+                          <View style={styles.cardAIBadge}>
+                            <Ionicons name="flash" size={10} color="#FFF" />
+                            <Text style={[styles.cardAIBadgeText, { fontFamily: fontFamily.arabic }]}>AI</Text>
+                          </View>
+                        )}
+
+                        {!isActive && (
+                          <View style={styles.maintenanceBadge}>
+                            <Text style={[styles.maintenanceText, { fontFamily: fontFamily.arabic }]}>
+                              {service.maintenanceText || 'غير متاح'}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
+      </>
     );
   };
 
@@ -426,7 +484,7 @@ export default function HomeScreen({ navigation }) {
       )}
 
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} contentContainerStyle={styles.content}>
-        {renderServices()}
+        {renderServicesByCategory()}
         <View style={{ height: 80 }} />
       </ScrollView>
 
