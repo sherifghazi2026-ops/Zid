@@ -67,3 +67,4 @@ secrets/
 *.keystore
 *.jks
 google-services.json
+add-*-secrets.sh
