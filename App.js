@@ -9,6 +9,7 @@ import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { CartProvider } from './src/context/CartContext';
+import { TermsProvider } from './src/context/TermsContext';
 import { loadFonts, fontFamily } from './src/utils/fonts';
 import { loadSounds, cleanup } from './src/utils/SoundHelper';
 import { initializeCoreServices } from './src/services/servicesService';
@@ -87,7 +88,7 @@ import ReviewDishesScreen from './src/screens/admin/ReviewDishesScreen';
 import ManageHomeChefsScreen from './src/screens/admin/ManageHomeChefsScreen';
 import AdminProductsReviewScreen from './src/screens/admin/AdminProductsReviewScreen';
 
-// ✅ شاشات جديدة (بالمسارات الصحيحة)
+// شاشات جديدة
 import TermsScreen from './src/screens/TermsScreen';
 import VerificationRequestsScreen from './src/screens/admin/VerificationRequestsScreen';
 import RateOrderScreen from './src/screens/customer/RateOrderScreen';
@@ -221,7 +222,7 @@ function RootStack() {
       <Stack.Screen name="ManageHomeChefs" component={ManageHomeChefsScreen} />
       <Stack.Screen name="AdminProductsReview" component={AdminProductsReviewScreen} />
 
-      {/* الشاشات الجديدة - بالمسارات الصحيحة */}
+      {/* الشاشات الجديدة */}
       <Stack.Screen name="TermsScreen" component={TermsScreen} />
       <Stack.Screen name="VerificationRequestsScreen" component={VerificationRequestsScreen} />
       <Stack.Screen name="RateOrderScreen" component={RateOrderScreen} />
@@ -280,11 +281,13 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <CartProvider>
-        <NavigationContainer>
-          <RootStack />
-        </NavigationContainer>
-      </CartProvider>
+      <TermsProvider>
+        <CartProvider>
+          <NavigationContainer>
+            <RootStack />
+          </NavigationContainer>
+        </CartProvider>
+      </TermsProvider>
     </SafeAreaProvider>
   );
 }

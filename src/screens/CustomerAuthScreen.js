@@ -19,6 +19,9 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { databases, DATABASE_ID, USERS_COLLECTION_ID } from '../appwrite/config';
 import { ID, Query } from 'appwrite';
+import Checkbox from 'expo-checkbox';
+import { acceptTerms } from '../appwrite/userService';
+import { useTerms } from '../context/TermsContext';
 import CustomDrawer from '../components/CustomDrawer';
 
 const appIcon = require('../../assets/icons/Zidicon.png');
@@ -33,6 +36,9 @@ export default function CustomerAuthScreen({ navigation }) {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [userData, setUserData] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  
+  // استخدام Context للشروط
+  const { termsAccepted, acceptTerms } = useTerms();
 
   useEffect(() => {
     loadSavedData();
@@ -110,6 +116,11 @@ export default function CustomerAuthScreen({ navigation }) {
       return;
     }
 
+    if (!termsAccepted) {
+      Alert.alert('تنبيه', 'يجب الموافقة على شروط الاستخدام');
+      return;
+    }
+
     setLoading(true);
     try {
       const existing = await databases.listDocuments(
@@ -132,6 +143,7 @@ export default function CustomerAuthScreen({ navigation }) {
         active: true,
         profileCompleted: true,
         createdAt: new Date().toISOString(),
+        termsAccepted: false,
       };
 
       const response = await databases.createDocument(
@@ -140,6 +152,9 @@ export default function CustomerAuthScreen({ navigation }) {
         ID.unique(),
         userData
       );
+
+      // تسجيل الموافقة على الشروط
+      await acceptTerms(response.$id);
 
       await AsyncStorage.setItem('userData', JSON.stringify(response));
       await AsyncStorage.setItem('userRole', 'customer');
@@ -239,6 +254,22 @@ export default function CustomerAuthScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
+            {/* الموافقة على الشروط (تظهر فقط في وضع التسجيل) */}
+            {!isLogin && (
+              <View style={styles.termsRow}>
+                <Checkbox
+                  value={termsAccepted}
+                  onValueChange={acceptTerms}
+                  color={termsAccepted ? '#4F46E5' : undefined}
+                />
+                <TouchableOpacity onPress={() => navigation.navigate('TermsScreen')}>
+                  <Text style={styles.termsText}>
+                    أوافق على <Text style={styles.termsLink}>شروط الاستخدام</Text>
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <TouchableOpacity
               style={styles.primaryButton}
               onPress={isLogin ? handleLogin : handleRegister}
@@ -258,11 +289,6 @@ export default function CustomerAuthScreen({ navigation }) {
                 {isLogin ? 'ليس لديك حساب؟ سجل الآن' : 'لديك حساب؟ سجل دخول'}
               </Text>
             </TouchableOpacity>
-
-            {/* ✅ تم إزالة visitorButton من هنا - سيكون في الـ Drawer فقط */}
-
-            {/* ❌ تم إزالة providerSection بالكامل */}
-            {/* ❌ تم إزالة footer بالكامل */}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -290,7 +316,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  // زر القائمة في أعلى اليسار
   menuButton: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 80 : 40,
@@ -307,9 +332,8 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
     paddingTop: 20,
-    paddingBottom: 40, // إضافة مساحة سفلية بسيطة
+    paddingBottom: 40,
   },
-  // شعار مرفوع لأعلى
   logoContainer: {
     alignItems: 'center',
     marginTop: 0,
@@ -355,6 +379,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1F2937',
   },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  termsText: {
+    fontSize: 14,
+    color: '#4B5563',
+  },
+  termsLink: {
+    color: '#4F46E5',
+    textDecorationLine: 'underline',
+  },
   primaryButton: {
     backgroundColor: '#4F46E5',
     padding: 16,
@@ -370,14 +408,13 @@ const styles = StyleSheet.create({
   switchButton: {
     alignItems: 'center',
     marginVertical: 10,
-    marginBottom: 20, // مسافة بعد الرابط
+    marginBottom: 20,
   },
   switchText: {
     color: '#4F46E5',
     fontSize: 14,
     fontWeight: '500',
   },
-  // ❌ تم إزالة visitorButton, providerSection, footer
   drawerOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
