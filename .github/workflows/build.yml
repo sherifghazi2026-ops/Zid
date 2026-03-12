@@ -1,4 +1,4 @@
-name: Build Android App
+name: Build Android App (Debug)
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22  # ✅ تغيير نهائي من 18.x إلى 22
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -30,19 +30,19 @@ jobs:
       - name: Install EAS CLI globally
         run: npm install -g eas-cli
 
-      - name: Build Android app
-        run: eas build -p android --profile preview --non-interactive --local
+      # ✅ بناء نسخة DEBUG بدلاً من RELEASE
+      - name: Build Android app (Debug)
+        run: eas build -p android --profile development --non-interactive --local
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
+          name: app-debug
           path: |
             *.apk
             *.aab
             build-*.apk
-            app-release.apk
-            android/app/build/outputs/apk/release/*.apk
-            android/app/build/outputs/bundle/release/*.aab
+            app-debug.apk
+            android/app/build/outputs/apk/debug/*.apk
