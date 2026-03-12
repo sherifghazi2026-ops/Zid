@@ -3,9 +3,28 @@ import { ID, Query } from 'appwrite';
 
 export const PLACES_COLLECTION_ID = 'places';
 
-/**
- * جلب جميع الأماكن حسب النوع
- */
+// دالة تهيئة الـ Collection (شغلها مرة واحدة)
+export const initializePlacesCollection = async () => {
+  try {
+    // محاولة جلب الأماكن - إذا نجح، الـ Collection موجود
+    await databases.listDocuments(DATABASE_ID, PLACES_COLLECTION_ID, [Query.limit(1)]);
+    console.log('✅ Collection "places" موجود بالفعل');
+    return true;
+  } catch (error) {
+    if (error.message.includes('not found')) {
+      console.log('⚠️ Collection "places" غير موجود. يرجى إنشاؤه يدوياً من Appwrite Console.');
+      Alert.alert(
+        'تنبيه',
+        'الرجاء إنشاء Collection "places" في Appwrite Console أولاً.',
+        [{ text: 'حسناً' }]
+      );
+      return false;
+    }
+    return false;
+  }
+};
+
+// جلب جميع الأماكن حسب النوع
 export const getPlacesByType = async (type) => {
   try {
     const response = await databases.listDocuments(
@@ -23,12 +42,9 @@ export const getPlacesByType = async (type) => {
   }
 };
 
-/**
- * جلب الأماكن المتاحة (غير مرتبطة بتاجر)
- */
+// جلب الأماكن المتاحة (غير مرتبطة بتاجر)
 export const getAvailablePlacesByType = async (type) => {
   try {
-    // جلب الأماكن اللي مش مرتبطة بتاجر (merchantId غير موجود أو فارغ)
     const response = await databases.listDocuments(
       DATABASE_ID,
       PLACES_COLLECTION_ID,
@@ -48,9 +64,7 @@ export const getAvailablePlacesByType = async (type) => {
   }
 };
 
-/**
- * جلب مكان معين
- */
+// جلب مكان معين
 export const getPlaceById = async (placeId) => {
   try {
     const response = await databases.getDocument(
@@ -65,9 +79,7 @@ export const getPlaceById = async (placeId) => {
   }
 };
 
-/**
- * إنشاء مكان جديد
- */
+// إنشاء مكان جديد
 export const createPlace = async (placeData) => {
   try {
     const newPlace = {
@@ -95,9 +107,7 @@ export const createPlace = async (placeData) => {
   }
 };
 
-/**
- * تحديث مكان
- */
+// تحديث مكان
 export const updatePlace = async (placeId, updateData) => {
   try {
     const response = await databases.updateDocument(
@@ -113,9 +123,7 @@ export const updatePlace = async (placeId, updateData) => {
   }
 };
 
-/**
- * حذف مكان
- */
+// حذف مكان
 export const deletePlace = async (placeId) => {
   try {
     await databases.deleteDocument(
@@ -130,9 +138,7 @@ export const deletePlace = async (placeId) => {
   }
 };
 
-/**
- * تعيين تاجر لمكان
- */
+// تعيين تاجر لمكان
 export const assignMerchantToPlace = async (placeId, merchantId, merchantName) => {
   try {
     const response = await databases.updateDocument(
@@ -152,9 +158,7 @@ export const assignMerchantToPlace = async (placeId, merchantId, merchantName) =
   }
 };
 
-/**
- * جلب جميع الأماكن (للمشرف)
- */
+// جلب جميع الأماكن (للمشرف)
 export const getAllPlaces = async () => {
   try {
     const response = await databases.listDocuments(

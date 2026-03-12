@@ -72,6 +72,7 @@ const HomeScreen = ({ navigation }) => {
   const [adminModalVisible, setAdminModalVisible] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [showActiveOrders, setShowActiveOrders] = useState(true);
+  const [userRole, setUserRole] = useState(null);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -100,11 +101,14 @@ const HomeScreen = ({ navigation }) => {
   const checkLoginStatus = async () => {
     const data = await AsyncStorage.getItem('userData');
     const phone = await AsyncStorage.getItem('userPhone');
+    const role = await AsyncStorage.getItem('userRole');
+    
     if (data) {
       setUserData(JSON.parse(data));
       setIsLoggedIn(true);
     }
     if (phone) setUserPhone(phone || '');
+    if (role) setUserRole(role);
   };
 
   const loadServices = async () => {
@@ -172,13 +176,11 @@ const HomeScreen = ({ navigation }) => {
     if (!isLoggedIn || !userPhone) return;
     setLoading(true);
     try {
-      // الطلبات النشطة (غير المكتملة)
       const activeResult = await getOrders({
         customerPhone: userPhone,
         status: [ORDER_STATUS.PENDING, ORDER_STATUS.ACCEPTED, ORDER_STATUS.PREPARING, ORDER_STATUS.READY, ORDER_STATUS.DRIVER_ASSIGNED, ORDER_STATUS.ON_THE_WAY]
       });
       
-      // الطلبات المكتملة (تم التوصيل)
       const completedResult = await getOrders({
         customerPhone: userPhone,
         status: ORDER_STATUS.DELIVERED
@@ -201,11 +203,26 @@ const HomeScreen = ({ navigation }) => {
   const onRefresh = () => {
     setRefreshing(true);
     loadServices();
-    fetchAllOrders();
+    if (isLoggedIn) {
+      fetchAllOrders();
+    }
     loadChefsCount();
   };
 
   const navigateToService = (service) => {
+    // ✅ التحقق من تسجيل الدخول أولاً
+    if (!isLoggedIn) {
+      Alert.alert(
+        'تنبيه',
+        'يجب تسجيل الدخول أولاً لاستخدام الخدمات',
+        [
+          { text: 'إلغاء', style: 'cancel' },
+          { text: 'تسجيل الدخول', onPress: () => navigation.navigate('CustomerAuth') }
+        ]
+      );
+      return;
+    }
+
     if (!service.isActive) {
       Alert.alert('تنبيه', service.maintenanceText || 'هذه الخدمة غير متاحة حالياً');
       return;
@@ -513,7 +530,7 @@ const HomeScreen = ({ navigation }) => {
         </View>
       )}
 
-      {/* الطلبات النشطة */}
+      {/* الطلبات النشطة - تظهر فقط للمستخدمين المسجلين */}
       {isLoggedIn && activeOrders.length > 0 && (
         <View style={styles.ordersSection}>
           <View style={styles.ordersHeader}>
@@ -531,7 +548,7 @@ const HomeScreen = ({ navigation }) => {
         </View>
       )}
 
-      {/* الطلبات المكتملة */}
+      {/* الطلبات المكتملة - تظهر فقط للمستخدمين المسجلين */}
       {isLoggedIn && completedOrders.length > 0 && (
         <View style={styles.completedOrdersSection}>
           <Text style={[styles.completedOrdersTitle, { fontFamily: fontFamily.arabic }]}>الطلبات السابقة</Text>

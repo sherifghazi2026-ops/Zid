@@ -26,6 +26,7 @@ export default function AdminHomeScreen({ navigation }) {
     pendingAssistants: 0,
     restaurants: 0,
     homeChefs: 0,
+    pendingVerifications: 0, // ✅ عدد طلبات التوثيق
   });
 
   useEffect(() => {
@@ -75,7 +76,7 @@ export default function AdminHomeScreen({ navigation }) {
         [Query.limit(1)]
       );
 
-      // جلب المنتجات المعلقة (لو عندك collection للمنتجات)
+      // جلب المنتجات المعلقة
       let pendingProducts = 0;
       try {
         const productsRes = await databases.listDocuments(
@@ -88,6 +89,27 @@ export default function AdminHomeScreen({ navigation }) {
         console.log('لا يوجد collection للمنتجات');
       }
 
+      // ✅ جلب عدد طلبات التوثيق
+      let pendingVerifications = 0;
+      try {
+        const verificationsRes = await databases.listDocuments(
+          DATABASE_ID,
+          COLLECTIONS.USERS,
+          [
+            Query.equal('role', 'merchant'),
+            Query.equal('isVerified', false),
+            Query.or([
+              Query.notEqual('verificationImage', null),
+              Query.notEqual('verificationImage', '')
+            ]),
+            Query.limit(1)
+          ]
+        );
+        pendingVerifications = verificationsRes.total || 0;
+      } catch (e) {
+        console.log('خطأ في جلب طلبات التوثيق:', e);
+      }
+
       setStats({
         users: usersRes.total || 0,
         todayOrders: ordersRes.total || 0,
@@ -96,6 +118,7 @@ export default function AdminHomeScreen({ navigation }) {
         pendingAssistants: 0,
         restaurants: restaurantsRes.total || 0,
         homeChefs: chefsRes.total || 0,
+        pendingVerifications: pendingVerifications,
       });
     } catch (error) {
       console.error('خطأ في تحميل الإحصائيات:', error);
@@ -210,7 +233,15 @@ export default function AdminHomeScreen({ navigation }) {
       title: 'مراجعة الصور',
       screen: 'ReviewDishes',
       count: 0
-    }
+    },
+    // ✅ زر طلبات التوثيق
+    {
+      icon: 'shield-checkmark-outline',
+      color: '#10B981',
+      title: 'طلبات التوثيق',
+      screen: 'VerificationRequestsScreen',
+      count: stats.pendingVerifications
+    },
   ];
 
   if (loading) {

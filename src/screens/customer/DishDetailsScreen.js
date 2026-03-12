@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,8 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { VideoView, useVideoPlayer } from 'expo-video';
+// تم تغيير الاستيراد هنا لاستخدام المكتبة المستقرة
+import { Video, ResizeMode } from 'expo-av';
 import { useCart } from '../../context/CartContext';
 
 const { width } = Dimensions.get('window');
@@ -22,10 +23,6 @@ export default function DishDetailsScreen({ navigation, route }) {
   const { addToCart } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
-
-  const player = useVideoPlayer(dish.videoUrl, player => {
-    player.loop = false;
-  });
 
   const handleAddToCart = () => {
     addToCart(dish, quantity, notes);
@@ -48,19 +45,19 @@ export default function DishDetailsScreen({ navigation, route }) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
+
         {dish.images && dish.images.length > 0 ? (
-          <ScrollView 
-            horizontal 
-            pagingEnabled 
+          <ScrollView
+            horizontal
+            pagingEnabled
             showsHorizontalScrollIndicator={false}
             style={styles.imagesContainer}
           >
             {dish.images.map((url, index) => (
-              <Image 
-                key={index} 
-                source={{ uri: url }} 
-                style={styles.fullImage} 
+              <Image
+                key={index}
+                source={{ uri: url }}
+                style={styles.fullImage}
                 resizeMode="cover"
               />
             ))}
@@ -74,26 +71,31 @@ export default function DishDetailsScreen({ navigation, route }) {
 
         <View style={styles.infoCard}>
           <Text style={styles.dishName}>{dish.name}</Text>
-          
+
           {dish.description && (
             <Text style={styles.dishDescription}>{dish.description}</Text>
           )}
-          
+
           <View style={styles.priceRow}>
             <Text style={styles.priceLabel}>السعر:</Text>
             <Text style={styles.priceValue}>{dish.price} ج</Text>
           </View>
         </View>
 
+        {/* تعديل قسم الفيديو لاستخدام مكون Video من مكتبة expo-av */}
         {dish.videoUrl && (
           <View style={styles.videoCard}>
             <Text style={styles.sectionTitle}>🎥 فيديو التحضير</Text>
             <View style={styles.videoContainer}>
-              <VideoView
-                player={player}
+              <Video
+                source={{ uri: dish.videoUrl }}
                 style={styles.video}
-                contentFit="contain"
-                nativeControls
+                useNativeControls
+                resizeMode={ResizeMode.CONTAIN}
+                isLooping={false}
+                shouldPlay={false}
+                // لضمان عدم حدوث خطأ عند تحميل الفيديو
+                onError={(e) => console.log('Video Error:', e)}
               />
             </View>
           </View>
@@ -102,16 +104,16 @@ export default function DishDetailsScreen({ navigation, route }) {
         <View style={styles.quantityCard}>
           <Text style={styles.sectionTitle}>🔢 الكمية</Text>
           <View style={styles.quantityRow}>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setQuantity(Math.max(1, quantity - 1))}
               style={styles.quantityButton}
             >
               <Ionicons name="remove" size={20} color="#FFF" />
             </TouchableOpacity>
-            
+
             <Text style={styles.quantityText}>{quantity}</Text>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               onPress={() => setQuantity(quantity + 1)}
               style={[styles.quantityButton, styles.quantityButtonAdd]}
             >
@@ -143,190 +145,35 @@ export default function DishDetailsScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  cartButton: {
-    padding: 4,
-  },
-  scrollContent: {
-    paddingBottom: 30,
-  },
-  
-  imagesContainer: {
-    height: 250,
-  },
-  fullImage: {
-    width: width,
-    height: 250,
-    resizeMode: 'cover',
-  },
-  noImage: {
-    width: width,
-    height: 250,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  noImageText: {
-    marginTop: 10,
-    fontSize: 14,
-    color: '#9CA3AF',
-  },
-
-  infoCard: {
-    backgroundColor: '#FFF',
-    marginTop: 12,
-    marginHorizontal: 16,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  dishName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  dishDescription: {
-    fontSize: 16,
-    color: '#4B5563',
-    lineHeight: 24,
-    marginBottom: 12,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingTop: 12,
-  },
-  priceLabel: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginRight: 8,
-  },
-  priceValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#F59E0B',
-  },
-
-  videoCard: {
-    backgroundColor: '#FFF',
-    marginTop: 12,
-    marginHorizontal: 16,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4B5563',
-    marginBottom: 12,
-  },
-  videoContainer: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-  },
-  video: {
-    width: '100%',
-    height: '100%',
-  },
-
-  quantityCard: {
-    backgroundColor: '#FFF',
-    marginTop: 12,
-    marginHorizontal: 16,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  quantityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 20,
-  },
-  quantityButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#EF4444',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quantityButtonAdd: {
-    backgroundColor: '#10B981',
-  },
-  quantityText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    minWidth: 40,
-    textAlign: 'center',
-  },
-
-  notesCard: {
-    backgroundColor: '#FFF',
-    marginTop: 12,
-    marginHorizontal: 16,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  notesInput: {
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-
-  addButton: {
-    backgroundColor: '#4F46E5',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 18,
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginTop: 20,
-    gap: 8,
-  },
-  addButtonText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  // ... (نفس الـ styles السابقة التي لديك في الملف دون تغيير)
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  backButton: { padding: 4 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
+  cartButton: { padding: 4 },
+  scrollContent: { paddingBottom: 30 },
+  imagesContainer: { height: 250 },
+  fullImage: { width: width, height: 250, resizeMode: 'cover' },
+  noImage: { width: width, height: 250, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
+  noImageText: { marginTop: 10, fontSize: 14, color: '#9CA3AF' },
+  infoCard: { backgroundColor: '#FFF', marginTop: 12, marginHorizontal: 16, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
+  dishName: { fontSize: 24, fontWeight: 'bold', color: '#1F2937', marginBottom: 8 },
+  dishDescription: { fontSize: 16, color: '#4B5563', lineHeight: 24, marginBottom: 12 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: 12 },
+  priceLabel: { fontSize: 16, color: '#6B7280', marginRight: 8 },
+  priceValue: { fontSize: 24, fontWeight: 'bold', color: '#F59E0B' },
+  videoCard: { backgroundColor: '#FFF', marginTop: 12, marginHorizontal: 16, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#4B5563', marginBottom: 12 },
+  videoContainer: { width: '100%', height: 200, borderRadius: 8, overflow: 'hidden', backgroundColor: '#000' },
+  video: { width: '100%', height: '100%' },
+  quantityCard: { backgroundColor: '#FFF', marginTop: 12, marginHorizontal: 16, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
+  quantityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20 },
+  quantityButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center' },
+  quantityButtonAdd: { backgroundColor: '#10B981' },
+  quantityText: { fontSize: 24, fontWeight: 'bold', color: '#1F2937', minWidth: 40, textAlign: 'center' },
+  notesCard: { backgroundColor: '#FFF', marginTop: 12, marginHorizontal: 16, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
+  notesInput: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, fontSize: 14, minHeight: 100, textAlignVertical: 'top' },
+  addButton: { backgroundColor: '#4F46E5', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 12, marginHorizontal: 16, marginTop: 20, gap: 8 },
+  addButtonText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
 });
+

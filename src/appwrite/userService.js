@@ -60,6 +60,7 @@ export const registerCustomer = async (name, phone, password) => {
       active: true,
       profileCompleted: true,
       createdAt: new Date().toISOString(),
+      termsAccepted: false, // ✅ إضافة حقل الموافقة على الشروط
     };
 
     const response = await databases.createDocument(
@@ -73,6 +74,25 @@ export const registerCustomer = async (name, phone, password) => {
 
   } catch (error) {
     console.error('Registration error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// ✅ دالة تسجيل الموافقة على الشروط
+export const acceptTerms = async (userId) => {
+  try {
+    const response = await databases.updateDocument(
+      DATABASE_ID,
+      USERS_COLLECTION_ID,
+      userId,
+      {
+        termsAccepted: true,
+        termsAcceptedAt: new Date().toISOString(),
+      }
+    );
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('❌ خطأ في تسجيل الموافقة على الشروط:', error);
     return { success: false, error: error.message };
   }
 };
@@ -98,6 +118,11 @@ export const createUserByAdmin = async (userData) => {
       active: userData.active !== undefined ? userData.active : true,
       profileCompleted: false,
       createdAt: new Date().toISOString(),
+      isVerified: false,
+      verificationImage: null,
+      commercialRegister: null,
+      taxCard: null,
+      termsAccepted: false, // ✅ إضافة حقل الموافقة على الشروط
     };
 
     if (userData.role === 'merchant') {
@@ -117,8 +142,7 @@ export const createUserByAdmin = async (userData) => {
         newUser.healthCertUrl = userData.healthCertUrl || null;
         newUser.isVerified = false;
       }
-      
-      // ✅ إضافة placeId للمطاعم والشيفات وأي خدمة ليها أصناف
+
       if (userData.selectedPlace) {
         newUser.placeId = userData.selectedPlace.$id;
         newUser.placeName = userData.selectedPlace.name;
@@ -228,6 +252,41 @@ export const deleteUser = async (userId) => {
     return { success: true };
   } catch (error) {
     console.error('❌ خطأ في حذف المستخدم:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const verifyMerchant = async (userId, isVerified) => {
+  try {
+    const response = await databases.updateDocument(
+      DATABASE_ID,
+      USERS_COLLECTION_ID,
+      userId,
+      { isVerified }
+    );
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('Error verifying merchant:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const uploadVerificationDocument = async (userId, documentUrl, documentType) => {
+  try {
+    const updateData = {};
+    if (documentType === 'id') updateData.verificationImage = documentUrl;
+    if (documentType === 'commercial') updateData.commercialRegister = documentUrl;
+    if (documentType === 'tax') updateData.taxCard = documentUrl;
+
+    const response = await databases.updateDocument(
+      DATABASE_ID,
+      USERS_COLLECTION_ID,
+      userId,
+      updateData
+    );
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('Error uploading document:', error);
     return { success: false, error: error.message };
   }
 };

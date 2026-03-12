@@ -44,7 +44,6 @@
       "expo-image-picker",
       "expo-location",
       "expo-font",
-      "expo-video",
       "expo-asset"
     ],
     "owner": "sherifghazi",
