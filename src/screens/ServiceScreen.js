@@ -399,13 +399,14 @@ export default function ServiceScreen({ navigation, route }) {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* منجز - خارج ScrollView */}
+      {/* ✅ منجز - خارج ScrollView مع تمرير serviceId */}
       <DynamicMongez
         screen="service"
         navigation={navigation}
         contextData={{
           serviceType: route.params?.serviceType,
-          serviceName: route.params?.serviceName
+          serviceName: route.params?.serviceName,
+serviceId: service?.$id || route.params?.serviceType
         }}
       />
     </SafeAreaView>

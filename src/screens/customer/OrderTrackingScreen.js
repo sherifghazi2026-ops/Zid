@@ -9,20 +9,28 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { databases, DATABASE_ID } from '../../appwrite/config';
 import { ORDER_STATUS } from '../../services/orderService';
+import { fontFamily } from '../../utils/fonts';
 
 export default function OrderTrackingScreen({ route, navigation }) {
   const { orderId } = route.params;
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [playingVoice, setPlayingVoice] = useState(null);
+  const [sound, setSound] = useState(null);
 
   useEffect(() => {
     loadOrder();
-    const interval = setInterval(loadOrder, 5000); // تحديث كل 5 ثواني
-    return () => clearInterval(interval);
+    const interval = setInterval(loadOrder, 5000);
+    return () => {
+      clearInterval(interval);
+      if (sound) sound.unloadAsync();
+    };
   }, []);
 
   const loadOrder = async () => {
@@ -45,12 +53,28 @@ export default function OrderTrackingScreen({ route, navigation }) {
     Linking.openURL(`tel:${phone}`);
   };
 
+  const playVoice = async (voiceUrl) => {
+    try {
+      if (sound) await sound.unloadAsync();
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: voiceUrl },
+        { shouldPlay: true }
+      );
+      setSound(newSound);
+      setPlayingVoice(voiceUrl);
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) setPlayingVoice(null);
+      });
+    } catch (error) {
+      Alert.alert('خطأ', 'فشل تشغيل التسجيل الصوتي');
+    }
+  };
+
   const getStatusIcon = (status) => {
     const icons = {
       [ORDER_STATUS.PENDING]: 'time-outline',
       [ORDER_STATUS.ACCEPTED]: 'checkmark-circle-outline',
       [ORDER_STATUS.PREPARING]: 'restaurant-outline',
-      [ORDER_STATUS.PRICE_SET]: 'pricetag-outline',
       [ORDER_STATUS.READY]: 'checkmark-done-circle-outline',
       [ORDER_STATUS.DRIVER_ASSIGNED]: 'person-outline',
       [ORDER_STATUS.ON_THE_WAY]: 'bicycle-outline',
@@ -65,7 +89,6 @@ export default function OrderTrackingScreen({ route, navigation }) {
       [ORDER_STATUS.PENDING]: '#F59E0B',
       [ORDER_STATUS.ACCEPTED]: '#3B82F6',
       [ORDER_STATUS.PREPARING]: '#8B5CF6',
-      [ORDER_STATUS.PRICE_SET]: '#10B981',
       [ORDER_STATUS.READY]: '#10B981',
       [ORDER_STATUS.DRIVER_ASSIGNED]: '#3B82F6',
       [ORDER_STATUS.ON_THE_WAY]: '#3B82F6',
@@ -79,12 +102,11 @@ export default function OrderTrackingScreen({ route, navigation }) {
     const texts = {
       [ORDER_STATUS.PENDING]: 'في انتظار تاجر',
       [ORDER_STATUS.ACCEPTED]: 'تم قبول الطلب',
-      [ORDER_STATUS.PREPARING]: 'جاري التجهيز',
-      [ORDER_STATUS.PRICE_SET]: 'تم تحديد السعر',
-      [ORDER_STATUS.READY]: 'الطلب جاهز',
+      [ORDER_STATUS.PREPARING]: 'جاري تجهيز الطلب',
+      [ORDER_STATUS.READY]: 'طلبك جاهز للاستلام',
       [ORDER_STATUS.DRIVER_ASSIGNED]: 'تم تعيين مندوب',
       [ORDER_STATUS.ON_THE_WAY]: 'المندوب في الطريق',
-      [ORDER_STATUS.DELIVERED]: 'تم التوصيل',
+      [ORDER_STATUS.DELIVERED]: 'تم الاستلام',
       [ORDER_STATUS.CANCELLED]: 'تم الإلغاء',
     };
     return texts[status] || status;
@@ -127,7 +149,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-forward" size={28} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>تتبع الطلب</Text>
+        <Text style={[styles.headerTitle, { fontFamily: fontFamily.arabic }]}>تتبع الطلب</Text>
         <View style={{ width: 28 }} />
       </View>
 
@@ -136,64 +158,133 @@ export default function OrderTrackingScreen({ route, navigation }) {
         <View style={[styles.statusCard, { backgroundColor: getStatusColor(order.status) + '20' }]}>
           <Ionicons name={getStatusIcon(order.status)} size={50} color={getStatusColor(order.status)} />
           <View style={styles.statusInfo}>
-            <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}>
+            <Text style={[styles.statusText, { fontFamily: fontFamily.arabic, color: getStatusColor(order.status) }]}>
               {getStatusText(order.status)}
             </Text>
-            <Text style={styles.orderId}>طلب #{order.$id.slice(-6)}</Text>
+            <Text style={[styles.orderId, { fontFamily: fontFamily.arabic }]}>طلب #{order.$id.slice(-6)}</Text>
           </View>
         </View>
 
-        {/* شريط التقدم */}
-        <View style={styles.timeline}>
-          {[
-            { status: ORDER_STATUS.ACCEPTED, label: 'قبول' },
-            { status: ORDER_STATUS.PREPARING, label: 'تجهيز' },
-            { status: ORDER_STATUS.READY, label: 'جاهز' },
-            { status: ORDER_STATUS.ON_THE_WAY, label: 'توصيل' },
-            { status: ORDER_STATUS.DELIVERED, label: 'تم' },
-          ].map((step, index) => {
-            const isCompleted = currentStep > index + 1;
-            const isCurrent = currentStep === index + 1;
-            
-            return (
-              <View key={step.status} style={styles.timelineItem}>
+        {/* شريط التقدم - كل كلمة في سطر منفصل */}
+        <View style={styles.timelineContainer}>
+          <View style={styles.timelineRow}>
+            {/* الخطوة 1: قبول */}
+            <View style={styles.stepWrapper}>
+              <View style={styles.stepContent}>
                 <View style={[
-                  styles.timelineDot,
-                  isCompleted && styles.timelineDotCompleted,
-                  isCurrent && styles.timelineDotCurrent,
+                  styles.stepDot,
+                  currentStep >= 1 && styles.stepDotCompleted,
+                  currentStep === 1 && styles.stepDotCurrent
                 ]}>
-                  {isCompleted && <Ionicons name="checkmark" size={12} color="#FFF" />}
+                  {currentStep > 1 && <Ionicons name="checkmark" size={14} color="#FFF" />}
                 </View>
                 <Text style={[
-                  styles.timelineLabel,
-                  (isCompleted || isCurrent) && styles.timelineLabelActive
-                ]}>
-                  {step.label}
-                </Text>
-                {index < 4 && (
-                  <View style={[
-                    styles.timelineLine,
-                    index < currentStep && styles.timelineLineActive,
-                  ]} />
-                )}
+                  styles.stepLabel,
+                  currentStep >= 1 && styles.stepLabelActive,
+                  { fontFamily: fontFamily.arabic }
+                ]}>قبول</Text>
               </View>
-            );
-          })}
+              {currentStep > 1 && <View style={[styles.stepLine, styles.stepLineActive]} />}
+              {currentStep === 1 && <View style={styles.stepLine} />}
+              {currentStep < 1 && <View style={styles.stepLine} />}
+            </View>
+
+            {/* الخطوة 2: تجهيز الطلب */}
+            <View style={styles.stepWrapper}>
+              <View style={styles.stepContent}>
+                <View style={[
+                  styles.stepDot,
+                  currentStep >= 2 && styles.stepDotCompleted,
+                  currentStep === 2 && styles.stepDotCurrent
+                ]}>
+                  {currentStep > 2 && <Ionicons name="checkmark" size={14} color="#FFF" />}
+                </View>
+                <Text style={[
+                  styles.stepLabel,
+                  currentStep >= 2 && styles.stepLabelActive,
+                  { fontFamily: fontFamily.arabic }
+                ]}>تجهيز الطلب</Text>
+              </View>
+              {currentStep > 2 && <View style={[styles.stepLine, styles.stepLineActive]} />}
+              {currentStep === 2 && <View style={styles.stepLine} />}
+              {currentStep < 2 && <View style={styles.stepLine} />}
+            </View>
+
+            {/* الخطوة 3: جاهز للاستلام */}
+            <View style={styles.stepWrapper}>
+              <View style={styles.stepContent}>
+                <View style={[
+                  styles.stepDot,
+                  currentStep >= 3 && styles.stepDotCompleted,
+                  currentStep === 3 && styles.stepDotCurrent
+                ]}>
+                  {currentStep > 3 && <Ionicons name="checkmark" size={14} color="#FFF" />}
+                </View>
+                <Text style={[
+                  styles.stepLabel,
+                  currentStep >= 3 && styles.stepLabelActive,
+                  { fontFamily: fontFamily.arabic }
+                ]}>جاهز للاستلام</Text>
+              </View>
+              {currentStep > 3 && <View style={[styles.stepLine, styles.stepLineActive]} />}
+              {currentStep === 3 && <View style={styles.stepLine} />}
+              {currentStep < 3 && <View style={styles.stepLine} />}
+            </View>
+
+            {/* الخطوة 4: المندوب في الطريق */}
+            <View style={styles.stepWrapper}>
+              <View style={styles.stepContent}>
+                <View style={[
+                  styles.stepDot,
+                  currentStep >= 4 && styles.stepDotCompleted,
+                  currentStep === 4 && styles.stepDotCurrent
+                ]}>
+                  {currentStep > 4 && <Ionicons name="checkmark" size={14} color="#FFF" />}
+                </View>
+                <Text style={[
+                  styles.stepLabel,
+                  currentStep >= 4 && styles.stepLabelActive,
+                  { fontFamily: fontFamily.arabic }
+                ]}>المندوب في الطريق</Text>
+              </View>
+              {currentStep > 4 && <View style={[styles.stepLine, styles.stepLineActive]} />}
+              {currentStep === 4 && <View style={styles.stepLine} />}
+              {currentStep < 4 && <View style={styles.stepLine} />}
+            </View>
+
+            {/* الخطوة 5: تم الاستلام */}
+            <View style={styles.stepWrapper}>
+              <View style={styles.stepContent}>
+                <View style={[
+                  styles.stepDot,
+                  currentStep >= 5 && styles.stepDotCompleted,
+                  currentStep === 5 && styles.stepDotCurrent
+                ]}>
+                  {currentStep > 5 && <Ionicons name="checkmark" size={14} color="#FFF" />}
+                </View>
+                <Text style={[
+                  styles.stepLabel,
+                  currentStep >= 5 && styles.stepLabelActive,
+                  { fontFamily: fontFamily.arabic }
+                ]}>تم الاستلام</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
-        {/* معلومات الطلب */}
+        {/* معلومات العميل */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>تفاصيل الطلب</Text>
+          <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>معلومات التوصيل</Text>
           <View style={styles.infoCard}>
+            <TouchableOpacity style={styles.infoRow} onPress={() => makePhoneCall(order.customerPhone)}>
+              <Ionicons name="call-outline" size={20} color="#4F46E5" />
+              <Text style={[styles.infoLabel, { fontFamily: fontFamily.arabic }]}>رقم الهاتف:</Text>
+              <Text style={[styles.infoValue, styles.phoneLink, { fontFamily: fontFamily.arabic }]}>{order.customerPhone}</Text>
+            </TouchableOpacity>
             <View style={styles.infoRow}>
-              <Ionicons name="call-outline" size={18} color="#4F46E5" />
-              <Text style={styles.infoLabel}>رقم الهاتف:</Text>
-              <Text style={styles.infoValue}>{order.customerPhone}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Ionicons name="location-outline" size={18} color="#EF4444" />
-              <Text style={styles.infoLabel}>العنوان:</Text>
-              <Text style={styles.infoValue}>{order.customerAddress}</Text>
+              <Ionicons name="location-outline" size={20} color="#EF4444" />
+              <Text style={[styles.infoLabel, { fontFamily: fontFamily.arabic }]}>العنوان:</Text>
+              <Text style={[styles.infoValue, { fontFamily: fontFamily.arabic }]}>{order.customerAddress}</Text>
             </View>
           </View>
         </View>
@@ -201,30 +292,62 @@ export default function OrderTrackingScreen({ route, navigation }) {
         {/* المنتجات */}
         {order.items && order.items.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>المنتجات</Text>
+            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>المنتجات</Text>
             <View style={styles.itemsCard}>
               {order.items.map((item, index) => (
-                <Text key={index} style={styles.itemText}>• {item}</Text>
+                <Text key={index} style={[styles.itemText, { fontFamily: fontFamily.arabic }]}>• {item}</Text>
               ))}
             </View>
+          </View>
+        )}
+
+        {/* الصور المرفقة */}
+        {order.imageUrls && order.imageUrls.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>🖼️ الصور المرفقة</Text>
+            <ScrollView horizontal style={styles.imagesContainer}>
+              {order.imageUrls.map((url, index) => (
+                <Image key={index} source={{ uri: url }} style={styles.thumbnail} />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* التسجيل الصوتي */}
+        {order.voiceUrl && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>🎤 التسجيل الصوتي</Text>
+            <TouchableOpacity
+              style={styles.voiceButton}
+              onPress={() => playVoice(order.voiceUrl)}
+            >
+              <Ionicons
+                name={playingVoice === order.voiceUrl ? "pause" : "play"}
+                size={24}
+                color="#FFF"
+              />
+              <Text style={[styles.voiceButtonText, { fontFamily: fontFamily.arabic }]}>
+                {playingVoice === order.voiceUrl ? 'جاري التشغيل' : 'استمع للتسجيل'}
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
 
         {/* معلومات التاجر */}
         {order.merchantName && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>التاجر</Text>
+            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>التاجر</Text>
             <View style={styles.contactCard}>
               <View style={styles.contactRow}>
                 <Ionicons name="business-outline" size={20} color="#F59E0B" />
-                <Text style={styles.contactName}>{order.merchantName}</Text>
+                <Text style={[styles.contactName, { fontFamily: fontFamily.arabic }]}>{order.merchantName}</Text>
               </View>
               <TouchableOpacity 
                 style={styles.contactButton}
                 onPress={() => makePhoneCall(order.merchantPhone)}
               >
                 <Ionicons name="call" size={18} color="#FFF" />
-                <Text style={styles.contactButtonText}>اتصل بالتاجر</Text>
+                <Text style={[styles.contactButtonText, { fontFamily: fontFamily.arabic }]}>اتصل بالتاجر</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -233,41 +356,45 @@ export default function OrderTrackingScreen({ route, navigation }) {
         {/* معلومات المندوب */}
         {order.driverName && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>المندوب</Text>
+            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>المندوب</Text>
             <View style={[styles.contactCard, { borderColor: '#3B82F6' }]}>
               <View style={styles.contactRow}>
                 <Ionicons name="bicycle-outline" size={20} color="#3B82F6" />
-                <Text style={styles.contactName}>{order.driverName}</Text>
+                <Text style={[styles.contactName, { fontFamily: fontFamily.arabic }]}>{order.driverName}</Text>
               </View>
               <TouchableOpacity 
                 style={[styles.contactButton, { backgroundColor: '#3B82F6' }]}
                 onPress={() => makePhoneCall(order.driverPhone)}
               >
                 <Ionicons name="call" size={18} color="#FFF" />
-                <Text style={styles.contactButtonText}>اتصل بالمندوب</Text>
+                <Text style={[styles.contactButtonText, { fontFamily: fontFamily.arabic }]}>اتصل بالمندوب</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* السعر */}
+        {/* الفاتورة */}
         {order.totalPrice > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>السعر</Text>
-            <View style={styles.priceCard}>
-              <View style={styles.priceRow}>
-                <Text style={styles.priceLabel}>قيمة الطلب:</Text>
-                <Text style={styles.priceValue}>{order.totalPrice} ج</Text>
+            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>💰 الفاتورة</Text>
+            <View style={styles.invoiceCard}>
+              <View style={styles.invoiceRow}>
+                <Text style={[styles.invoiceLabel, { fontFamily: fontFamily.arabic }]}>قيمة الطلب:</Text>
+                <Text style={[styles.invoiceValue, { fontFamily: fontFamily.arabic }]}>{order.totalPrice} ج</Text>
               </View>
               {order.deliveryFee > 0 && (
-                <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>توصيل:</Text>
-                  <Text style={styles.priceValue}>{order.deliveryFee} ج</Text>
+                <View style={styles.invoiceRow}>
+                  <Text style={[styles.invoiceLabel, { fontFamily: fontFamily.arabic }]}>توصيل:</Text>
+                  <Text style={[styles.invoiceValue, { fontFamily: fontFamily.arabic }]}>{order.deliveryFee} ج</Text>
                 </View>
               )}
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>الإجمالي:</Text>
-                <Text style={styles.totalValue}>{order.finalTotal || order.totalPrice} ج</Text>
+              <View style={styles.invoiceTotal}>
+                <Text style={[styles.totalLabel, { fontFamily: fontFamily.arabic }]}>الإجمالي:</Text>
+                <Text style={[styles.totalValue, { fontFamily: fontFamily.arabic }]}>{order.finalTotal || order.totalPrice} ج</Text>
+              </View>
+              <View style={styles.paymentMethod}>
+                <Text style={[styles.paymentLabel, { fontFamily: fontFamily.arabic }]}>طريقة الدفع:</Text>
+                <Text style={[styles.paymentValue, { fontFamily: fontFamily.arabic }]}>الدفع عند الاستلام</Text>
               </View>
             </View>
           </View>
@@ -275,12 +402,12 @@ export default function OrderTrackingScreen({ route, navigation }) {
 
         {/* تاريخ الطلب */}
         <View style={styles.section}>
-          <Text style={styles.dateText}>
+          <Text style={[styles.dateText, { fontFamily: fontFamily.arabic }]}>
             تاريخ الطلب: {new Date(order.createdAt).toLocaleString('ar-EG')}
           </Text>
           {order.deliveredAt && (
-            <Text style={styles.dateText}>
-              تم التوصيل: {new Date(order.deliveredAt).toLocaleString('ar-EG')}
+            <Text style={[styles.dateText, { fontFamily: fontFamily.arabic }]}>
+              تم الاستلام: {new Date(order.deliveredAt).toLocaleString('ar-EG')}
             </Text>
           )}
         </View>
@@ -317,41 +444,72 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
   orderId: { fontSize: 14, color: '#6B7280' },
 
-  // شريط التقدم
-  timeline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  // شريط التقدم المحسن
+  timelineContainer: {
     marginBottom: 24,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
   },
-  timelineItem: { alignItems: 'center', flex: 1, position: 'relative' },
-  timelineDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  timelineRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    position: 'relative',
+  },
+  stepWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  stepContent: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  stepDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#E5E7EB',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
-  },
-  timelineDotCompleted: { backgroundColor: '#10B981' },
-  timelineDotCurrent: { 
-    backgroundColor: '#4F46E5',
+    marginBottom: 6,
     borderWidth: 2,
     borderColor: '#FFF',
   },
-  timelineLabel: { fontSize: 10, color: '#9CA3AF' },
-  timelineLabelActive: { color: '#1F2937', fontWeight: '600' },
-  timelineLine: {
+  stepDotCompleted: {
+    backgroundColor: '#10B981',
+  },
+  stepDotCurrent: {
+    backgroundColor: '#4F46E5',
+    borderWidth: 3,
+    borderColor: '#FFF',
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  stepLabel: {
+    fontSize: 10,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    width: '100%',
+    paddingHorizontal: 2,
+  },
+  stepLabelActive: {
+    color: '#1F2937',
+    fontWeight: '600',
+  },
+  stepLine: {
     position: 'absolute',
-    top: 11,
+    top: 13,
     right: -50,
     width: 40,
     height: 2,
     backgroundColor: '#E5E7EB',
   },
-  timelineLineActive: { backgroundColor: '#10B981' },
+  stepLineActive: {
+    backgroundColor: '#10B981',
+  },
 
   // الأقسام
   section: { marginBottom: 20 },
@@ -362,9 +520,24 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
   infoLabel: { fontSize: 14, color: '#6B7280', width: 70 },
   infoValue: { fontSize: 14, color: '#1F2937', flex: 1 },
+  phoneLink: { color: '#3B82F6', textDecorationLine: 'underline' },
 
   itemsCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E5E7EB' },
   itemText: { fontSize: 14, color: '#4B5563', marginBottom: 6 },
+
+  imagesContainer: { flexDirection: 'row', marginBottom: 8 },
+  thumbnail: { width: 80, height: 80, borderRadius: 8, marginRight: 8 },
+
+  voiceButton: {
+    backgroundColor: '#3B82F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  voiceButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
 
   contactCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#F59E0B' },
   contactRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
@@ -372,13 +545,16 @@ const styles = StyleSheet.create({
   contactButton: { backgroundColor: '#F59E0B', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 10, borderRadius: 8, gap: 6 },
   contactButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
 
-  priceCard: { backgroundColor: '#FEF3C7', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#F59E0B' },
-  priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  priceLabel: { fontSize: 14, color: '#92400E' },
-  priceValue: { fontSize: 14, fontWeight: '600', color: '#92400E' },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F59E0B' },
+  invoiceCard: { backgroundColor: '#FEF3C7', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#F59E0B' },
+  invoiceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  invoiceLabel: { fontSize: 14, color: '#92400E' },
+  invoiceValue: { fontSize: 14, fontWeight: '600', color: '#92400E' },
+  invoiceTotal: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F59E0B' },
   totalLabel: { fontSize: 16, fontWeight: '600', color: '#92400E' },
   totalValue: { fontSize: 18, fontWeight: 'bold', color: '#92400E' },
+  paymentMethod: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F59E0B' },
+  paymentLabel: { fontSize: 14, color: '#92400E' },
+  paymentValue: { fontSize: 14, fontWeight: '600', color: '#10B981' },
 
   dateText: { fontSize: 12, color: '#9CA3AF', marginBottom: 4 },
 });

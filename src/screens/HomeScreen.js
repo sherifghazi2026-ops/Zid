@@ -26,8 +26,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { databases, DATABASE_ID } from '../appwrite/config';
 import { Query } from 'appwrite';
 import { fontFamily } from '../utils/fonts';
-
-// استيراد DynamicMongez
 import DynamicMongez from '../components/DynamicMongez';
 
 const { width } = Dimensions.get('window');
@@ -59,11 +57,12 @@ const CATEGORY_COLORS = {
   'other': '#6B7280'
 };
 
-export default function HomeScreen({ navigation }) {
+const HomeScreen = ({ navigation }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userData, setUserData] = useState(null);
   const [userPhone, setUserPhone] = useState('');
   const [activeOrders, setActiveOrders] = useState([]);
+  const [completedOrders, setCompletedOrders] = useState([]);
   const [services, setServices] = useState([]);
   const [groupedServices, setGroupedServices] = useState({});
   const [chefsCount, setChefsCount] = useState(0);
@@ -72,6 +71,7 @@ export default function HomeScreen({ navigation }) {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [adminModalVisible, setAdminModalVisible] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
+  const [showActiveOrders, setShowActiveOrders] = useState(true);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -86,14 +86,13 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => {
     checkLoginStatus();
     loadServices();
-    fetchActiveOrders();
     loadChefsCount();
   }, []);
 
   useFocusEffect(
     React.useCallback(() => {
       if (isLoggedIn && userPhone) {
-        fetchActiveOrders();
+        fetchAllOrders();
       }
     }, [isLoggedIn, userPhone])
   );
@@ -115,15 +114,24 @@ export default function HomeScreen({ navigation }) {
     if (result.success) {
       console.log('✅ تم جلب', result.data.length, 'خدمة');
 
+      // تصفية الخدمات غير المرغوب فيها
+      const filteredServices = result.data.filter(service => {
+        const excludeIds = ['mongez', 'assistant', 'vegetables', 'fruits'];
+        const excludeNames = ['منحز', 'Mongez', 'الخضار والفاكهة', 'خضار', 'فاكهة'];
+        if (excludeIds.includes(service.id)) return false;
+        if (excludeNames.includes(service.name)) return false;
+        return true;
+      });
+
       // ترتيب الخدمات حسب الطلب
-      const sortedServices = result.data.sort((a, b) => {
+      const sortedServices = filteredServices.sort((a, b) => {
         if (a.isActive && !b.isActive) return -1;
         if (!a.isActive && b.isActive) return 1;
         return (a.order || 0) - (b.order || 0);
       });
 
       setServices(sortedServices);
-      
+
       // تجميع الخدمات حسب التصنيف
       const grouped = {};
       sortedServices.forEach(service => {
@@ -133,7 +141,7 @@ export default function HomeScreen({ navigation }) {
         }
         grouped[category].push(service);
       });
-      
+
       setGroupedServices(grouped);
     } else {
       console.log('❌ فشل جلب الخدمات:', result.error);
@@ -160,16 +168,27 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  const fetchActiveOrders = async () => {
+  const fetchAllOrders = async () => {
     if (!isLoggedIn || !userPhone) return;
     setLoading(true);
     try {
-      const result = await getOrders({
+      // الطلبات النشطة (غير المكتملة)
+      const activeResult = await getOrders({
         customerPhone: userPhone,
-        status: [ORDER_STATUS.PENDING, ORDER_STATUS.ACCEPTED, ORDER_STATUS.PREPARING, ORDER_STATUS.ON_THE_WAY]
+        status: [ORDER_STATUS.PENDING, ORDER_STATUS.ACCEPTED, ORDER_STATUS.PREPARING, ORDER_STATUS.READY, ORDER_STATUS.DRIVER_ASSIGNED, ORDER_STATUS.ON_THE_WAY]
       });
-      if (result.success) {
-        setActiveOrders(result.data);
+      
+      // الطلبات المكتملة (تم التوصيل)
+      const completedResult = await getOrders({
+        customerPhone: userPhone,
+        status: ORDER_STATUS.DELIVERED
+      });
+
+      if (activeResult.success) {
+        setActiveOrders(activeResult.data);
+      }
+      if (completedResult.success) {
+        setCompletedOrders(completedResult.data);
       }
     } catch (error) {
       console.error('خطأ في جلب الطلبات:', error);
@@ -182,7 +201,7 @@ export default function HomeScreen({ navigation }) {
   const onRefresh = () => {
     setRefreshing(true);
     loadServices();
-    fetchActiveOrders();
+    fetchAllOrders();
     loadChefsCount();
   };
 
@@ -192,25 +211,19 @@ export default function HomeScreen({ navigation }) {
       return;
     }
 
-    // الخدمات الأساسية (مطاعم، أكل بيتي)
     if (service.id === 'restaurant') {
-      console.log('🍽️ توجيه إلى RestaurantList');
       navigation.navigate('RestaurantList');
     }
     else if (service.id === 'home_chef') {
-      console.log('👨‍🍳 توجيه إلى HomeChefsScreen');
       navigation.navigate('HomeChefsScreen');
     }
-    // الخدمات الجديدة ذات المنتجات (مثل milk, bakery, drinks)
     else if (service.hasItems && service.itemsCollection && service.type === 'items') {
-      console.log('📦 توجيه إلى ProvidersListScreen:', service.name);
       navigation.navigate('ProvidersListScreen', {
         serviceId: service.id,
         serviceName: service.name,
         merchantType: service.merchantType || service.id
       });
     }
-    // الخدمات القديمة اللي ليها أصناف (مثل مكوجي)
     else if (service.hasItems && service.type === 'items_service') {
       navigation.navigate('ItemsServiceScreen', {
         serviceId: service.id,
@@ -218,7 +231,6 @@ export default function HomeScreen({ navigation }) {
         serviceColor: service.color
       });
     }
-    // الخدمات العادية
     else {
       navigation.navigate('ServiceScreen', {
         serviceType: service.id,
@@ -257,6 +269,8 @@ export default function HomeScreen({ navigation }) {
       case ORDER_STATUS.PENDING: return '#F59E0B';
       case ORDER_STATUS.ACCEPTED: return '#3B82F6';
       case ORDER_STATUS.PREPARING: return '#8B5CF6';
+      case ORDER_STATUS.READY: return '#10B981';
+      case ORDER_STATUS.DRIVER_ASSIGNED: return '#3B82F6';
       case ORDER_STATUS.ON_THE_WAY: return '#3B82F6';
       case ORDER_STATUS.DELIVERED: return '#10B981';
       default: return '#6B7280';
@@ -268,7 +282,10 @@ export default function HomeScreen({ navigation }) {
       case ORDER_STATUS.PENDING: return 'معلق';
       case ORDER_STATUS.ACCEPTED: return 'تم القبول';
       case ORDER_STATUS.PREPARING: return 'قيد التجهيز';
+      case ORDER_STATUS.READY: return 'جاهز للتسليم';
+      case ORDER_STATUS.DRIVER_ASSIGNED: return 'تم تعيين مندوب';
       case ORDER_STATUS.ON_THE_WAY: return 'جاري التوصيل';
+      case ORDER_STATUS.DELIVERED: return 'تم التوصيل';
       default: return status;
     }
   };
@@ -288,7 +305,46 @@ export default function HomeScreen({ navigation }) {
     return service.type === 'ai' || service.id === 'restaurant' || service.id === 'home_chef';
   };
 
-  // عرض الخدمات حسب التصنيف
+  const renderOrderCard = (order) => (
+    <TouchableOpacity 
+      key={order.$id} 
+      style={styles.orderCard} 
+      onPress={() => navigation.navigate('OrderTrackingScreen', { orderId: order.$id })}
+    >
+      <View style={styles.orderHeader}>
+        <Text style={[styles.orderId, { fontFamily: fontFamily.arabic }]}>طلب #{order.$id.slice(-6)}</Text>
+        <View style={[styles.orderStatusBadge, { backgroundColor: getStatusColor(order.status) + '20' }]}>
+          <Text style={[styles.orderStatusText, { color: getStatusColor(order.status), fontFamily: fontFamily.arabic }]}>{getStatusText(order.status)}</Text>
+        </View>
+      </View>
+      
+      <Text style={[styles.orderService, { fontFamily: fontFamily.arabic }]}>{order.serviceName}</Text>
+      
+      <View style={styles.orderContactRow}>
+        {order.merchantPhone && (
+          <TouchableOpacity onPress={() => makePhoneCall(order.merchantPhone)}>
+            <Ionicons name="call" size={16} color="#3B82F6" />
+          </TouchableOpacity>
+        )}
+        {order.driverPhone && (
+          <TouchableOpacity onPress={() => makePhoneCall(order.driverPhone)}>
+            <Ionicons name="bicycle" size={16} color="#10B981" />
+          </TouchableOpacity>
+        )}
+      </View>
+      
+      {order.finalTotal > 0 && (
+        <View style={styles.orderPriceContainer}>
+          <Text style={[styles.orderPriceLabel, { fontFamily: fontFamily.arabic }]}>الإجمالي:</Text>
+          <Text style={[styles.orderPrice, { fontFamily: fontFamily.arabic }]}>{order.finalTotal} ج</Text>
+          <Text style={[styles.paymentMethod, { fontFamily: fontFamily.arabic }]}>نقداً</Text>
+        </View>
+      )}
+      
+      <Text style={[styles.orderDate, { fontFamily: fontFamily.arabic }]}>{new Date(order.createdAt).toLocaleDateString('ar-EG')}</Text>
+    </TouchableOpacity>
+  );
+
   const renderServicesByCategory = () => {
     if (services.length === 0) {
       return (
@@ -302,7 +358,6 @@ export default function HomeScreen({ navigation }) {
       );
     }
 
-    // ترتيب التصنيفات
     const sortedCategories = Object.keys(groupedServices).sort((a, b) => {
       return (CATEGORY_ORDER[a] || 999) - (CATEGORY_ORDER[b] || 999);
     });
@@ -312,7 +367,7 @@ export default function HomeScreen({ navigation }) {
         {sortedCategories.map(category => {
           const categoryServices = groupedServices[category];
           if (!categoryServices || categoryServices.length === 0) return null;
-          
+
           const categoryColor = CATEGORY_COLORS[category] || '#6B7280';
           const categoryTitle = CATEGORY_TITLES[category] || category;
 
@@ -458,32 +513,39 @@ export default function HomeScreen({ navigation }) {
         </View>
       )}
 
+      {/* الطلبات النشطة */}
       {isLoggedIn && activeOrders.length > 0 && (
         <View style={styles.ordersSection}>
-          <Text style={[styles.ordersTitle, { fontFamily: fontFamily.arabic }]}>طلباتك الحالية</Text>
+          <View style={styles.ordersHeader}>
+            <Text style={[styles.ordersTitle, { fontFamily: fontFamily.arabic }]}>طلباتك الحالية</Text>
+            <TouchableOpacity onPress={() => setShowActiveOrders(!showActiveOrders)}>
+              <Ionicons name={showActiveOrders ? "chevron-up" : "chevron-down"} size={20} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+          
+          {showActiveOrders && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.ordersScroll}>
+              {activeOrders.map(renderOrderCard)}
+            </ScrollView>
+          )}
+        </View>
+      )}
+
+      {/* الطلبات المكتملة */}
+      {isLoggedIn && completedOrders.length > 0 && (
+        <View style={styles.completedOrdersSection}>
+          <Text style={[styles.completedOrdersTitle, { fontFamily: fontFamily.arabic }]}>الطلبات السابقة</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.ordersScroll}>
-            {activeOrders.map((order) => (
-              <TouchableOpacity key={order.$id} style={styles.orderCard} onPress={() => navigation.navigate('OrderTracking', { orderId: order.$id })}>
-                <View style={styles.orderHeader}>
-                  <Text style={[styles.orderId, { fontFamily: fontFamily.arabic }]}>طلب #{order.$id.slice(-6)}</Text>
-                  <View style={[styles.orderStatusBadge, { backgroundColor: getStatusColor(order.status) + '20' }]}>
-                    <Text style={[styles.orderStatusText, { color: getStatusColor(order.status), fontFamily: fontFamily.arabic }]}>{getStatusText(order.status)}</Text>
-                  </View>
-                </View>
-                <Text style={[styles.orderService, { fontFamily: fontFamily.arabic }]}>{order.serviceName}</Text>
-                <View style={styles.orderContactRow}>
-                  {order.merchantPhone && (<TouchableOpacity onPress={() => makePhoneCall(order.merchantPhone)}><Ionicons name="call" size={16} color="#3B82F6" /></TouchableOpacity>)}
-                  {order.driverPhone && (<TouchableOpacity onPress={() => makePhoneCall(order.driverPhone)}><Ionicons name="bicycle" size={16} color="#10B981" /></TouchableOpacity>)}
-                </View>
-                {order.totalPrice > 0 && (<Text style={[styles.orderPrice, { fontFamily: fontFamily.arabic }]}>{order.totalPrice} ج</Text>)}
-                <Text style={[styles.orderDate, { fontFamily: fontFamily.arabic }]}>{new Date(order.createdAt).toLocaleDateString('ar-EG')}</Text>
-              </TouchableOpacity>
-            ))}
+            {completedOrders.map(renderOrderCard)}
           </ScrollView>
         </View>
       )}
 
-      <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} contentContainerStyle={styles.content}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} 
+        contentContainerStyle={styles.content}
+      >
         {renderServicesByCategory()}
         <View style={{ height: 80 }} />
       </ScrollView>
@@ -534,7 +596,6 @@ export default function HomeScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* DynamicMongez */}
       <DynamicMongez
         screen="home"
         navigation={navigation}
@@ -545,7 +606,7 @@ export default function HomeScreen({ navigation }) {
       />
     </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
@@ -574,18 +635,35 @@ const styles = StyleSheet.create({
   welcomeText: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
   promoSection: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#FEF3C7', marginHorizontal: 16, marginVertical: 8, borderRadius: 8 },
   promoText: { fontSize: 12, color: '#92400E', textAlign: 'center' },
+  
+  // الطلبات
   ordersSection: { marginTop: 8, marginBottom: 12, paddingHorizontal: 16 },
-  ordersTitle: { fontSize: 15, fontWeight: '600', color: '#1F2937', marginBottom: 8, textAlign: 'right' },
+  completedOrdersSection: { marginTop: 8, marginBottom: 12, paddingHorizontal: 16, opacity: 0.8 },
+  ordersHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  ordersTitle: { fontSize: 15, fontWeight: '600', color: '#1F2937', textAlign: 'right' },
+  completedOrdersTitle: { fontSize: 14, fontWeight: '500', color: '#6B7280', marginBottom: 8, textAlign: 'right' },
   ordersScroll: { flexDirection: 'row' },
-  orderCard: { backgroundColor: '#F9FAFB', borderRadius: 10, padding: 10, marginRight: 8, minWidth: 160, borderWidth: 1, borderColor: '#E5E7EB' },
+  orderCard: { 
+    backgroundColor: '#F9FAFB', 
+    borderRadius: 10, 
+    padding: 10, 
+    marginRight: 8, 
+    minWidth: 180, 
+    borderWidth: 1, 
+    borderColor: '#E5E7EB' 
+  },
   orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   orderId: { fontSize: 11, fontWeight: '600', color: '#1F2937' },
   orderStatusBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
   orderStatusText: { fontSize: 9, fontWeight: '600' },
   orderService: { fontSize: 13, fontWeight: '500', color: '#1F2937', marginBottom: 2 },
   orderContactRow: { flexDirection: 'row', gap: 8, marginBottom: 2 },
-  orderPrice: { fontSize: 13, fontWeight: '600', color: '#F59E0B' },
+  orderPriceContainer: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
+  orderPriceLabel: { fontSize: 11, color: '#6B7280' },
+  orderPrice: { fontSize: 12, fontWeight: '600', color: '#F59E0B' },
+  paymentMethod: { fontSize: 10, color: '#10B981', marginLeft: 4 },
   orderDate: { fontSize: 9, color: '#9CA3AF' },
+
   content: { padding: 16, paddingTop: 8 },
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 6 },
@@ -625,3 +703,5 @@ const styles = StyleSheet.create({
   modalCancelText: { color: '#1F2937', fontSize: 16, fontWeight: '600' },
   modalConfirmText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
 });
+
+export default HomeScreen;

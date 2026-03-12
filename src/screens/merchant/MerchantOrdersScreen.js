@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,12 @@ import {
   SafeAreaView,
   ActivityIndicator,
   RefreshControl,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getOrders, ORDER_STATUS } from '../../services/orderService';
+import { getOrders, acceptOrder, ORDER_STATUS } from '../../services/orderService';
+import { playNotificationSound, stopNotificationSound } from '../../utils/SoundHelper';
+import useInterval from '../../hooks/useInterval';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function MerchantOrdersScreen({ navigation }) {
@@ -18,23 +21,70 @@ export default function MerchantOrdersScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userData, setUserData] = useState(null);
+  const lastOrderIds = useRef(new Set());
   const [activeTab, setActiveTab] = useState('pending');
 
   useEffect(() => {
     loadUserData();
+    return () => stopNotificationSound();
   }, []);
 
   useEffect(() => {
     if (userData) {
+      console.log('👤 بيانات التاجر:', userData);
+      console.log('📌 merchantType:', userData.merchantType);
       loadOrders();
     }
   }, [userData, activeTab]);
+
+  // التحقق من الطلبات الجديدة كل 5 ثواني
+  useInterval(() => {
+    if (userData) {
+      checkForNewOrders();
+    }
+  }, 5000);
 
   const loadUserData = async () => {
     const data = await AsyncStorage.getItem('userData');
     if (data) {
       const user = JSON.parse(data);
       setUserData(user);
+    }
+  };
+
+  const checkForNewOrders = async () => {
+    try {
+      const result = await getOrders({ status: ORDER_STATUS.PENDING });
+      console.log('📦 جميع الطلبات المعلقة:', result.data.length);
+      
+      if (result.success) {
+        // فلترة حسب نوع خدمة التاجر
+        const merchantOrders = result.data.filter(order => {
+          const match = order.serviceType === userData?.merchantType || 
+                        order.serviceType === userData?.serviceType;
+          console.log(`🔍 طلب ${order.$id}: serviceType=${order.serviceType}, merchantType=${userData?.merchantType}, match=${match}`);
+          return match;
+        });
+
+        console.log('✅ طلبات التاجر:', merchantOrders.length);
+
+        // التحقق من وجود طلبات جديدة
+        const newOrderIds = new Set(merchantOrders.map(o => o.$id));
+        const hasNewOrder = [...newOrderIds].some(id => !lastOrderIds.current.has(id));
+
+        if (hasNewOrder && merchantOrders.length > 0) {
+          console.log('🔔 تم اكتشاف طلب جديد، تشغيل notification.wav');
+          playNotificationSound();
+        }
+
+        lastOrderIds.current = newOrderIds;
+        
+        if (activeTab === 'pending') {
+          setOrders(merchantOrders);
+        }
+      }
+    } catch (error) {
+      console.error('خطأ في التحقق من الطلبات:', error);
     }
   };
 
@@ -46,22 +96,35 @@ export default function MerchantOrdersScreen({ navigation }) {
           statusFilter = ORDER_STATUS.PENDING;
           break;
         case 'active':
-          statusFilter = [ORDER_STATUS.ACCEPTED, ORDER_STATUS.PREPARING, ORDER_STATUS.PRICE_SET, ORDER_STATUS.READY];
+          statusFilter = [ORDER_STATUS.ACCEPTED, ORDER_STATUS.PREPARING, ORDER_STATUS.READY, ORDER_STATUS.DRIVER_ASSIGNED, ORDER_STATUS.ON_THE_WAY];
           break;
-        case 'delivered':
+        case 'completed':
           statusFilter = ORDER_STATUS.DELIVERED;
           break;
         default:
           statusFilter = ORDER_STATUS.PENDING;
       }
 
+      console.log(`📥 جلب الطلبات للحالة: ${statusFilter}`);
       const result = await getOrders({ status: statusFilter });
+      
       if (result.success) {
-        // فلترة حسب نوع خدمة التاجر
-        const merchantOrders = result.data.filter(order => 
-          order.serviceType === userData?.merchantType || 
-          order.serviceType === userData?.serviceType
-        );
+        console.log(`📦 إجمالي الطلبات من Appwrite: ${result.data.length}`);
+        
+        const merchantOrders = result.data.filter(order => {
+          const match = order.serviceType === userData?.merchantType || 
+                        order.serviceType === userData?.serviceType;
+          console.log(`🔍 طلب ${order.$id}: serviceType=${order.serviceType}, match=${match}`);
+          return match;
+        });
+
+        console.log(`✅ طلبات التاجر بعد الفلترة: ${merchantOrders.length}`);
+
+        if (activeTab === 'pending') {
+          // تحديث lastOrderIds للطلبات المعلقة
+          lastOrderIds.current = new Set(merchantOrders.map(o => o.$id));
+        }
+        
         setOrders(merchantOrders);
       }
     } catch (error) {
@@ -72,12 +135,39 @@ export default function MerchantOrdersScreen({ navigation }) {
     }
   };
 
+  const handleAcceptOrder = async (order) => {
+    Alert.alert(
+      'قبول الطلب',
+      'هل أنت متأكد من قبول هذا الطلب؟',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'قبول',
+          onPress: async () => {
+            const result = await acceptOrder(
+              order.$id,
+              userData.$id,
+              userData.name,
+              userData.phone
+            );
+            if (result.success) {
+              stopNotificationSound();
+              loadOrders();
+              Alert.alert('✅ تم', 'تم قبول الطلب بنجاح');
+            } else {
+              Alert.alert('خطأ', result.error);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const getStatusColor = (status) => {
     const colors = {
       [ORDER_STATUS.PENDING]: '#F59E0B',
       [ORDER_STATUS.ACCEPTED]: '#3B82F6',
       [ORDER_STATUS.PREPARING]: '#8B5CF6',
-      [ORDER_STATUS.PRICE_SET]: '#10B981',
       [ORDER_STATUS.READY]: '#10B981',
       [ORDER_STATUS.DRIVER_ASSIGNED]: '#3B82F6',
       [ORDER_STATUS.ON_THE_WAY]: '#3B82F6',
@@ -92,7 +182,6 @@ export default function MerchantOrdersScreen({ navigation }) {
       [ORDER_STATUS.PENDING]: 'معلق',
       [ORDER_STATUS.ACCEPTED]: 'تم القبول',
       [ORDER_STATUS.PREPARING]: 'جاري التجهيز',
-      [ORDER_STATUS.PRICE_SET]: 'تم تحديد السعر',
       [ORDER_STATUS.READY]: 'جاهز للتسليم',
       [ORDER_STATUS.DRIVER_ASSIGNED]: 'تم تعيين مندوب',
       [ORDER_STATUS.ON_THE_WAY]: 'في الطريق',
@@ -100,16 +189,6 @@ export default function MerchantOrdersScreen({ navigation }) {
       [ORDER_STATUS.CANCELLED]: 'ملغي',
     };
     return texts[status] || status;
-  };
-
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleString('ar-EG', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      day: '2-digit',
-      month: '2-digit',
-    });
   };
 
   const onRefresh = () => {
@@ -125,7 +204,7 @@ export default function MerchantOrdersScreen({ navigation }) {
       <View style={styles.orderHeader}>
         <View>
           <Text style={styles.orderId}>طلب #{item.$id.slice(-6)}</Text>
-          <Text style={styles.orderTime}>{formatDate(item.createdAt)}</Text>
+          <Text style={styles.orderTime}>{new Date(item.createdAt).toLocaleTimeString('ar-EG')}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
           <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
@@ -145,15 +224,26 @@ export default function MerchantOrdersScreen({ navigation }) {
         </View>
       </View>
 
-      {item.totalPrice > 0 && (
-        <Text style={styles.totalPrice}>السعر: {item.totalPrice} ج</Text>
+      {item.items && item.items.length > 0 && (
+        <View style={styles.itemsContainer}>
+          <Text style={styles.itemsTitle}>المنتجات:</Text>
+          {item.items.map((itm, idx) => (
+            <Text key={idx} style={styles.itemText}>• {itm}</Text>
+          ))}
+        </View>
       )}
 
-      {item.driverName && (
-        <View style={styles.driverInfo}>
-          <Ionicons name="bicycle-outline" size={14} color="#3B82F6" />
-          <Text style={styles.driverText}>مندوب: {item.driverName}</Text>
-        </View>
+      {item.totalPrice > 0 && (
+        <Text style={styles.totalPrice}>الإجمالي: {item.totalPrice} ج</Text>
+      )}
+
+      {item.status === ORDER_STATUS.PENDING && (
+        <TouchableOpacity 
+          style={styles.acceptButton} 
+          onPress={() => handleAcceptOrder(item)}
+        >
+          <Text style={styles.acceptButtonText}>قبول الطلب</Text>
+        </TouchableOpacity>
       )}
     </TouchableOpacity>
   );
@@ -197,10 +287,10 @@ export default function MerchantOrdersScreen({ navigation }) {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'delivered' && styles.activeTab]}
-          onPress={() => setActiveTab('delivered')}
+          style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
+          onPress={() => setActiveTab('completed')}
         >
-          <Text style={[styles.tabText, activeTab === 'delivered' && styles.activeTabText]}>
+          <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
             منتهية
           </Text>
         </TouchableOpacity>
@@ -279,9 +369,18 @@ const styles = StyleSheet.create({
   customerInfo: { marginBottom: 8 },
   infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 8 },
   infoText: { fontSize: 14, color: '#4B5563', flex: 1 },
+  itemsContainer: { marginVertical: 8, padding: 8, backgroundColor: '#F9FAFB', borderRadius: 8 },
+  itemsTitle: { fontSize: 13, fontWeight: '600', color: '#1F2937', marginBottom: 4 },
+  itemText: { fontSize: 13, color: '#4B5563', marginBottom: 2 },
   totalPrice: { fontSize: 14, fontWeight: '600', color: '#F59E0B', marginTop: 4 },
-  driverInfo: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 },
-  driverText: { fontSize: 12, color: '#3B82F6' },
+  acceptButton: {
+    backgroundColor: '#10B981',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  acceptButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
   emptyContainer: { alignItems: 'center', padding: 40 },
   emptyText: { marginTop: 12, fontSize: 16, color: '#6B7280' },
 });

@@ -8,13 +8,16 @@ export default function DynamicMongez({ screen, navigation, contextData = {} }) 
   const [selectedAssistant, setSelectedAssistant] = useState(null);
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
-  const screenRef = useRef(screen);
   const loadedRef = useRef(false);
+
+  // استخراج serviceId من contextData إذا كانت موجودة
+  const serviceId = contextData?.serviceId || null;
 
   useEffect(() => {
     mountedRef.current = true;
-    
-    // تحميل المساعدين مرة واحدة فقط
+
+    console.log(`🔍 DynamicMongez - screen: ${screen}, serviceId: ${serviceId}`);
+
     if (!loadedRef.current) {
       loadAssistants();
     }
@@ -22,28 +25,31 @@ export default function DynamicMongez({ screen, navigation, contextData = {} }) 
     return () => {
       mountedRef.current = false;
     };
-  }, []); // مصفوفة فارغة - يشتغل مرة واحدة فقط عند تحميل المكون
-
-  // لا نستخدم useEffect مع screen لأننا لا نريد إعادة التحميل
+  }, [screen, serviceId]); // إعادة التحميل إذا تغيرت الشاشة أو الخدمة
 
   const loadAssistants = async () => {
     if (!mountedRef.current || loadedRef.current) return;
-    
+
     setLoading(true);
-    
+
     try {
-      const result = await getAssistantsForScreen(screen);
+      // تمرير serviceId إذا كنا في شاشة خدمة
+      console.log(`📥 جلب المساعدين للشاشة: ${screen}, الخدمة: ${serviceId || 'عام'}`);
       
+      const result = await getAssistantsForScreen(screen, serviceId);
+
       if (!mountedRef.current) return;
-      
-      if (result.success) {
+
+      if (result.success && result.data.length > 0) {
+        console.log(`✅ تم جلب ${result.data.length} مساعد`);
         setAssistants(result.data);
-        loadedRef.current = true; // نضع علامة أنه تم التحميل
+        loadedRef.current = true;
       } else {
+        console.log(`⚠️ لا يوجد مساعدين للشاشة ${screen} والخدمة ${serviceId}`);
         setAssistants([]);
       }
     } catch (error) {
-      console.log('خطأ في تحميل المساعدين:', error);
+      console.log('❌ خطأ في تحميل المساعدين:', error);
       if (mountedRef.current) {
         setAssistants([]);
       }

@@ -42,26 +42,55 @@ export const getAllServices = async () => {
   }
 };
 
-// جلب المساعدين لشاشة محددة
-export const getAssistantsForScreen = async (screenName) => {
+// جلب المساعدين لشاشة محددة (مع إمكانية تحديد serviceId)
+export const getAssistantsForScreen = async (screenName, serviceId = null) => {
   try {
-    console.log(`🔍 جلب المساعدين للشاشة: ${screenName}`);
-    
+    console.log(`🔍 جلب المساعدين للشاشة: ${screenName}, الخدمة ID: ${serviceId || 'عام'}`);
+
+    // أولاً: جلب كل المساعدين لنرى ماذا يوجد (للتشخيص)
+    const allAssistants = await databases.listDocuments(
+      DATABASE_ID,
+      ASSISTANTS_COLLECTION_ID,
+      [Query.limit(100)]
+    );
+    console.log(`📋 جميع المساعدين في قاعدة البيانات (${allAssistants.documents.length}):`);
+    allAssistants.documents.forEach((a, i) => {
+      console.log(`   ${i+1}. ${a.name} - screen: ${a.screen}, serviceId: ${a.serviceId}, isActive: ${a.isActive}`);
+    });
+
+    const queries = [
+      Query.equal('isActive', true),
+      Query.orderAsc('order'),
+      Query.limit(20)
+    ];
+
+    // إذا كانت الشاشة هي 'service'، نضيف شرط الـ serviceId (Document ID)
+    if (screenName === 'service' && serviceId) {
+      console.log(`📌 تصفية حسب serviceId (Document ID): ${serviceId}`);
+      queries.push(Query.equal('serviceId', serviceId));
+    } else {
+      // للشاشات الأخرى، نجلب المساعدين المخصصين لتلك الشاشة فقط
+      console.log(`📌 تصفية حسب الشاشة: ${screenName}`);
+      queries.push(Query.equal('screen', screenName));
+    }
+
     const response = await databases.listDocuments(
       DATABASE_ID,
       ASSISTANTS_COLLECTION_ID,
-      [
-        Query.equal('screen', screenName),
-        Query.equal('isActive', true),
-        Query.orderAsc('order'),
-        Query.limit(20)
-      ]
+      queries
     );
+
+    console.log(`✅ تم جلب ${response.documents.length} مساعد للشاشة ${screenName}`);
     
+    // طباعة تفاصيل المساعدين للتحقق
+    response.documents.forEach((doc, index) => {
+      console.log(`   ${index + 1}. ${doc.name} - serviceId: ${doc.serviceId}, screen: ${doc.screen}`);
+    });
+
     return { success: true, data: response.documents };
-    
+
   } catch (error) {
-    console.log('⚠️ المساعدين مش متاحين حالياً');
+    console.log('⚠️ المساعدين مش متاحين حالياً:', error.message);
     return { success: true, data: [] };
   }
 };
@@ -96,7 +125,7 @@ export const createAssistant = async (assistantData) => {
       order: assistantData.order || 0,
       serviceId: assistantData.serviceId || null,
       serviceName: assistantData.serviceName || null,
-      model: assistantData.model || 'llama-3.3-70b-versatile', // ✅ الموديل الافتراضي
+      model: assistantData.model || 'llama-3.3-70b-versatile',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };

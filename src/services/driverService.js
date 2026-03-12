@@ -1,26 +1,21 @@
 import { databases, DATABASE_ID, USERS_COLLECTION_ID } from '../appwrite/config';
-import { ID } from 'appwrite';
+import { Query } from 'appwrite';
 
-// تسجيل مندوب جديد
-export const registerDriver = async (driverData) => {
+export const getAvailableDrivers = async () => {
   try {
-    const driver = {
-      ...driverData,
-      role: 'driver',
-      active: true,
-      createdAt: new Date().toISOString(),
-    };
-    
-    const response = await databases.createDocument(
+    const response = await databases.listDocuments(
       DATABASE_ID,
       USERS_COLLECTION_ID,
-      ID.unique(),
-      driver
+      [
+        Query.equal('role', 'driver'),
+        Query.equal('active', true),
+        Query.equal('isAvailable', true),
+        Query.limit(50)
+      ]
     );
-    
-    return { success: true, id: response.$id };
+    return { success: true, data: response.documents };
   } catch (error) {
-    console.error('Error registering driver:', error);
-    return { success: false, error: error.message };
+    console.error('❌ خطأ في جلب المناديب:', error);
+    return { success: false, error: error.message, data: [] };
   }
 };

@@ -11,13 +11,21 @@ import {
   TextInput,
   Modal,
   FlatList,
+  Image,
+  Linking,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { databases, DATABASE_ID } from '../../appwrite/config';
 import { 
-  startPreparing, setOrderPrice, markAsReady, 
-  assignDriver, getAvailableDrivers, ORDER_STATUS 
+  setOrderPrice, assignDriver, startDelivery, completeDelivery,
+  updateOrderStatus, ORDER_STATUS 
 } from '../../services/orderService';
+import { getAvailableDrivers } from '../../services/driverService';
+import { fontFamily } from '../../utils/fonts';
+
+const { width, height } = Dimensions.get('window');
 
 export default function OrderDetailsScreen({ route, navigation }) {
   const { orderId } = route.params;
@@ -28,13 +36,17 @@ export default function OrderDetailsScreen({ route, navigation }) {
   const [showPriceModal, setShowPriceModal] = useState(false);
   const [price, setPrice] = useState('');
   const [deliveryFee, setDeliveryFee] = useState('');
-
-  // هل هذه الخدمة تحتاج تحديد سعر؟
-  const needsPrice = !order?.serviceType?.match(/restaurant|home_chef|supermarket|pharmacy/);
+  const [playingVoice, setPlayingVoice] = useState(null);
+  const [sound, setSound] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [showImageModal, setShowImageModal] = useState(false);
 
   useEffect(() => {
     loadOrder();
     loadDrivers();
+    return () => {
+      if (sound) sound.unloadAsync();
+    };
   }, []);
 
   const loadOrder = async () => {
@@ -60,25 +72,26 @@ export default function OrderDetailsScreen({ route, navigation }) {
     }
   };
 
-  const handleStartPreparing = () => {
-    Alert.alert(
-      'بدء التجهيز',
-      'هل أنت متأكد من بدء تجهيز الطلب؟',
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'بدء',
-          onPress: async () => {
-            const result = await startPreparing(orderId);
-            if (result.success) {
-              loadOrder();
-            } else {
-              Alert.alert('خطأ', result.error);
-            }
-          }
-        }
-      ]
-    );
+  const playVoice = async (voiceUrl) => {
+    try {
+      if (sound) await sound.unloadAsync();
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: voiceUrl },
+        { shouldPlay: true }
+      );
+      setSound(newSound);
+      setPlayingVoice(voiceUrl);
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) setPlayingVoice(null);
+      });
+    } catch (error) {
+      Alert.alert('خطأ', 'فشل تشغيل التسجيل الصوتي');
+    }
+  };
+
+  const openImage = (imageUrl) => {
+    setSelectedImage(imageUrl);
+    setShowImageModal(true);
   };
 
   const handleSetPrice = async () => {
@@ -86,40 +99,17 @@ export default function OrderDetailsScreen({ route, navigation }) {
       Alert.alert('تنبيه', 'السعر مطلوب');
       return;
     }
-
     const result = await setOrderPrice(
       orderId,
       parseFloat(price),
       deliveryFee ? parseFloat(deliveryFee) : 0
     );
-
     if (result.success) {
       setShowPriceModal(false);
       loadOrder();
     } else {
       Alert.alert('خطأ', result.error);
     }
-  };
-
-  const handleMarkAsReady = () => {
-    Alert.alert(
-      'الطلب جاهز',
-      'هل الطلب جاهز للتسليم؟',
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'نعم، جاهز',
-          onPress: async () => {
-            const result = await markAsReady(orderId);
-            if (result.success) {
-              loadOrder();
-            } else {
-              Alert.alert('خطأ', result.error);
-            }
-          }
-        }
-      ]
-    );
   };
 
   const handleAssignDriver = (driver) => {
@@ -149,12 +139,27 @@ export default function OrderDetailsScreen({ route, navigation }) {
     );
   };
 
+  const handleStartDelivery = async () => {
+    const result = await startDelivery(orderId);
+    if (result.success) loadOrder();
+    else Alert.alert('خطأ', result.error);
+  };
+
+  const handleCompleteDelivery = async () => {
+    const result = await completeDelivery(orderId);
+    if (result.success) loadOrder();
+    else Alert.alert('خطأ', result.error);
+  };
+
+  const makePhoneCall = (phone) => {
+    Linking.openURL(`tel:${phone}`);
+  };
+
   const getStatusColor = (status) => {
     const colors = {
       [ORDER_STATUS.PENDING]: '#F59E0B',
       [ORDER_STATUS.ACCEPTED]: '#3B82F6',
       [ORDER_STATUS.PREPARING]: '#8B5CF6',
-      [ORDER_STATUS.PRICE_SET]: '#10B981',
       [ORDER_STATUS.READY]: '#10B981',
       [ORDER_STATUS.DRIVER_ASSIGNED]: '#3B82F6',
       [ORDER_STATUS.ON_THE_WAY]: '#3B82F6',
@@ -169,7 +174,6 @@ export default function OrderDetailsScreen({ route, navigation }) {
       [ORDER_STATUS.PENDING]: 'معلق',
       [ORDER_STATUS.ACCEPTED]: 'تم القبول',
       [ORDER_STATUS.PREPARING]: 'جاري التجهيز',
-      [ORDER_STATUS.PRICE_SET]: 'تم تحديد السعر',
       [ORDER_STATUS.READY]: 'جاهز للتسليم',
       [ORDER_STATUS.DRIVER_ASSIGNED]: 'تم تعيين مندوب',
       [ORDER_STATUS.ON_THE_WAY]: 'في الطريق',
@@ -185,58 +189,78 @@ export default function OrderDetailsScreen({ route, navigation }) {
     switch(order.status) {
       case ORDER_STATUS.ACCEPTED:
         return (
-          <TouchableOpacity style={styles.actionButton} onPress={handleStartPreparing}>
-            <Ionicons name="restaurant-outline" size={24} color="#FFF" />
-            <Text style={styles.actionButtonText}>بدء التجهيز</Text>
-          </TouchableOpacity>
+          <View style={styles.actions}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => updateOrderStatus(orderId, ORDER_STATUS.PREPARING).then(loadOrder)}
+            >
+              <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>بدء التجهيز</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.priceButton]}
+              onPress={() => setShowPriceModal(true)}
+            >
+              <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>تحديد السعر</Text>
+            </TouchableOpacity>
+          </View>
         );
 
       case ORDER_STATUS.PREPARING:
-        if (needsPrice) {
-          return (
-            <TouchableOpacity style={styles.actionButton} onPress={() => setShowPriceModal(true)}>
-              <Ionicons name="pricetag-outline" size={24} color="#FFF" />
-              <Text style={styles.actionButtonText}>تحديد السعر</Text>
-            </TouchableOpacity>
-          );
-        } else {
-          return (
-            <TouchableOpacity style={styles.actionButton} onPress={handleMarkAsReady}>
-              <Ionicons name="checkmark-circle-outline" size={24} color="#FFF" />
-              <Text style={styles.actionButtonText}>الطلب جاهز</Text>
-            </TouchableOpacity>
-          );
-        }
-
-      case ORDER_STATUS.PRICE_SET:
         return (
-          <TouchableOpacity style={styles.actionButton} onPress={handleMarkAsReady}>
-            <Ionicons name="checkmark-circle-outline" size={24} color="#FFF" />
-            <Text style={styles.actionButtonText}>الطلب جاهز</Text>
-          </TouchableOpacity>
+          <View style={styles.actions}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => setShowPriceModal(true)}
+            >
+              <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>تحديد السعر</Text>
+            </TouchableOpacity>
+          </View>
         );
 
       case ORDER_STATUS.READY:
         return (
           <View>
-            <Text style={styles.sectionTitle}>اختيار طريقة التوصيل:</Text>
+            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>اختيار طريقة التوصيل:</Text>
             <View style={styles.deliveryOptions}>
               <TouchableOpacity 
                 style={[styles.deliveryOption, styles.selfDelivery]}
-                onPress={() => handleAssignDriver({ $id: 'self', name: 'التاجر نفسه', phone: order.merchantPhone })}
+                onPress={handleStartDelivery}
               >
                 <Ionicons name="person-outline" size={30} color="#FFF" />
-                <Text style={styles.deliveryOptionText}>توصيل بنفسي</Text>
+                <Text style={[styles.deliveryOptionText, { fontFamily: fontFamily.arabic }]}>توصيل بنفسي</Text>
               </TouchableOpacity>
-
               <TouchableOpacity 
                 style={[styles.deliveryOption, styles.driverDelivery]}
                 onPress={() => setShowDriversModal(true)}
               >
                 <Ionicons name="bicycle-outline" size={30} color="#FFF" />
-                <Text style={styles.deliveryOptionText}>مندوب</Text>
+                <Text style={[styles.deliveryOptionText, { fontFamily: fontFamily.arabic }]}>مندوب</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        );
+
+      case ORDER_STATUS.DRIVER_ASSIGNED:
+        return (
+          <View style={styles.actions}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={handleStartDelivery}
+            >
+              <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>بدء التوصيل</Text>
+            </TouchableOpacity>
+          </View>
+        );
+
+      case ORDER_STATUS.ON_THE_WAY:
+        return (
+          <View style={styles.actions}>
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.completeButton]}
+              onPress={handleCompleteDelivery}
+            >
+              <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>تم التوصيل</Text>
+            </TouchableOpacity>
           </View>
         );
 
@@ -259,7 +283,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-forward" size={28} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>تفاصيل الطلب</Text>
+        <Text style={[styles.headerTitle, { fontFamily: fontFamily.arabic }]}>تفاصيل الطلب</Text>
         <View style={{ width: 28 }} />
       </View>
 
@@ -268,99 +292,156 @@ export default function OrderDetailsScreen({ route, navigation }) {
         <View style={[styles.statusCard, { backgroundColor: getStatusColor(order.status) + '20' }]}>
           <Ionicons name="information-circle" size={40} color={getStatusColor(order.status)} />
           <View style={styles.statusInfo}>
-            <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}>
+            <Text style={[styles.statusText, { fontFamily: fontFamily.arabic, color: getStatusColor(order.status) }]}>
               {getStatusText(order.status)}
             </Text>
-            <Text style={styles.orderId}>طلب #{order.$id.slice(-6)}</Text>
+            <Text style={[styles.orderId, { fontFamily: fontFamily.arabic }]}>طلب #{order.$id.slice(-6)}</Text>
           </View>
         </View>
 
         {/* معلومات العميل */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>معلومات العميل</Text>
+          <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>معلومات العميل</Text>
           <View style={styles.infoCard}>
-            <View style={styles.infoRow}>
+            <TouchableOpacity style={styles.infoRow} onPress={() => makePhoneCall(order.customerPhone)}>
               <Ionicons name="call-outline" size={20} color="#4F46E5" />
-              <Text style={styles.infoLabel}>رقم الهاتف:</Text>
-              <Text style={styles.infoValue}>{order.customerPhone}</Text>
-            </View>
+              <Text style={[styles.infoLabel, { fontFamily: fontFamily.arabic }]}>رقم الهاتف:</Text>
+              <Text style={[styles.infoValue, styles.phoneLink, { fontFamily: fontFamily.arabic }]}>{order.customerPhone}</Text>
+            </TouchableOpacity>
             <View style={styles.infoRow}>
               <Ionicons name="location-outline" size={20} color="#EF4444" />
-              <Text style={styles.infoLabel}>العنوان:</Text>
-              <Text style={styles.infoValue}>{order.customerAddress}</Text>
+              <Text style={[styles.infoLabel, { fontFamily: fontFamily.arabic }]}>العنوان:</Text>
+              <Text style={[styles.infoValue, { fontFamily: fontFamily.arabic }]}>{order.customerAddress}</Text>
             </View>
           </View>
         </View>
 
-        {/* تفاصيل الطلب */}
+        {/* وصف الطلب */}
+        {order.description && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>📝 وصف الطلب</Text>
+            <View style={styles.descriptionCard}>
+              <Text style={[styles.descriptionText, { fontFamily: fontFamily.arabic }]}>{order.description}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* المنتجات */}
         {order.items && order.items.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>تفاصيل الطلب</Text>
+            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>📋 المنتجات</Text>
             <View style={styles.itemsCard}>
               {order.items.map((item, index) => (
-                <Text key={index} style={styles.itemText}>• {item}</Text>
+                <Text key={index} style={[styles.itemText, { fontFamily: fontFamily.arabic }]}>• {item}</Text>
               ))}
             </View>
           </View>
         )}
 
-        {/* السعر (إذا تم تحديده) */}
+        {/* ✅ الصور المرفقة - بدون تكبير */}
+        {order.imageUrls && order.imageUrls.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>🖼️ الصور المرفقة</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagesContainer}>
+              {order.imageUrls.map((url, index) => (
+                <TouchableOpacity key={index} onPress={() => openImage(url)}>
+                  <Image source={{ uri: url }} style={styles.thumbnail} />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* ✅ التسجيل الصوتي */}
+        {order.voiceUrl && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>🎤 التسجيل الصوتي</Text>
+            <TouchableOpacity
+              style={styles.voiceButton}
+              onPress={() => playVoice(order.voiceUrl)}
+            >
+              <Ionicons
+                name={playingVoice === order.voiceUrl ? "pause" : "play"}
+                size={24}
+                color="#FFF"
+              />
+              <Text style={[styles.voiceButtonText, { fontFamily: fontFamily.arabic }]}>
+                {playingVoice === order.voiceUrl ? 'جاري التشغيل' : 'استمع للتسجيل'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* الفاتورة */}
         {order.totalPrice > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>السعر</Text>
-            <View style={styles.priceCard}>
-              <View style={styles.priceRow}>
-                <Text style={styles.priceLabel}>قيمة الطلب:</Text>
-                <Text style={styles.priceValue}>{order.totalPrice} ج</Text>
+            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>💰 الفاتورة</Text>
+            <View style={styles.invoiceCard}>
+              <View style={styles.invoiceRow}>
+                <Text style={[styles.invoiceLabel, { fontFamily: fontFamily.arabic }]}>قيمة الطلب:</Text>
+                <Text style={[styles.invoiceValue, { fontFamily: fontFamily.arabic }]}>{order.totalPrice} ج</Text>
               </View>
               {order.deliveryFee > 0 && (
-                <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>تكلفة التوصيل:</Text>
-                  <Text style={styles.priceValue}>{order.deliveryFee} ج</Text>
+                <View style={styles.invoiceRow}>
+                  <Text style={[styles.invoiceLabel, { fontFamily: fontFamily.arabic }]}>تكلفة التوصيل:</Text>
+                  <Text style={[styles.invoiceValue, { fontFamily: fontFamily.arabic }]}>{order.deliveryFee} ج</Text>
                 </View>
               )}
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>الإجمالي:</Text>
-                <Text style={styles.totalValue}>{order.finalTotal || order.totalPrice} ج</Text>
+              <View style={styles.invoiceTotal}>
+                <Text style={[styles.totalLabel, { fontFamily: fontFamily.arabic }]}>الإجمالي:</Text>
+                <Text style={[styles.totalValue, { fontFamily: fontFamily.arabic }]}>{order.finalTotal || order.totalPrice} ج</Text>
+              </View>
+              <View style={styles.paymentMethod}>
+                <Text style={[styles.paymentLabel, { fontFamily: fontFamily.arabic }]}>طريقة الدفع:</Text>
+                <Text style={[styles.paymentValue, { fontFamily: fontFamily.arabic }]}>الدفع عند الاستلام</Text>
               </View>
             </View>
           </View>
         )}
 
-        {/* معلومات المندوب (إذا تم تعيينه) */}
+        {/* معلومات المندوب */}
         {order.driverName && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>معلومات المندوب</Text>
+            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>🚚 معلومات المندوب</Text>
             <View style={styles.driverCard}>
               <View style={styles.driverRow}>
                 <Ionicons name="person-outline" size={20} color="#3B82F6" />
-                <Text style={styles.driverName}>{order.driverName}</Text>
+                <Text style={[styles.driverName, { fontFamily: fontFamily.arabic }]}>{order.driverName}</Text>
               </View>
-              <View style={styles.driverRow}>
+              <TouchableOpacity style={styles.driverRow} onPress={() => makePhoneCall(order.driverPhone)}>
                 <Ionicons name="call-outline" size={20} color="#3B82F6" />
-                <Text style={styles.driverPhone}>{order.driverPhone}</Text>
-              </View>
+                <Text style={[styles.driverPhone, styles.phoneLink, { fontFamily: fontFamily.arabic }]}>{order.driverPhone}</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
 
         {/* أزرار الإجراءات */}
-        <View style={styles.actionsContainer}>
-          {renderActionButtons()}
-        </View>
+        {renderActionButtons()}
       </ScrollView>
+
+      {/* ✅ Modal عرض الصورة - بدون تكبير */}
+      <Modal visible={showImageModal} transparent animationType="fade">
+        <View style={styles.imageModalOverlay}>
+          <TouchableOpacity style={styles.closeImageButton} onPress={() => setShowImageModal(false)}>
+            <Ionicons name="close" size={30} color="#FFF" />
+          </TouchableOpacity>
+          {selectedImage && (
+            <Image source={{ uri: selectedImage }} style={styles.fullImage} resizeMode="contain" />
+          )}
+        </View>
+      </Modal>
 
       {/* Modal اختيار مندوب */}
       <Modal visible={showDriversModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>اختر مندوب</Text>
+              <Text style={[styles.modalTitle, { fontFamily: fontFamily.arabic }]}>اختر مندوب</Text>
               <TouchableOpacity onPress={() => setShowDriversModal(false)}>
                 <Ionicons name="close" size={24} color="#EF4444" />
               </TouchableOpacity>
             </View>
-
             <FlatList
               data={drivers}
               keyExtractor={item => item.$id}
@@ -371,13 +452,13 @@ export default function OrderDetailsScreen({ route, navigation }) {
                 >
                   <Ionicons name="person-circle-outline" size={40} color="#4F46E5" />
                   <View style={styles.driverItemInfo}>
-                    <Text style={styles.driverItemName}>{item.name}</Text>
-                    <Text style={styles.driverItemPhone}>{item.phone}</Text>
+                    <Text style={[styles.driverItemName, { fontFamily: fontFamily.arabic }]}>{item.name}</Text>
+                    <Text style={[styles.driverItemPhone, { fontFamily: fontFamily.arabic }]}>{item.phone}</Text>
                   </View>
                 </TouchableOpacity>
               )}
               ListEmptyComponent={
-                <Text style={styles.emptyText}>لا يوجد مندوبين متاحين</Text>
+                <Text style={[styles.emptyText, { fontFamily: fontFamily.arabic }]}>لا يوجد مندوبين متاحين</Text>
               }
             />
           </View>
@@ -388,21 +469,23 @@ export default function OrderDetailsScreen({ route, navigation }) {
       <Modal visible={showPriceModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.priceModalContent}>
-            <Text style={styles.modalTitle}>تحديد السعر</Text>
+            <Text style={[styles.modalTitle, { fontFamily: fontFamily.arabic }]}>تحديد السعر</Text>
             
-            <Text style={styles.inputLabel}>قيمة الطلب *</Text>
+            <Text style={[styles.inputLabel, { fontFamily: fontFamily.arabic }]}>قيمة الطلب *</Text>
             <TextInput
-              style={styles.priceInput}
+              style={[styles.priceInput, { fontFamily: fontFamily.arabic }]}
               placeholder="مثال: 150"
+              placeholderTextColor="#9CA3AF"
               value={price}
               onChangeText={setPrice}
               keyboardType="numeric"
             />
 
-            <Text style={styles.inputLabel}>تكلفة التوصيل (اختياري)</Text>
+            <Text style={[styles.inputLabel, { fontFamily: fontFamily.arabic }]}>تكلفة التوصيل (اختياري)</Text>
             <TextInput
-              style={styles.priceInput}
+              style={[styles.priceInput, { fontFamily: fontFamily.arabic }]}
               placeholder="مثال: 20"
+              placeholderTextColor="#9CA3AF"
               value={deliveryFee}
               onChangeText={setDeliveryFee}
               keyboardType="numeric"
@@ -410,10 +493,10 @@ export default function OrderDetailsScreen({ route, navigation }) {
 
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => setShowPriceModal(false)}>
-                <Text style={styles.cancelButtonText}>إلغاء</Text>
+                <Text style={[styles.cancelButtonText, { fontFamily: fontFamily.arabic }]}>إلغاء</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.confirmButton} onPress={handleSetPrice}>
-                <Text style={styles.confirmButtonText}>تأكيد</Text>
+                <Text style={[styles.confirmButtonText, { fontFamily: fontFamily.arabic }]}>تأكيد</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -454,40 +537,87 @@ const styles = StyleSheet.create({
   section: { marginBottom: 20 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginBottom: 8 },
 
-  // البطاقات
+  // بطاقة المعلومات
   infoCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E5E7EB' },
   infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
   infoLabel: { fontSize: 14, color: '#6B7280', width: 70 },
   infoValue: { fontSize: 14, color: '#1F2937', flex: 1 },
+  phoneLink: { color: '#3B82F6', textDecorationLine: 'underline' },
 
+  // وصف الطلب
+  descriptionCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E5E7EB' },
+  descriptionText: { fontSize: 14, color: '#4B5563', lineHeight: 20 },
+
+  // المنتجات
   itemsCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-  itemText: { fontSize: 14, color: '#4B5563', marginBottom: 6 },
+  itemText: { fontSize: 13, color: '#4B5563', marginBottom: 2 },
 
-  priceCard: { backgroundColor: '#FEF3C7', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#F59E0B' },
-  priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  priceLabel: { fontSize: 14, color: '#92400E' },
-  priceValue: { fontSize: 14, fontWeight: '600', color: '#92400E' },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F59E0B' },
+  // ✅ الصور
+  imagesContainer: { flexDirection: 'row', marginBottom: 8 },
+  thumbnail: { width: 80, height: 80, borderRadius: 8, marginRight: 8 },
+
+  // ✅ Modal عرض الصورة (بدون تكبير)
+  imageModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeImageButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    padding: 10,
+  },
+  fullImage: {
+    width: width,
+    height: height * 0.8,
+  },
+
+  // الصوت
+  voiceButton: {
+    backgroundColor: '#3B82F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  voiceButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
+
+  // الفاتورة
+  invoiceCard: { backgroundColor: '#FEF3C7', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#F59E0B' },
+  invoiceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  invoiceLabel: { fontSize: 14, color: '#92400E' },
+  invoiceValue: { fontSize: 14, fontWeight: '600', color: '#92400E' },
+  invoiceTotal: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F59E0B' },
   totalLabel: { fontSize: 16, fontWeight: '600', color: '#92400E' },
   totalValue: { fontSize: 18, fontWeight: 'bold', color: '#92400E' },
+  paymentMethod: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F59E0B' },
+  paymentLabel: { fontSize: 14, color: '#92400E' },
+  paymentValue: { fontSize: 14, fontWeight: '600', color: '#10B981' },
 
+  // معلومات المندوب
   driverCard: { backgroundColor: '#DBEAFE', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#3B82F6' },
   driverRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
   driverName: { fontSize: 16, fontWeight: '600', color: '#1E40AF' },
   driverPhone: { fontSize: 14, color: '#1E40AF' },
 
   // أزرار الإجراءات
-  actionsContainer: { marginTop: 10, marginBottom: 30 },
+  actions: { marginTop: 10, marginBottom: 30 },
   actionButton: {
     backgroundColor: '#4F46E5',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     padding: 16,
     borderRadius: 12,
-    gap: 8,
+    alignItems: 'center',
+    marginBottom: 10,
   },
+  priceButton: { backgroundColor: '#F59E0B' },
+  completeButton: { backgroundColor: '#10B981' },
   actionButtonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
+
   deliveryOptions: { flexDirection: 'row', gap: 12 },
   deliveryOption: { flex: 1, alignItems: 'center', padding: 20, borderRadius: 12, gap: 8 },
   selfDelivery: { backgroundColor: '#F59E0B' },
@@ -520,6 +650,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+    textAlign: 'right',
   },
   modalButtons: { flexDirection: 'row', gap: 12, marginTop: 20 },
   cancelButton: { flex: 1, padding: 12, borderRadius: 8, backgroundColor: '#F3F4F6', alignItems: 'center' },

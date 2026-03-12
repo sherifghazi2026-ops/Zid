@@ -1,7 +1,7 @@
 import { databases, DATABASE_ID, SERVICES_COLLECTION_ID } from '../appwrite/config';
 import { ID, Query } from 'appwrite';
 
-// الخدمات الثابتة (مطاعم وأكل بيتي)
+// ✅ الخدمات الأساسية فقط (مطاعم وأكل بيتي) - بدون خدمات افتراضية أخرى
 export const CORE_SERVICES = [
   {
     id: 'restaurant',
@@ -35,7 +35,7 @@ export const CORE_SERVICES = [
   }
 ];
 
-// تهيئة الخدمات الأساسية
+// تهيئة الخدمات الأساسية (فقط المطاعم وأكل بيتي)
 export const initializeCoreServices = async () => {
   try {
     console.log('🚀 تهيئة الخدمات الأساسية...');
@@ -73,7 +73,7 @@ export const initializeCoreServices = async () => {
   }
 };
 
-// جلب جميع الخدمات
+// جلب جميع الخدمات (من Appwrite فقط)
 export const getAllServices = async () => {
   try {
     const response = await databases.listDocuments(
@@ -88,7 +88,7 @@ export const getAllServices = async () => {
   }
 };
 
-// جلب الخدمات الظاهرة في الصفحة الرئيسية
+// جلب الخدمات الظاهرة في الصفحة الرئيسية (من Appwrite فقط)
 export const getVisibleServicesForHome = async () => {
   try {
     const response = await databases.listDocuments(
@@ -155,7 +155,7 @@ export const createService = async (serviceData) => {
       itemsCollection: serviceData.itemsCollection || null,
       merchantRole: serviceData.merchantRole || 'merchant',
       merchantType: serviceData.merchantType || null,
-      // 👇 الخدمات الفرعية (مهم جداً)
+      // الخدمات الفرعية
       subServices: serviceData.subServices || [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

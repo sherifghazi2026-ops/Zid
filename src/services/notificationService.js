@@ -1,21 +1,18 @@
 import { Vibration } from 'react-native';
 import { playNotificationSound, stopNotificationSound } from '../utils/SoundHelper';
 
-// نسخة مبسطة - تعتمد على الصوت المحلي فقط
-// لا تستخدم expo-notifications نهائياً
+// ✅ نسخة مبسطة - تعتمد على الصوت المحلي والاهتزاز فقط
+// ✅ لا تستخدم expo-notifications نهائياً
 
-// تهيئة الإشعارات
 export const setupNotifications = async () => {
   console.log('📱 استخدام النظام المحلي للإشعارات');
   return 'local-only';
 };
 
-// حفظ التوكن (وهمي)
 export const savePushToken = async () => {
   return true;
 };
 
-// إرسال إشعارات لجميع التجار
 export const notifyAllMerchants = async (serviceType, orderData) => {
   try {
     console.log(`🔔 طلب جديد في خدمة ${serviceType}`);
@@ -33,23 +30,19 @@ export const notifyAllMerchants = async (serviceType, orderData) => {
   }
 };
 
-// إشعار للمندوب
 export const notifyDriver = async () => {
   return true;
 };
 
-// معالج الإشعارات (وهمي)
 export const handleIncomingNotification = () => {
   return null;
 };
 
-// إيقاف الصوت
 export const stopOrderSound = () => {
   stopNotificationSound();
   Vibration.cancel();
 };
 
-// اختبار الإشعارات
 export const testNotification = () => {
   console.log('🔔 اختبار الإشعار...');
   playNotificationSound();

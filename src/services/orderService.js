@@ -1,63 +1,21 @@
-import { databases, DATABASE_ID, ORDERS_COLLECTION_ID, USERS_COLLECTION_ID } from '../appwrite/config';
+import { databases, DATABASE_ID, ORDERS_COLLECTION_ID } from '../appwrite/config';
 import { ID, Query } from 'appwrite';
 import { playSendSound } from '../utils/SoundHelper';
 import { uploadToImageKit } from './uploadService';
-import { notifyAllMerchants } from './notificationService';
 
 export const ORDER_STATUS = {
-  PENDING: 'pending',           // الطلب معلق (بانتظار تاجر)
-  ACCEPTED: 'accepted',         // تم قبول الطلب من تاجر
-  PREPARING: 'preparing',       // جاري التجهيز
-  PRICE_SET: 'price_set',       // تم تحديد السعر (للخدمات بدون سعر مسبق)
-  READY: 'ready',               // جاهز للاستلام
-  ASSIGNING_DRIVER: 'assigning_driver', // في انتظار مندوب
-  DRIVER_ASSIGNED: 'driver_assigned',   // تم تعيين مندوب
-  ON_THE_WAY: 'on_the_way',     // المندوب في الطريق
-  DELIVERED: 'delivered',       // تم التوصيل
-  CANCELLED: 'cancelled',       // ملغي
+  PENDING: 'pending',
+  ACCEPTED: 'accepted',
+  PREPARING: 'preparing',
+  READY: 'ready',
+  DRIVER_ASSIGNED: 'driver_assigned',
+  ON_THE_WAY: 'on_the_way',
+  DELIVERED: 'delivered',
+  CANCELLED: 'cancelled',
 };
 
-// جلب جميع التجار المرتبطين بخدمة معينة
-export const getMerchantsByServiceType = async (serviceType) => {
-  try {
-    console.log(`🔍 جلب التجار للخدمة: ${serviceType}`);
-    
-    const response = await databases.listDocuments(
-      DATABASE_ID,
-      USERS_COLLECTION_ID,
-      [
-        Query.equal('role', 'merchant'),
-        Query.equal('merchantType', serviceType),
-        Query.equal('active', true),
-        Query.limit(100)
-      ]
-    );
-
-    return { success: true, data: response.documents };
-  } catch (error) {
-    console.error('❌ خطأ في جلب التجار:', error);
-    return { success: false, error: error.message, data: [] };
-  }
-};
-
-// جلب المندوبين المتاحين
-export const getAvailableDrivers = async () => {
-  try {
-    const response = await databases.listDocuments(
-      DATABASE_ID,
-      USERS_COLLECTION_ID,
-      [
-        Query.equal('role', 'driver'),
-        Query.equal('active', true),
-        Query.equal('isAvailable', true),
-        Query.limit(50)
-      ]
-    );
-    return { success: true, data: response.documents };
-  } catch (error) {
-    console.error('❌ خطأ في جلب المندوبين:', error);
-    return { success: false, error: error.message, data: [] };
-  }
+export const PAYMENT_METHOD = {
+  CASH_ON_DELIVERY: 'cash_on_delivery',
 };
 
 export const createOrder = async (orderData) => {
@@ -67,7 +25,7 @@ export const createOrder = async (orderData) => {
       'items', 'description', 'rawText', 'status', 'totalPrice',
       'deliveryFee', 'finalTotal', 'voiceUrl', 'imageUrls', 'notes',
       'merchantId', 'merchantName', 'merchantPhone', 'driverId',
-      'driverName', 'driverPhone', 'createdAt', 'updatedAt'
+      'driverName', 'driverPhone', 'createdAt', 'updatedAt', 'paymentMethod'
     ];
 
     const cleanOrder = {};
@@ -83,6 +41,7 @@ export const createOrder = async (orderData) => {
     cleanOrder.serviceName = cleanOrder.serviceName || orderData.serviceName;
     cleanOrder.items = cleanOrder.items || orderData.items || [];
     cleanOrder.status = cleanOrder.status || ORDER_STATUS.PENDING;
+    cleanOrder.paymentMethod = cleanOrder.paymentMethod || PAYMENT_METHOD.CASH_ON_DELIVERY;
     cleanOrder.createdAt = cleanOrder.createdAt || new Date().toISOString();
     cleanOrder.updatedAt = cleanOrder.updatedAt || new Date().toISOString();
 
@@ -99,17 +58,7 @@ export const createOrder = async (orderData) => {
       cleanOrder
     );
 
-    // للعميل: تشغيل صوت الإرسال
     await playSendSound();
-
-    // إرسال إشعارات للتجار
-    if (cleanOrder.serviceType) {
-      await notifyAllMerchants(cleanOrder.serviceType, {
-        $id: response.$id,
-        customerPhone: cleanOrder.customerPhone,
-        serviceType: cleanOrder.serviceType,
-      });
-    }
 
     return { success: true, data: response };
   } catch (error) {
@@ -132,6 +81,8 @@ export const getOrders = async (filters = {}) => {
     if (filters.customerPhone) queries.push(Query.equal('customerPhone', filters.customerPhone));
     if (filters.merchantId) queries.push(Query.equal('merchantId', filters.merchantId));
     if (filters.driverId) queries.push(Query.equal('driverId', filters.driverId));
+    if (filters.notMerchantId) queries.push(Query.notEqual('merchantId', filters.notMerchantId));
+    if (filters.notDriverId) queries.push(Query.notEqual('driverId', filters.notDriverId));
     queries.push(Query.orderDesc('createdAt'));
 
     const response = await databases.listDocuments(
@@ -145,7 +96,8 @@ export const getOrders = async (filters = {}) => {
   }
 };
 
-// قبول الطلب (للتاجر)
+export const getMerchantOrders = async (merchantId) => getOrders({ merchantId });
+
 export const acceptOrder = async (orderId, merchantId, merchantName, merchantPhone) => {
   try {
     const response = await databases.updateDocument(
@@ -154,37 +106,45 @@ export const acceptOrder = async (orderId, merchantId, merchantName, merchantPho
       orderId,
       {
         status: ORDER_STATUS.ACCEPTED,
-        merchantId, merchantName, merchantPhone,
+        merchantId,
+        merchantName,
+        merchantPhone,
         acceptedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
     );
     return { success: true, data: response };
   } catch (error) {
+    console.error('❌ خطأ في قبول الطلب:', error);
     return { success: false, error: error.message };
   }
 };
 
-// بدء التجهيز
-export const startPreparing = async (orderId) => {
+export const updateOrderStatus = async (orderId, status, additionalData = {}) => {
   try {
+    const updateData = { 
+      status, 
+      updatedAt: new Date().toISOString(), 
+      ...additionalData 
+    };
+    
+    if (status === ORDER_STATUS.DELIVERED) {
+      updateData.deliveredAt = new Date().toISOString();
+    }
+    
     const response = await databases.updateDocument(
-      DATABASE_ID,
-      ORDERS_COLLECTION_ID,
-      orderId,
-      {
-        status: ORDER_STATUS.PREPARING,
-        preparingStartedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
+      DATABASE_ID, 
+      ORDERS_COLLECTION_ID, 
+      orderId, 
+      updateData
     );
     return { success: true, data: response };
   } catch (error) {
+    console.error('❌ خطأ في تحديث الطلب:', error);
     return { success: false, error: error.message };
   }
 };
 
-// تحديد السعر (للخدمات بدون سعر مسبق)
 export const setOrderPrice = async (orderId, totalPrice, deliveryFee = 0) => {
   try {
     const finalTotal = totalPrice + deliveryFee;
@@ -193,7 +153,7 @@ export const setOrderPrice = async (orderId, totalPrice, deliveryFee = 0) => {
       ORDERS_COLLECTION_ID,
       orderId,
       {
-        status: ORDER_STATUS.PRICE_SET,
+        status: ORDER_STATUS.READY,
         totalPrice: Number(totalPrice),
         deliveryFee: Number(deliveryFee),
         finalTotal: Number(finalTotal),
@@ -203,30 +163,11 @@ export const setOrderPrice = async (orderId, totalPrice, deliveryFee = 0) => {
     );
     return { success: true, data: response };
   } catch (error) {
+    console.error('❌ خطأ في تحديد السعر:', error);
     return { success: false, error: error.message };
   }
 };
 
-// الطلب جاهز
-export const markAsReady = async (orderId) => {
-  try {
-    const response = await databases.updateDocument(
-      DATABASE_ID,
-      ORDERS_COLLECTION_ID,
-      orderId,
-      {
-        status: ORDER_STATUS.READY,
-        readyAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-    );
-    return { success: true, data: response };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-};
-
-// تعيين مندوب
 export const assignDriver = async (orderId, driverId, driverName, driverPhone) => {
   try {
     const response = await databases.updateDocument(
@@ -235,18 +176,20 @@ export const assignDriver = async (orderId, driverId, driverName, driverPhone) =
       orderId,
       {
         status: ORDER_STATUS.DRIVER_ASSIGNED,
-        driverId, driverName, driverPhone,
+        driverId,
+        driverName,
+        driverPhone,
         driverAssignedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
     );
     return { success: true, data: response };
   } catch (error) {
+    console.error('❌ خطأ في تعيين مندوب:', error);
     return { success: false, error: error.message };
   }
 };
 
-// بدء التوصيل (للمندوب)
 export const startDelivery = async (orderId) => {
   try {
     const response = await databases.updateDocument(
@@ -261,11 +204,11 @@ export const startDelivery = async (orderId) => {
     );
     return { success: true, data: response };
   } catch (error) {
+    console.error('❌ خطأ في بدء التوصيل:', error);
     return { success: false, error: error.message };
   }
 };
 
-// تأكيد التوصيل
 export const completeDelivery = async (orderId) => {
   try {
     const response = await databases.updateDocument(
@@ -280,11 +223,11 @@ export const completeDelivery = async (orderId) => {
     );
     return { success: true, data: response };
   } catch (error) {
+    console.error('❌ خطأ في إكمال التوصيل:', error);
     return { success: false, error: error.message };
   }
 };
 
-// إلغاء الطلب
 export const cancelOrder = async (orderId, reason = '') => {
   try {
     const response = await databases.updateDocument(
@@ -300,16 +243,7 @@ export const cancelOrder = async (orderId, reason = '') => {
     );
     return { success: true, data: response };
   } catch (error) {
-    return { success: false, error: error.message };
-  }
-};
-
-// حذف طلب
-export const deleteOrder = async (orderId) => {
-  try {
-    await databases.deleteDocument(DATABASE_ID, ORDERS_COLLECTION_ID, orderId);
-    return { success: true };
-  } catch (error) {
+    console.error('❌ خطأ في إلغاء الطلب:', error);
     return { success: false, error: error.message };
   }
 };

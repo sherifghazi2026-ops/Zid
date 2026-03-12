@@ -9,12 +9,16 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
-  Modal,
   Linking,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getOrders, startDelivery, completeDelivery, ORDER_STATUS } from '../../services/orderService';
+import { databases, DATABASE_ID } from '../../appwrite/config';
+import { getOrders, startDelivery, completeDelivery, assignDriver, ORDER_STATUS } from '../../services/orderService';
+import { playNotificationSound, stopNotificationSound } from '../../utils/SoundHelper';
+import useInterval from '../../hooks/useInterval';
 
 export default function DriverDashboard({ navigation }) {
   const [availableOrders, setAvailableOrders] = useState([]);
@@ -24,9 +28,15 @@ export default function DriverDashboard({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [driverData, setDriverData] = useState(null);
   const [activeTab, setActiveTab] = useState('available');
+  const [playingVoice, setPlayingVoice] = useState(null);
+  const [sound, setSound] = useState(null);
+  const lastAvailableOrderIds = useState(new Set())[0];
 
   useEffect(() => {
     loadDriverData();
+    return () => {
+      if (sound) sound.unloadAsync();
+    };
   }, []);
 
   useEffect(() => {
@@ -34,6 +44,30 @@ export default function DriverDashboard({ navigation }) {
       loadOrders();
     }
   }, [driverData, activeTab]);
+
+  // التحقق من الطلبات الجديدة كل 7 ثواني
+  useInterval(() => {
+    if (driverData && activeTab === 'available') {
+      checkForNewAvailableOrders();
+    }
+  }, 7000);
+
+  const playVoice = async (voiceUrl) => {
+    try {
+      if (sound) await sound.unloadAsync();
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: voiceUrl },
+        { shouldPlay: true }
+      );
+      setSound(newSound);
+      setPlayingVoice(voiceUrl);
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) setPlayingVoice(null);
+      });
+    } catch (error) {
+      console.error('خطأ في تشغيل الصوت:', error);
+    }
+  };
 
   const loadDriverData = async () => {
     const data = await AsyncStorage.getItem('userData');
@@ -43,20 +77,49 @@ export default function DriverDashboard({ navigation }) {
     }
   };
 
+  const checkForNewAvailableOrders = async () => {
+    try {
+      const result = await getOrders({ 
+        status: ORDER_STATUS.READY,
+        notDriverId: driverData?.$id
+      });
+      
+      if (result.success) {
+        const available = result.data.filter(order => !order.driverId);
+        const newOrderIds = new Set(available.map(o => o.$id));
+        const hasNewOrder = [...newOrderIds].some(id => !lastAvailableOrderIds.has(id));
+        
+        if (hasNewOrder && available.length > 0) {
+          playNotificationSound();
+        }
+        
+        lastAvailableOrderIds.clear();
+        available.forEach(o => lastAvailableOrderIds.add(o.$id));
+        
+        if (activeTab === 'available') {
+          setAvailableOrders(available);
+        }
+      }
+    } catch (error) {
+      console.error('خطأ في التحقق من الطلبات:', error);
+    }
+  };
+
   const loadOrders = async () => {
     try {
       if (activeTab === 'available') {
-        // الطلبات الجاهزة (READY) والتي ليس لها مندوب
         const result = await getOrders({ 
           status: ORDER_STATUS.READY,
+          notDriverId: driverData?.$id
         });
         if (result.success) {
-          // فلترة الطلبات التي ليس لها مندوب
           const available = result.data.filter(order => !order.driverId);
           setAvailableOrders(available);
+          
+          lastAvailableOrderIds.clear();
+          available.forEach(o => lastAvailableOrderIds.add(o.$id));
         }
       } else if (activeTab === 'my') {
-        // طلباتي الحالية
         const result = await getOrders({ 
           driverId: driverData?.$id,
           status: [ORDER_STATUS.DRIVER_ASSIGNED, ORDER_STATUS.ON_THE_WAY]
@@ -65,7 +128,6 @@ export default function DriverDashboard({ navigation }) {
           setMyOrders(result.data);
         }
       } else {
-        // الطلبات المكتملة
         const result = await getOrders({ 
           driverId: driverData?.$id,
           status: ORDER_STATUS.DELIVERED
@@ -91,26 +153,18 @@ export default function DriverDashboard({ navigation }) {
         {
           text: 'قبول',
           onPress: async () => {
-            try {
-              // تعيين المندوب للطلب
-              const result = await databases.updateDocument(
-                DATABASE_ID,
-                'orders',
-                order.$id,
-                {
-                  status: ORDER_STATUS.DRIVER_ASSIGNED,
-                  driverId: driverData.$id,
-                  driverName: driverData.name,
-                  driverPhone: driverData.phone,
-                  driverAssignedAt: new Date().toISOString(),
-                }
-              );
-              if (result) {
-                Alert.alert('✅ تم', 'تم قبول التوصيل');
-                loadOrders();
-              }
-            } catch (error) {
-              Alert.alert('خطأ', error.message);
+            const result = await assignDriver(
+              order.$id,
+              driverData.$id,
+              driverData.name,
+              driverData.phone
+            );
+            if (result.success) {
+              stopNotificationSound();
+              Alert.alert('✅ تم', 'تم قبول التوصيل');
+              loadOrders();
+            } else {
+              Alert.alert('خطأ', result.error);
             }
           }
         }
@@ -183,8 +237,8 @@ export default function DriverDashboard({ navigation }) {
       <View key={order.$id} style={styles.orderCard}>
         <View style={styles.orderHeader}>
           <Text style={styles.orderId}>طلب #{order.$id.slice(-6)}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: order.serviceType === 'restaurant' ? '#EF444420' : '#F59E0B20' }]}>
-            <Text style={[styles.statusText, { color: order.serviceType === 'restaurant' ? '#EF4444' : '#F59E0B' }]}>
+          <View style={[styles.statusBadge, { backgroundColor: '#10B98120' }]}>
+            <Text style={[styles.statusText, { color: '#10B981' }]}>
               {order.serviceName}
             </Text>
           </View>
@@ -214,13 +268,41 @@ export default function DriverDashboard({ navigation }) {
             <Text style={styles.detailText}>{formatAddress(order.customerAddress)}</Text>
           </View>
 
-          {order.totalPrice > 0 && (
+          {order.description && (
+            <View style={styles.detailRow}>
+              <Ionicons name="document-text-outline" size={16} color="#6B7280" />
+              <Text style={styles.detailText} numberOfLines={2}>{order.description}</Text>
+            </View>
+          )}
+
+          {order.voiceUrl && (
+            <TouchableOpacity
+              style={styles.voiceButton}
+              onPress={() => playVoice(order.voiceUrl)}
+            >
+              <Ionicons
+                name={playingVoice === order.voiceUrl ? "pause" : "play"}
+                size={20}
+                color="#FFF"
+              />
+              <Text style={styles.voiceButtonText}>
+                {playingVoice === order.voiceUrl ? 'جاري التشغيل' : 'استمع للتسجيل'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {order.imageUrls && order.imageUrls.length > 0 && (
+            <View style={styles.imageIndicator}>
+              <Ionicons name="images-outline" size={16} color="#4F46E5" />
+              <Text style={styles.imageText}>{order.imageUrls.length} صورة مرفقة</Text>
+            </View>
+          )}
+
+          {order.finalTotal > 0 && (
             <View style={styles.priceContainer}>
-              <Text style={styles.priceLabel}>قيمة الطلب:</Text>
-              <Text style={styles.priceValue}>{order.totalPrice} ج</Text>
-              {order.deliveryFee > 0 && (
-                <Text style={styles.deliveryFee}>+ {order.deliveryFee} ج</Text>
-              )}
+              <Text style={styles.priceLabel}>الإجمالي:</Text>
+              <Text style={styles.priceValue}>{order.finalTotal} ج</Text>
+              <Text style={styles.paymentMethod}>نقداً</Text>
             </View>
           )}
         </View>
@@ -399,6 +481,27 @@ const styles = StyleSheet.create({
   orderDetails: { marginBottom: 12 },
   detailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 8 },
   detailText: { fontSize: 14, color: '#4B5563', flex: 1 },
+  
+  voiceButton: {
+    backgroundColor: '#3B82F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 8,
+    gap: 4,
+  },
+  voiceButtonText: { color: '#FFF', fontSize: 12, fontWeight: '600' },
+  
+  imageIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 4,
+  },
+  imageText: { fontSize: 12, color: '#4F46E5' },
+  
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -410,7 +513,8 @@ const styles = StyleSheet.create({
   },
   priceLabel: { fontSize: 14, color: '#4B5563' },
   priceValue: { fontSize: 14, fontWeight: '600', color: '#F59E0B' },
-  deliveryFee: { fontSize: 12, color: '#9CA3AF' },
+  paymentMethod: { fontSize: 12, color: '#10B981' },
+
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
