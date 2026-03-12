@@ -1,5 +1,5 @@
 import { Audio } from 'expo-av';
-import { Vibration, Platform } from 'react-native';
+import { Platform, Vibration } from 'react-native';
 
 let notificationSound = null;
 let sendSound = null;
@@ -8,27 +8,27 @@ let notificationTimeout = null;
 
 export const loadSounds = async () => {
   try {
-    console.log('🔊 بدء تحميل الأصوات من الملفات المحلية...');
+    console.log('🔊 بدء تحميل الأصوات...');
     
     await unloadSounds();
 
-    // تحميل صوت الإشعار من الملف المحلي
+    // تحميل صوت الإشعار
     try {
       const notificationFile = require('../../assets/sounds/notification.wav');
       const { sound: notifSound } = await Audio.Sound.createAsync(
         notificationFile,
         { 
           shouldPlay: false, 
-          isLooping: true, // ✅ تشغيل متكرر لمدة 20 ثانية
+          isLooping: true,
         }
       );
       notificationSound = notifSound;
-      console.log('✅ تم تحميل صوت الإشعار من الملف المحلي');
+      console.log('✅ تم تحميل صوت الإشعار');
     } catch (e) {
-      console.log('⚠️ فشل تحميل صوت الإشعار المحلي:', e.message);
+      console.log('⚠️ فشل تحميل صوت الإ시عار:', e.message);
     }
 
-    // تحميل صوت الإرسال من الملف المحلي
+    // تحميل صوت الإرسال
     try {
       const sendFile = require('../../assets/sounds/send.wav');
       const { sound: sndSound } = await Audio.Sound.createAsync(
@@ -36,9 +36,9 @@ export const loadSounds = async () => {
         { shouldPlay: false }
       );
       sendSound = sndSound;
-      console.log('✅ تم تحميل صوت الإرسال من الملف المحلي');
+      console.log('✅ تم تحميل صوت الإرسال');
     } catch (e) {
-      console.log('⚠️ فشل تحميل صوت الإرسال المحلي:', e.message);
+      console.log('⚠️ فشل تحميل صوت الإرسال:', e.message);
     }
 
     return true;
@@ -48,10 +48,8 @@ export const loadSounds = async () => {
   }
 };
 
-// تشغيل صوت الإشعار لمدة 20 ثانية
 export const playNotificationSound = async () => {
   try {
-    // إلغاء أي تايمر سابق
     if (notificationTimeout) {
       clearTimeout(notificationTimeout);
       notificationTimeout = null;
@@ -62,26 +60,17 @@ export const playNotificationSound = async () => {
     }
 
     if (notificationSound) {
-      // إيقاف أي تشغيل سابق
-      if (isNotificationPlaying) {
-        await notificationSound.stopAsync();
-      }
-      
-      // تشغيل من البداية
       await notificationSound.setPositionAsync(0);
       await notificationSound.playAsync();
       isNotificationPlaying = true;
 
-      // إيقاف الصوت بعد 20 ثانية
       notificationTimeout = setTimeout(async () => {
         await stopNotificationSound();
-        console.log('⏱️ انتهت مدة 20 ثانية - إيقاف صوت الإشعار');
-      }, 20000); // 20 ثانية بالضبط
+      }, 20000);
 
-      console.log('🔊 تشغيل صوت الإشعار - سيستمر لمدة 20 ثانية');
+      console.log('🔊 تشغيل صوت الإشعار');
     } else {
-      console.log('🔇 لا يوجد صوت إشعار، استخدام الاهتزاز');
-      Vibration.vibrate([500, 200, 500, 200, 500]); // اهتزاز متكرر
+      Vibration.vibrate([500, 200, 500, 200, 500]);
     }
   } catch (error) {
     console.log('🔇 فشل تشغيل صوت الإشعار:', error);
@@ -89,7 +78,6 @@ export const playNotificationSound = async () => {
   }
 };
 
-// إيقاف صوت الإشعار (عند قبول الطلب)
 export const stopNotificationSound = async () => {
   try {
     if (notificationTimeout) {
@@ -101,17 +89,14 @@ export const stopNotificationSound = async () => {
       await notificationSound.stopAsync();
       await notificationSound.setPositionAsync(0);
       isNotificationPlaying = false;
-      console.log('🔇 إيقاف صوت الإشعار - تم قبول الطلب');
+      console.log('🔇 إيقاف صوت الإشعار');
     }
-    
-    // إيقاف الاهتزاز إذا كان يعمل
     Vibration.cancel();
   } catch (error) {
     console.log('⚠️ خطأ في إيقاف الصوت:', error);
   }
 };
 
-// تشغيل صوت الإرسال (للعميل)
 export const playSendSound = async () => {
   try {
     if (!sendSound) {
@@ -131,7 +116,6 @@ export const playSendSound = async () => {
   }
 };
 
-// تصدير الدوال المطلوبة
 export const playOrderSound = playNotificationSound;
 
 export const unloadSounds = async () => {
@@ -141,19 +125,36 @@ export const unloadSounds = async () => {
       notificationTimeout = null;
     }
 
+    // ✅ استخدام try/catch لكل عملية unload
     if (notificationSound) {
-      await notificationSound.stopAsync();
-      await notificationSound.unloadAsync();
+      try {
+        await notificationSound.stopAsync();
+        await notificationSound.unloadAsync();
+      } catch (e) {
+        console.log('⚠️ خطأ في تفريغ صوت الإشعار:', e.message);
+      }
       notificationSound = null;
     }
+    
     if (sendSound) {
-      await sendSound.unloadAsync();
+      try {
+        await sendSound.unloadAsync();
+      } catch (e) {
+        console.log('⚠️ خطأ في تفريغ صوت الإرسال:', e.message);
+      }
       sendSound = null;
     }
+    
     isNotificationPlaying = false;
     Vibration.cancel();
     console.log('🔇 تفريغ موارد الصوت');
   } catch (error) {
     console.log('⚠️ خطأ في تفريغ الصوت:', error);
   }
+};
+
+// ✅ دالة جديدة للتنظيف عند خروج التطبيق
+export const cleanup = async () => {
+  console.log('🧹 تنظيف الموارد الصوتية...');
+  await unloadSounds();
 };

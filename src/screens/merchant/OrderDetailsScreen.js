@@ -44,10 +44,14 @@ export default function OrderDetailsScreen({ route, navigation }) {
   useEffect(() => {
     loadOrder();
     loadDrivers();
+    
+    // ✅ تنظيف الصوت عند الخروج من الشاشة
     return () => {
-      if (sound) sound.unloadAsync();
+      if (sound) {
+        sound.unloadAsync().catch(e => console.log('خطأ في تفريغ الصوت:', e));
+      }
     };
-  }, []);
+  }, [sound]);
 
   const loadOrder = async () => {
     try {
@@ -74,15 +78,22 @@ export default function OrderDetailsScreen({ route, navigation }) {
 
   const playVoice = async (voiceUrl) => {
     try {
-      if (sound) await sound.unloadAsync();
+      // ✅ إيقاف أي صوت سابق
+      if (sound) {
+        await sound.unloadAsync();
+      }
+      
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: voiceUrl },
         { shouldPlay: true }
       );
       setSound(newSound);
       setPlayingVoice(voiceUrl);
+      
       newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) setPlayingVoice(null);
+        if (status.didJustFinish) {
+          setPlayingVoice(null);
+        }
       });
     } catch (error) {
       Alert.alert('خطأ', 'فشل تشغيل التسجيل الصوتي');
@@ -264,6 +275,24 @@ export default function OrderDetailsScreen({ route, navigation }) {
           </View>
         );
 
+      case ORDER_STATUS.DELIVERED:
+        return (
+          <View style={styles.actions}>
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.reviewButton]}
+              onPress={() => navigation.navigate('RateOrderScreen', {
+                orderId: order.$id,
+                providerId: order.merchantId,
+                customerId: order.customerPhone,
+                providerName: order.merchantName,
+              })}
+            >
+              <Ionicons name="star-outline" size={20} color="#FFF" />
+              <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>تقييم الخدمة</Text>
+            </TouchableOpacity>
+          </View>
+        );
+
       default:
         return null;
     }
@@ -338,7 +367,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
           </View>
         )}
 
-        {/* ✅ الصور المرفقة - بدون تكبير */}
+        {/* الصور المرفقة */}
         {order.imageUrls && order.imageUrls.length > 0 && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>🖼️ الصور المرفقة</Text>
@@ -352,7 +381,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
           </View>
         )}
 
-        {/* ✅ التسجيل الصوتي */}
+        {/* ✅ التسجيل الصوتي - مع إمكانية الإيقاف */}
         {order.voiceUrl && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>🎤 التسجيل الصوتي</Text>
@@ -420,7 +449,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
         {renderActionButtons()}
       </ScrollView>
 
-      {/* ✅ Modal عرض الصورة - بدون تكبير */}
+      {/* Modal عرض الصورة */}
       <Modal visible={showImageModal} transparent animationType="fade">
         <View style={styles.imageModalOverlay}>
           <TouchableOpacity style={styles.closeImageButton} onPress={() => setShowImageModal(false)}>
@@ -521,7 +550,6 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
   content: { padding: 16 },
 
-  // حالة الطلب
   statusCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -533,30 +561,24 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
   orderId: { fontSize: 14, color: '#6B7280' },
 
-  // الأقسام
   section: { marginBottom: 20 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginBottom: 8 },
 
-  // بطاقة المعلومات
   infoCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E5E7EB' },
   infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
   infoLabel: { fontSize: 14, color: '#6B7280', width: 70 },
   infoValue: { fontSize: 14, color: '#1F2937', flex: 1 },
   phoneLink: { color: '#3B82F6', textDecorationLine: 'underline' },
 
-  // وصف الطلب
   descriptionCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E5E7EB' },
   descriptionText: { fontSize: 14, color: '#4B5563', lineHeight: 20 },
 
-  // المنتجات
   itemsCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E5E7EB' },
   itemText: { fontSize: 13, color: '#4B5563', marginBottom: 2 },
 
-  // ✅ الصور
   imagesContainer: { flexDirection: 'row', marginBottom: 8 },
   thumbnail: { width: 80, height: 80, borderRadius: 8, marginRight: 8 },
 
-  // ✅ Modal عرض الصورة (بدون تكبير)
   imageModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.95)',
@@ -575,7 +597,6 @@ const styles = StyleSheet.create({
     height: height * 0.8,
   },
 
-  // الصوت
   voiceButton: {
     backgroundColor: '#3B82F6',
     flexDirection: 'row',
@@ -587,7 +608,6 @@ const styles = StyleSheet.create({
   },
   voiceButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
 
-  // الفاتورة
   invoiceCard: { backgroundColor: '#FEF3C7', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#F59E0B' },
   invoiceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   invoiceLabel: { fontSize: 14, color: '#92400E' },
@@ -599,13 +619,11 @@ const styles = StyleSheet.create({
   paymentLabel: { fontSize: 14, color: '#92400E' },
   paymentValue: { fontSize: 14, fontWeight: '600', color: '#10B981' },
 
-  // معلومات المندوب
   driverCard: { backgroundColor: '#DBEAFE', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#3B82F6' },
   driverRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
   driverName: { fontSize: 16, fontWeight: '600', color: '#1E40AF' },
   driverPhone: { fontSize: 14, color: '#1E40AF' },
 
-  // أزرار الإجراءات
   actions: { marginTop: 10, marginBottom: 30 },
   actionButton: {
     backgroundColor: '#4F46E5',
@@ -616,6 +634,7 @@ const styles = StyleSheet.create({
   },
   priceButton: { backgroundColor: '#F59E0B' },
   completeButton: { backgroundColor: '#10B981' },
+  reviewButton: { backgroundColor: '#F59E0B' },
   actionButtonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
 
   deliveryOptions: { flexDirection: 'row', gap: 12 },
@@ -624,7 +643,6 @@ const styles = StyleSheet.create({
   driverDelivery: { backgroundColor: '#3B82F6' },
   deliveryOptionText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
 
-  // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '80%' },
   priceModalContent: { backgroundColor: '#FFF', borderRadius: 20, padding: 20, margin: 20 },

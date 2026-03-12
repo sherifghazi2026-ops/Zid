@@ -42,8 +42,14 @@ export default function ServiceScreen({ navigation, route }) {
   useEffect(() => {
     loadService();
     loadSavedData();
-    return () => { if (sound) sound.unloadAsync(); };
-  }, []);
+    
+    // ✅ تنظيف الصوت عند الخروج من الشاشة
+    return () => {
+      if (sound) {
+        sound.unloadAsync().catch(e => console.log('خطأ في تفريغ الصوت:', e));
+      }
+    };
+  }, [sound]);
 
   const loadService = async () => {
     try {
@@ -153,11 +159,18 @@ export default function ServiceScreen({ navigation, route }) {
   const playVoice = async () => {
     if (!voiceUri) return;
     try {
-      if (sound) await sound.unloadAsync();
+      // ✅ إيقاف أي صوت سابق
+      if (sound) {
+        await sound.unloadAsync();
+      }
+      
       const { sound: newSound } = await Audio.Sound.createAsync({ uri: voiceUri }, { shouldPlay: true });
       setSound(newSound);
       setIsPlaying(true);
-      newSound.setOnPlaybackStatusUpdate((status) => { if (status.didJustFinish) setIsPlaying(false); });
+      
+      newSound.setOnPlaybackStatusUpdate((status) => { 
+        if (status.didJustFinish) setIsPlaying(false); 
+      });
     } catch (error) {
       Alert.alert('خطأ', 'فشل تشغيل التسجيل');
     }
@@ -166,7 +179,11 @@ export default function ServiceScreen({ navigation, route }) {
   const deleteVoice = () => {
     setVoiceUri(null);
     setRecordingDuration(0);
-    if (sound) { sound.unloadAsync(); setSound(null); setIsPlaying(false); }
+    if (sound) { 
+      sound.unloadAsync(); 
+      setSound(null); 
+      setIsPlaying(false); 
+    }
   };
 
   const sendOrder = async () => {
@@ -399,14 +416,13 @@ export default function ServiceScreen({ navigation, route }) {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* ✅ منجز - خارج ScrollView مع تمرير serviceId */}
       <DynamicMongez
         screen="service"
         navigation={navigation}
         contextData={{
           serviceType: route.params?.serviceType,
           serviceName: route.params?.serviceName,
-serviceId: service?.$id || route.params?.serviceType
+          serviceId: service?.id || route.params?.serviceType
         }}
       />
     </SafeAreaView>
