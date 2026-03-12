@@ -262,7 +262,7 @@ export default function App() {
 
     prepare();
 
-    // تنظيف الموارد عند إغلاق التطبيق
+    // ✅ تنظيف الموارد عند إغلاق التطبيق
     return () => {
       cleanup();
     };

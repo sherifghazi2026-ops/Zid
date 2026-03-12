@@ -38,14 +38,20 @@ export default function ServiceScreen({ navigation, route }) {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const timerRef = useRef(null);
   const [sending, setSending] = useState(false);
+  
+  // ✅ useRef للتحقق من أن المكون لا يزال مثبتاً
+  const isMounted = useRef(true);
 
   useEffect(() => {
+    isMounted.current = true;
     loadService();
     loadSavedData();
     
     // ✅ تنظيف الصوت عند الخروج من الشاشة
     return () => {
+      isMounted.current = false;
       if (sound) {
+        console.log('🧹 تفريغ الصوت من الذاكرة...');
         sound.unloadAsync().catch(e => console.log('خطأ في تفريغ الصوت:', e));
       }
     };
@@ -55,7 +61,7 @@ export default function ServiceScreen({ navigation, route }) {
     try {
       setLoading(true);
       const result = await getServiceById(serviceType);
-      if (result.success && result.data) {
+      if (result.success && result.data && isMounted.current) {
         setService(result.data);
       } else {
         Alert.alert('تنبيه', 'الخدمة غير متوفرة حالياً', [
@@ -66,7 +72,9 @@ export default function ServiceScreen({ navigation, route }) {
       Alert.alert('خطأ', 'فشل في تحميل الخدمة');
       navigation.goBack();
     } finally {
-      setLoading(false);
+      if (isMounted.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -165,11 +173,14 @@ export default function ServiceScreen({ navigation, route }) {
       }
       
       const { sound: newSound } = await Audio.Sound.createAsync({ uri: voiceUri }, { shouldPlay: true });
-      setSound(newSound);
-      setIsPlaying(true);
+      
+      if (isMounted.current) {
+        setSound(newSound);
+        setIsPlaying(true);
+      }
       
       newSound.setOnPlaybackStatusUpdate((status) => { 
-        if (status.didJustFinish) setIsPlaying(false); 
+        if (status.didJustFinish && isMounted.current) setIsPlaying(false); 
       });
     } catch (error) {
       Alert.alert('خطأ', 'فشل تشغيل التسجيل');

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -40,14 +40,20 @@ export default function OrderDetailsScreen({ route, navigation }) {
   const [sound, setSound] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
+  
+  // ✅ useRef للتحقق من أن المكون لا يزال مثبتاً
+  const isMounted = useRef(true);
 
   useEffect(() => {
+    isMounted.current = true;
     loadOrder();
     loadDrivers();
     
-    // ✅ تنظيف الصوت عند الخروج من الشاشة
+    // ✅ تنظيف الصوت عند الخروج من الشاشة بطريقة آمنة
     return () => {
+      isMounted.current = false;
       if (sound) {
+        console.log('🧹 تفريغ الصوت من الذاكرة...');
         sound.unloadAsync().catch(e => console.log('خطأ في تفريغ الصوت:', e));
       }
     };
@@ -60,18 +66,24 @@ export default function OrderDetailsScreen({ route, navigation }) {
         'orders',
         orderId
       );
-      setOrder(doc);
+      if (isMounted.current) {
+        setOrder(doc);
+      }
     } catch (error) {
       console.error('خطأ في جلب الطلب:', error);
-      Alert.alert('خطأ', 'فشل في تحميل الطلب');
+      if (isMounted.current) {
+        Alert.alert('خطأ', 'فشل في تحميل الطلب');
+      }
     } finally {
-      setLoading(false);
+      if (isMounted.current) {
+        setLoading(false);
+      }
     }
   };
 
   const loadDrivers = async () => {
     const result = await getAvailableDrivers();
-    if (result.success) {
+    if (result.success && isMounted.current) {
       setDrivers(result.data);
     }
   };
@@ -87,11 +99,14 @@ export default function OrderDetailsScreen({ route, navigation }) {
         { uri: voiceUrl },
         { shouldPlay: true }
       );
-      setSound(newSound);
-      setPlayingVoice(voiceUrl);
+      
+      if (isMounted.current) {
+        setSound(newSound);
+        setPlayingVoice(voiceUrl);
+      }
       
       newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) {
+        if (status.didJustFinish && isMounted.current) {
           setPlayingVoice(null);
         }
       });
@@ -115,7 +130,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
       parseFloat(price),
       deliveryFee ? parseFloat(deliveryFee) : 0
     );
-    if (result.success) {
+    if (result.success && isMounted.current) {
       setShowPriceModal(false);
       loadOrder();
     } else {
@@ -138,7 +153,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
               driver.name,
               driver.phone
             );
-            if (result.success) {
+            if (result.success && isMounted.current) {
               setShowDriversModal(false);
               loadOrder();
             } else {
@@ -152,13 +167,13 @@ export default function OrderDetailsScreen({ route, navigation }) {
 
   const handleStartDelivery = async () => {
     const result = await startDelivery(orderId);
-    if (result.success) loadOrder();
+    if (result.success && isMounted.current) loadOrder();
     else Alert.alert('خطأ', result.error);
   };
 
   const handleCompleteDelivery = async () => {
     const result = await completeDelivery(orderId);
-    if (result.success) loadOrder();
+    if (result.success && isMounted.current) loadOrder();
     else Alert.alert('خطأ', result.error);
   };
 

@@ -5,6 +5,7 @@ let notificationSound = null;
 let sendSound = null;
 let isNotificationPlaying = false;
 let notificationTimeout = null;
+let isMounted = true;
 
 export const loadSounds = async () => {
   try {
@@ -25,7 +26,7 @@ export const loadSounds = async () => {
       notificationSound = notifSound;
       console.log('✅ تم تحميل صوت الإشعار');
     } catch (e) {
-      console.log('⚠️ فشل تحميل صوت الإ시عار:', e.message);
+      console.log('⚠️ فشل تحميل صوت الإشعار:', e.message);
     }
 
     // تحميل صوت الإرسال
@@ -60,6 +61,7 @@ export const playNotificationSound = async () => {
     }
 
     if (notificationSound) {
+      // ✅ التأكد من أن الصوت في الموضع 0 قبل التشغيل
       await notificationSound.setPositionAsync(0);
       await notificationSound.playAsync();
       isNotificationPlaying = true;
@@ -125,7 +127,7 @@ export const unloadSounds = async () => {
       notificationTimeout = null;
     }
 
-    // ✅ استخدام try/catch لكل عملية unload
+    // ✅ تفريغ صوت الإشعار بأمان
     if (notificationSound) {
       try {
         await notificationSound.stopAsync();
@@ -136,6 +138,7 @@ export const unloadSounds = async () => {
       notificationSound = null;
     }
     
+    // ✅ تفريغ صوت الإرسال بأمان
     if (sendSound) {
       try {
         await sendSound.unloadAsync();
@@ -153,8 +156,8 @@ export const unloadSounds = async () => {
   }
 };
 
-// ✅ دالة جديدة للتنظيف عند خروج التطبيق
+// ✅ دالة تنظيف شاملة (تستدعى عند إغلاق التطبيق)
 export const cleanup = async () => {
-  console.log('🧹 تنظيف الموارد الصوتية...');
+  console.log('🧹 تنظيف شامل للموارد الصوتية...');
   await unloadSounds();
 };

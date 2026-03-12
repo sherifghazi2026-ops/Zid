@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,15 +23,21 @@ export default function OrderTrackingScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [playingVoice, setPlayingVoice] = useState(null);
   const [sound, setSound] = useState(null);
+  
+  // ✅ useRef للتحقق من أن المكون لا يزال مثبتاً
+  const isMounted = useRef(true);
 
   useEffect(() => {
+    isMounted.current = true;
     loadOrder();
     const interval = setInterval(loadOrder, 5000);
     
     // ✅ تنظيف الصوت عند الخروج من الشاشة
     return () => {
+      isMounted.current = false;
       clearInterval(interval);
       if (sound) {
+        console.log('🧹 تفريغ الصوت من الذاكرة...');
         sound.unloadAsync().catch(e => console.log('خطأ في تفريغ الصوت:', e));
       }
     };
@@ -44,11 +50,15 @@ export default function OrderTrackingScreen({ route, navigation }) {
         'orders',
         orderId
       );
-      setOrder(doc);
+      if (isMounted.current) {
+        setOrder(doc);
+      }
     } catch (error) {
       console.error('خطأ في جلب الطلب:', error);
     } finally {
-      setLoading(false);
+      if (isMounted.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -68,11 +78,16 @@ export default function OrderTrackingScreen({ route, navigation }) {
         { uri: voiceUrl },
         { shouldPlay: true }
       );
-      setSound(newSound);
-      setPlayingVoice(voiceUrl);
+      
+      if (isMounted.current) {
+        setSound(newSound);
+        setPlayingVoice(voiceUrl);
+      }
       
       newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) setPlayingVoice(null);
+        if (status.didJustFinish && isMounted.current) {
+          setPlayingVoice(null);
+        }
       });
     } catch (error) {
       Alert.alert('خطأ', 'فشل تشغيل التسجيل الصوتي');
@@ -177,7 +192,102 @@ export default function OrderTrackingScreen({ route, navigation }) {
         {/* شريط التقدم */}
         <View style={styles.timelineContainer}>
           <View style={styles.timelineRow}>
-            {/* الخطوات كما هي ... */}
+            <View style={styles.stepWrapper}>
+              <View style={styles.stepContent}>
+                <View style={[
+                  styles.stepDot,
+                  currentStep >= 1 && styles.stepDotCompleted,
+                  currentStep === 1 && styles.stepDotCurrent
+                ]}>
+                  {currentStep > 1 && <Ionicons name="checkmark" size={14} color="#FFF" />}
+                </View>
+                <Text style={[
+                  styles.stepLabel,
+                  currentStep >= 1 && styles.stepLabelActive,
+                  { fontFamily: fontFamily.arabic }
+                ]}>قبول</Text>
+              </View>
+              {currentStep > 1 && <View style={[styles.stepLine, styles.stepLineActive]} />}
+              {currentStep === 1 && <View style={styles.stepLine} />}
+              {currentStep < 1 && <View style={styles.stepLine} />}
+            </View>
+
+            <View style={styles.stepWrapper}>
+              <View style={styles.stepContent}>
+                <View style={[
+                  styles.stepDot,
+                  currentStep >= 2 && styles.stepDotCompleted,
+                  currentStep === 2 && styles.stepDotCurrent
+                ]}>
+                  {currentStep > 2 && <Ionicons name="checkmark" size={14} color="#FFF" />}
+                </View>
+                <Text style={[
+                  styles.stepLabel,
+                  currentStep >= 2 && styles.stepLabelActive,
+                  { fontFamily: fontFamily.arabic }
+                ]}>تجهيز الطلب</Text>
+              </View>
+              {currentStep > 2 && <View style={[styles.stepLine, styles.stepLineActive]} />}
+              {currentStep === 2 && <View style={styles.stepLine} />}
+              {currentStep < 2 && <View style={styles.stepLine} />}
+            </View>
+
+            <View style={styles.stepWrapper}>
+              <View style={styles.stepContent}>
+                <View style={[
+                  styles.stepDot,
+                  currentStep >= 3 && styles.stepDotCompleted,
+                  currentStep === 3 && styles.stepDotCurrent
+                ]}>
+                  {currentStep > 3 && <Ionicons name="checkmark" size={14} color="#FFF" />}
+                </View>
+                <Text style={[
+                  styles.stepLabel,
+                  currentStep >= 3 && styles.stepLabelActive,
+                  { fontFamily: fontFamily.arabic }
+                ]}>جاهز للاستلام</Text>
+              </View>
+              {currentStep > 3 && <View style={[styles.stepLine, styles.stepLineActive]} />}
+              {currentStep === 3 && <View style={styles.stepLine} />}
+              {currentStep < 3 && <View style={styles.stepLine} />}
+            </View>
+
+            <View style={styles.stepWrapper}>
+              <View style={styles.stepContent}>
+                <View style={[
+                  styles.stepDot,
+                  currentStep >= 4 && styles.stepDotCompleted,
+                  currentStep === 4 && styles.stepDotCurrent
+                ]}>
+                  {currentStep > 4 && <Ionicons name="checkmark" size={14} color="#FFF" />}
+                </View>
+                <Text style={[
+                  styles.stepLabel,
+                  currentStep >= 4 && styles.stepLabelActive,
+                  { fontFamily: fontFamily.arabic }
+                ]}>المندوب في الطريق</Text>
+              </View>
+              {currentStep > 4 && <View style={[styles.stepLine, styles.stepLineActive]} />}
+              {currentStep === 4 && <View style={styles.stepLine} />}
+              {currentStep < 4 && <View style={styles.stepLine} />}
+            </View>
+
+            <View style={styles.stepWrapper}>
+              <View style={styles.stepContent}>
+                <View style={[
+                  styles.stepDot,
+                  currentStep >= 5 && styles.stepDotCompleted,
+                  currentStep === 5 && styles.stepDotCurrent
+                ]}>
+                  {currentStep > 5 && <Ionicons name="checkmark" size={14} color="#FFF" />}
+                </View>
+                <Text style={[
+                  styles.stepLabel,
+                  currentStep >= 5 && styles.stepLabelActive,
+                  { fontFamily: fontFamily.arabic }
+                ]}>تم الاستلام</Text>
+              </View>
+            </View>
           </View>
         </View>
 
