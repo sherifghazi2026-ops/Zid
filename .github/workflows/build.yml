@@ -1,4 +1,4 @@
-name: Build Android App (Debug)
+name: Build Android App (Release)
 
 on:
   push:
@@ -30,19 +30,19 @@ jobs:
       - name: Install EAS CLI globally
         run: npm install -g eas-cli
 
-      # ✅ بناء نسخة DEBUG بدلاً من RELEASE
-      - name: Build Android app (Debug)
-        run: eas build -p android --profile development --non-interactive --local
+      # ✅ بناء نسخة Release عادية
+      - name: Build Android app (Release)
+        run: eas build -p android --profile production --non-interactive --local
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: app-release
           path: |
             *.apk
             *.aab
             build-*.apk
-            app-debug.apk
-            android/app/build/outputs/apk/debug/*.apk
+            app-release.apk
+            android/app/build/outputs/apk/release/*.apk
