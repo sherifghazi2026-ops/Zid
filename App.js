@@ -87,7 +87,7 @@ import ReviewDishesScreen from './src/screens/admin/ReviewDishesScreen';
 import ManageHomeChefsScreen from './src/screens/admin/ManageHomeChefsScreen';
 import AdminProductsReviewScreen from './src/screens/admin/AdminProductsReviewScreen';
 
-// شاشات جديدة
+// ✅ شاشات جديدة (بالمسارات الصحيحة)
 import TermsScreen from './src/screens/TermsScreen';
 import VerificationRequestsScreen from './src/screens/admin/VerificationRequestsScreen';
 import RateOrderScreen from './src/screens/customer/RateOrderScreen';
@@ -221,7 +221,7 @@ function RootStack() {
       <Stack.Screen name="ManageHomeChefs" component={ManageHomeChefsScreen} />
       <Stack.Screen name="AdminProductsReview" component={AdminProductsReviewScreen} />
 
-      {/* الشاشات الجديدة */}
+      {/* الشاشات الجديدة - بالمسارات الصحيحة */}
       <Stack.Screen name="TermsScreen" component={TermsScreen} />
       <Stack.Screen name="VerificationRequestsScreen" component={VerificationRequestsScreen} />
       <Stack.Screen name="RateOrderScreen" component={RateOrderScreen} />
@@ -261,7 +261,7 @@ export default function App() {
 
     prepare();
 
-    // ✅ تنظيف الموارد عند إغلاق التطبيق
+    // تنظيف الموارد عند إغلاق التطبيق
     return () => {
       cleanup();
     };
