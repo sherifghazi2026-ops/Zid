@@ -1,4 +1,4 @@
-name: Build ZayedID Production APK
+name: Build ZayedID No-Fonts Release
 
 on:
   push:
@@ -34,12 +34,11 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: 🚀 Build Production APK
-        # استخدام ملف eas.json الجديد مع بروفايل production والبناء محلياً لاستخراج APK
-        run: eas build -p android --profile production --local --non-interactive --output ./Zid-Production-Release.apk
+      - name: 🚀 Build APK (Preview Profile - No Fonts)
+        run: eas build -p android --profile preview --local --non-interactive --output ./Zid-Final.apk
 
-      - name: 📤 Upload Release APK
+      - name: 📤 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Zid-Production-APK
-          path: ./Zid-Production-Release.apk
+          name: Zid-NoFonts-APK
+          path: ./Zid-Final.apk

@@ -2,55 +2,28 @@
   "expo": {
     "name": "Zid",
     "slug": "zayedid",
-    "scheme": "zid",
-    "version": "1.0.0",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#4F46E5"
     },
     "assetBundlePatterns": [
-      "**/*",
-      "assets/fonts/*.ttf",
-      "assets/fonts/*.otf",
-      "node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/*.ttf"
+      "**/*"
     ],
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.sherif.zid"
-    },
     "android": {
-      "icon": "./assets/icon.png",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#4F46E5"
-      },
       "package": "com.sherif.zid",
-      "permissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
-      ]
-    },
-    "web": {
-      "favicon": "./assets/icon.png"
+      "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },
     "plugins": [
       "expo-av",
-      "expo-image-picker",
-      "expo-location",
       "expo-font",
       "expo-asset"
     ],
-    "owner": "sherifghazi",
     "extra": {
-      "eas": {
-        "projectId": "6fb89af9-0810-42de-9023-bbbbbfa63509"
-      }
+      "eas": { "projectId": "6fb89af9-0810-42de-9023-bbbbbfa63509" }
     }
   }
 }
