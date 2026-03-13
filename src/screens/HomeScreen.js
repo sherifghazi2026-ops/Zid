@@ -102,7 +102,7 @@ const HomeScreen = ({ navigation }) => {
     const data = await AsyncStorage.getItem('userData');
     const phone = await AsyncStorage.getItem('userPhone');
     const role = await AsyncStorage.getItem('userRole');
-    
+
     if (data) {
       setUserData(JSON.parse(data));
       setIsLoggedIn(true);
@@ -180,7 +180,7 @@ const HomeScreen = ({ navigation }) => {
         customerPhone: userPhone,
         status: [ORDER_STATUS.PENDING, ORDER_STATUS.ACCEPTED, ORDER_STATUS.PREPARING, ORDER_STATUS.READY, ORDER_STATUS.DRIVER_ASSIGNED, ORDER_STATUS.ON_THE_WAY]
       });
-      
+
       const completedResult = await getOrders({
         customerPhone: userPhone,
         status: ORDER_STATUS.DELIVERED
@@ -323,9 +323,9 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const renderOrderCard = (order) => (
-    <TouchableOpacity 
-      key={order.$id} 
-      style={styles.orderCard} 
+    <TouchableOpacity
+      key={order.$id}
+      style={styles.orderCard}
       onPress={() => navigation.navigate('OrderTrackingScreen', { orderId: order.$id })}
     >
       <View style={styles.orderHeader}>
@@ -334,9 +334,9 @@ const HomeScreen = ({ navigation }) => {
           <Text style={[styles.orderStatusText, { color: getStatusColor(order.status), fontFamily: fontFamily.arabic }]}>{getStatusText(order.status)}</Text>
         </View>
       </View>
-      
+
       <Text style={[styles.orderService, { fontFamily: fontFamily.arabic }]}>{order.serviceName}</Text>
-      
+
       <View style={styles.orderContactRow}>
         {order.merchantPhone && (
           <TouchableOpacity onPress={() => makePhoneCall(order.merchantPhone)}>
@@ -349,7 +349,7 @@ const HomeScreen = ({ navigation }) => {
           </TouchableOpacity>
         )}
       </View>
-      
+
       {order.finalTotal > 0 && (
         <View style={styles.orderPriceContainer}>
           <Text style={[styles.orderPriceLabel, { fontFamily: fontFamily.arabic }]}>الإجمالي:</Text>
@@ -357,7 +357,7 @@ const HomeScreen = ({ navigation }) => {
           <Text style={[styles.paymentMethod, { fontFamily: fontFamily.arabic }]}>نقداً</Text>
         </View>
       )}
-      
+
       <Text style={[styles.orderDate, { fontFamily: fontFamily.arabic }]}>{new Date(order.createdAt).toLocaleDateString('ar-EG')}</Text>
     </TouchableOpacity>
   );
@@ -539,7 +539,7 @@ const HomeScreen = ({ navigation }) => {
               <Ionicons name={showActiveOrders ? "chevron-up" : "chevron-down"} size={20} color="#6B7280" />
             </TouchableOpacity>
           </View>
-          
+
           {showActiveOrders && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.ordersScroll}>
               {activeOrders.map(renderOrderCard)}
@@ -558,9 +558,9 @@ const HomeScreen = ({ navigation }) => {
         </View>
       )}
 
-      <ScrollView 
-        showsVerticalScrollIndicator={false} 
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} 
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={styles.content}
       >
         {renderServicesByCategory()}
@@ -652,7 +652,7 @@ const styles = StyleSheet.create({
   welcomeText: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
   promoSection: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#FEF3C7', marginHorizontal: 16, marginVertical: 8, borderRadius: 8 },
   promoText: { fontSize: 12, color: '#92400E', textAlign: 'center' },
-  
+
   // الطلبات
   ordersSection: { marginTop: 8, marginBottom: 12, paddingHorizontal: 16 },
   completedOrdersSection: { marginTop: 8, marginBottom: 12, paddingHorizontal: 16, opacity: 0.8 },
@@ -660,14 +660,14 @@ const styles = StyleSheet.create({
   ordersTitle: { fontSize: 15, fontWeight: '600', color: '#1F2937', textAlign: 'right' },
   completedOrdersTitle: { fontSize: 14, fontWeight: '500', color: '#6B7280', marginBottom: 8, textAlign: 'right' },
   ordersScroll: { flexDirection: 'row' },
-  orderCard: { 
-    backgroundColor: '#F9FAFB', 
-    borderRadius: 10, 
-    padding: 10, 
-    marginRight: 8, 
-    minWidth: 180, 
-    borderWidth: 1, 
-    borderColor: '#E5E7EB' 
+  orderCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    padding: 10,
+    marginRight: 8,
+    minWidth: 180,
+    borderWidth: 1,
+    borderColor: '#E5E7EB'
   },
   orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   orderId: { fontSize: 11, fontWeight: '600', color: '#1F2937' },
@@ -689,18 +689,57 @@ const styles = StyleSheet.create({
   aiBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F59E0B', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 },
   aiBadgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  card: { height: 130, borderRadius: 14, overflow: 'hidden', marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+  card: { 
+    height: 140, 
+    borderRadius: 14, 
+    overflow: 'hidden', 
+    marginBottom: 12, 
+    elevation: 2, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 1 }, 
+    shadowOpacity: 0.05, 
+    shadowRadius: 2 
+  },
   cardImage: { width: '100%', height: '100%' },
   placeholderImage: { justifyContent: 'center', alignItems: 'center' },
   disabledCard: { opacity: 0.8 },
   disabledImage: { opacity: 0.5 },
   disabledOverlay: { backgroundColor: 'rgba(0,0,0,0.4)' },
-  disabledCardTitle: { color: '#FFF', opacity: 0.9, fontSize: 14 },
+  disabledCardTitle: { color: '#FFF', opacity: 0.9, fontSize: 16 },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center', padding: 8 },
-  cardTitle: { color: '#FFF', fontSize: 15, fontWeight: '600', marginBottom: 2, textAlign: 'center' },
-  cardAIBadge: { position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F59E0B', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10, gap: 2 },
-  cardAIBadgeText: { color: '#FFF', fontSize: 8, fontWeight: 'bold' },
-  maintenanceBadge: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#EF4444', paddingVertical: 6, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', borderBottomLeftRadius: 14, borderBottomRightRadius: 14 },
+  cardTitle: { 
+    color: '#FFF', 
+    fontSize: 20, // 🔥 تم التكبير من 15 إلى 20
+    fontWeight: 'bold', 
+    marginBottom: 4, 
+    textAlign: 'center' 
+  },
+  cardAIBadge: { 
+    position: 'absolute', 
+    top: 8, 
+    left: 8, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#F59E0B', 
+    paddingHorizontal: 8, 
+    paddingVertical: 4, 
+    borderRadius: 10, 
+    gap: 2 
+  },
+  cardAIBadgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
+  maintenanceBadge: { 
+    position: 'absolute', 
+    bottom: 0, 
+    left: 0, 
+    right: 0, 
+    backgroundColor: '#EF4444', 
+    paddingVertical: 6, 
+    paddingHorizontal: 8, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    borderBottomLeftRadius: 14, 
+    borderBottomRightRadius: 14 
+  },
   maintenanceText: { color: '#FFF', fontSize: 12, fontWeight: 'bold', textAlign: 'center' },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
   emptyText: { marginTop: 12, fontSize: 16, color: '#6B7280', textAlign: 'center' },

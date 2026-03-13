@@ -5,23 +5,20 @@ let notificationSound = null;
 let sendSound = null;
 let isNotificationPlaying = false;
 let notificationTimeout = null;
-let isMounted = true;
 
 export const loadSounds = async () => {
   try {
     console.log('🔊 بدء تحميل الأصوات...');
-    
+
+    // تفريغ الأصوات السابقة
     await unloadSounds();
 
-    // تحميل صوت الإشعار
+    // ✅ تحميل صوت الإشعار
     try {
       const notificationFile = require('../../assets/sounds/notification.wav');
       const { sound: notifSound } = await Audio.Sound.createAsync(
         notificationFile,
-        { 
-          shouldPlay: false, 
-          isLooping: true,
-        }
+        { shouldPlay: false, isLooping: true }
       );
       notificationSound = notifSound;
       console.log('✅ تم تحميل صوت الإشعار');
@@ -29,7 +26,7 @@ export const loadSounds = async () => {
       console.log('⚠️ فشل تحميل صوت الإشعار:', e.message);
     }
 
-    // تحميل صوت الإرسال
+    // ✅ تحميل صوت الإرسال
     try {
       const sendFile = require('../../assets/sounds/send.wav');
       const { sound: sndSound } = await Audio.Sound.createAsync(
@@ -61,7 +58,6 @@ export const playNotificationSound = async () => {
     }
 
     if (notificationSound) {
-      // ✅ التأكد من أن الصوت في الموضع 0 قبل التشغيل
       await notificationSound.setPositionAsync(0);
       await notificationSound.playAsync();
       isNotificationPlaying = true;
@@ -127,7 +123,6 @@ export const unloadSounds = async () => {
       notificationTimeout = null;
     }
 
-    // ✅ تفريغ صوت الإشعار بأمان
     if (notificationSound) {
       try {
         await notificationSound.stopAsync();
@@ -137,8 +132,7 @@ export const unloadSounds = async () => {
       }
       notificationSound = null;
     }
-    
-    // ✅ تفريغ صوت الإرسال بأمان
+
     if (sendSound) {
       try {
         await sendSound.unloadAsync();
@@ -147,7 +141,7 @@ export const unloadSounds = async () => {
       }
       sendSound = null;
     }
-    
+
     isNotificationPlaying = false;
     Vibration.cancel();
     console.log('🔇 تفريغ موارد الصوت');
@@ -156,8 +150,7 @@ export const unloadSounds = async () => {
   }
 };
 
-// ✅ دالة تنظيف شاملة (تستدعى عند إغلاق التطبيق)
 export const cleanup = async () => {
-  console.log('🧹 تنظيف شامل للموارد الصوتية...');
+  console.log('🧹 تنظيف الموارد الصوتية...');
   await unloadSounds();
 };

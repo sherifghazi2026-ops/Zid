@@ -13,7 +13,6 @@ import { TermsProvider } from './src/context/TermsContext';
 import { loadFonts, fontFamily } from './src/utils/fonts';
 import { loadSounds, cleanup } from './src/utils/SoundHelper';
 import { initializeCoreServices } from './src/services/servicesService';
-import { initializePlacesCollection } from './src/services/placesService';
 
 // شاشات البداية والأساسية
 import SplashScreen from './src/screens/SplashScreen';
@@ -152,7 +151,7 @@ function MainTabs() {
         tabBarActiveTintColor: '#F59E0B',
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: { backgroundColor: '#FFF', borderTopColor: '#E5E7EB', paddingBottom: 5, height: 60 },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '500', fontFamily: fontFamily.arabic },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '500' },
         headerShown: false,
       })}
     >
@@ -236,22 +235,16 @@ export default function App() {
   useEffect(() => {
     async function prepare() {
       try {
+        // ✅ تحميل الخطوط (الآن بترجع true مباشرة)
         await loadFonts();
         console.log('✅ تم تحميل الخطوط');
-        
+
         await loadSounds();
         console.log('✅ تم تحميل الأصوات');
-        
+
         console.log('🚀 بدء تهيئة الخدمات الأساسية...');
         await initializeCoreServices();
         console.log('✅ تم تهيئة الخدمات الأساسية');
-
-        // محاولة تهيئة places collection (اختياري)
-        try {
-          await initializePlacesCollection();
-        } catch (e) {
-          console.log('⚠️ لم يتم تهيئة places collection');
-        }
 
       } catch (error) {
         console.error('❌ خطأ في التحميل:', error);
@@ -262,7 +255,6 @@ export default function App() {
 
     prepare();
 
-    // ✅ تنظيف الموارد عند إغلاق التطبيق
     return () => {
       cleanup();
     };
@@ -272,7 +264,7 @@ export default function App() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4F46E5" />
-        <Text style={[styles.loadingText, { fontFamily: fontFamily.arabic }]}>
+        <Text style={styles.loadingText}>
           جاري تحميل التطبيق...
         </Text>
       </View>
