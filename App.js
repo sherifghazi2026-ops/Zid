@@ -5,7 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, Alert, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { CartProvider } from './src/context/CartContext';
@@ -14,7 +14,25 @@ import { loadFonts, fontFamily } from './src/utils/fonts';
 import { loadSounds, cleanup } from './src/utils/SoundHelper';
 import { initializeCoreServices } from './src/services/servicesService';
 
-// شاشات البداية والأساسية
+// ==================== DEBUG SCREEN ====================
+function DebugScreen({ error, onRetry }) {
+  return (
+    <SafeAreaProvider>
+      <View style={styles.debugContainer}>
+        <Text style={styles.debugTitle}>❌ خطأ في التطبيق</Text>
+        <ScrollView style={styles.debugScroll}>
+          <Text style={styles.debugMessage}>{error}</Text>
+        </ScrollView>
+        <View style={styles.debugButtons}>
+          <Text style={styles.debugHint}>اضغط على Retry للمحاولة مرة أخرى</Text>
+          <Text style={styles.debugHint}>أو شوف الـ logs في terminal</Text>
+        </View>
+      </View>
+    </SafeAreaProvider>
+  );
+}
+
+// ==================== IMPORTS ====================
 import SplashScreen from './src/screens/SplashScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import CustomerAuthScreen from './src/screens/CustomerAuthScreen';
@@ -23,49 +41,31 @@ import CompleteProfileScreen from './src/screens/CompleteProfileScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import MyOrdersScreen from './src/screens/MyOrdersScreen';
 import OrderTracking from './src/screens/customer/OrderTracking';
-
-// شاشات الخدمات
 import ServiceScreen from './src/screens/ServiceScreen';
 import ItemsServiceScreen from './src/screens/ItemsServiceScreen';
 import IroningScreen from './src/screens/IroningScreen';
 import ServiceItemsScreen from './src/screens/ServiceItemsScreen';
 import ProductDetailsScreen from './src/screens/customer/ProductDetailsScreen';
-
-// لوحات التحكم
 import MerchantDashboard from './src/screens/merchant/MerchantDashboard';
 import DriverDashboard from './src/screens/driver/DriverDashboard';
 import DriverDeliveriesScreen from './src/screens/driver/DriverDeliveriesScreen';
-
-// شاشات المطاعم
 import RestaurantListScreen from './src/screens/restaurant/RestaurantListScreen';
 import RestaurantDishesScreen from './src/screens/restaurant/RestaurantDishesScreen';
 import RestaurantPDFViewer from './src/screens/restaurant/RestaurantPDFViewer';
 import RestaurantOrderScreen from './src/screens/restaurant/RestaurantOrderScreen';
-
-// شاشات الأكل البيتي
 import HomeChefsScreen from './src/screens/homechef/HomeChefsScreen';
 import HomeChefDishesScreen from './src/screens/homechef/HomeChefDishesScreen';
-
-// شاشات إضافة الأطباق
 import AddHomeChefDishScreen from './src/screens/merchant/AddHomeChefDishScreen';
 import AddDishScreen from './src/screens/merchant/AddDishScreen';
 import MyDishesScreen from './src/screens/merchant/MyDishesScreen';
 import EditDishScreen from './src/screens/merchant/EditDishScreen';
-
-// شاشات السلة وتفاصيل الطبق
 import DishDetailsScreen from './src/screens/customer/DishDetailsScreen';
 import CartScreen from './src/screens/customer/CartScreen';
-
-// شاشات إضافية
 import OffersScreen from './src/screens/OffersScreen';
 import EshopScreen from './src/screens/EshopScreen';
-
-// شاشات الدخول
 import DriverLoginScreen from './src/screens/auth/DriverLoginScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import MerchantRegisterScreen from './src/screens/auth/MerchantRegisterScreen';
-
-// شاشات الأدمن
 import AdminHomeScreen from './src/screens/admin/AdminHomeScreen';
 import UserManagement from './src/screens/admin/UserManagement';
 import UserEditScreen from './src/screens/admin/UserEditScreen';
@@ -86,29 +86,20 @@ import ManagePlacesScreen from './src/screens/admin/ManagePlacesScreen';
 import ReviewDishesScreen from './src/screens/admin/ReviewDishesScreen';
 import ManageHomeChefsScreen from './src/screens/admin/ManageHomeChefsScreen';
 import AdminProductsReviewScreen from './src/screens/admin/AdminProductsReviewScreen';
-
-// شاشات جديدة
 import TermsScreen from './src/screens/TermsScreen';
 import VerificationRequestsScreen from './src/screens/admin/VerificationRequestsScreen';
 import RateOrderScreen from './src/screens/customer/RateOrderScreen';
-
-// شاشات التجار
 import MerchantOrdersScreen from './src/screens/merchant/MerchantOrdersScreen';
 import MyProductsScreen from './src/screens/merchant/MyProductsScreen';
 import AddProductScreen from './src/screens/merchant/AddProductScreen';
 import OrderDetailsScreen from './src/screens/merchant/OrderDetailsScreen';
-
-// شاشات التجار والمنتجات
 import ProvidersListScreen from './src/screens/ProvidersListScreen';
 import ProviderProductsScreen from './src/screens/ProviderProductsScreen';
-
-// شاشة تتبع الطلب للعميل
 import OrderTrackingScreen from './src/screens/customer/OrderTrackingScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// Stack مخصص للعملاء
 function CustomerStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -174,7 +165,6 @@ function RootStack() {
     >
       <Stack.Screen name="Splash" component={SplashScreen} />
       <Stack.Screen name="MainTabs" component={MainTabs} />
-
       <Stack.Screen name="CustomerAuth" component={CustomerAuthScreen} />
       <Stack.Screen name="ServiceProvider" component={ServiceProviderScreen} />
       <Stack.Screen name="DriverLogin" component={DriverLoginScreen} />
@@ -183,23 +173,19 @@ function RootStack() {
       <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="MyOrders" component={MyOrdersScreen} />
-
       <Stack.Screen name="MerchantDashboard" component={MerchantDashboard} />
       <Stack.Screen name="MerchantOrdersScreen" component={MerchantOrdersScreen} />
       <Stack.Screen name="OrderDetailsScreen" component={OrderDetailsScreen} />
       <Stack.Screen name="MyProductsScreen" component={MyProductsScreen} />
       <Stack.Screen name="AddProductScreen" component={AddProductScreen} />
-
       <Stack.Screen name="DriverDashboard" component={DriverDashboard} />
       <Stack.Screen name="DriverDeliveries" component={DriverDeliveriesScreen} />
-
       <Stack.Screen name="OrderTracking" component={OrderTracking} />
       <Stack.Screen name="ItemsServiceScreen" component={ItemsServiceScreen} />
       <Stack.Screen name="IroningScreen" component={IroningScreen} />
       <Stack.Screen name="ServiceItemsScreen" component={ServiceItemsScreen} />
       <Stack.Screen name="ProductDetailsScreen" component={ProductDetailsScreen} />
       <Stack.Screen name="ManageLaundryItemsScreen" component={ManageLaundryItemsScreen} />
-
       <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
       <Stack.Screen name="UserManagement" component={UserManagement} />
       <Stack.Screen name="UserEditScreen" component={UserEditScreen} />
@@ -220,8 +206,6 @@ function RootStack() {
       <Stack.Screen name="ReviewDishes" component={ReviewDishesScreen} />
       <Stack.Screen name="ManageHomeChefs" component={ManageHomeChefsScreen} />
       <Stack.Screen name="AdminProductsReview" component={AdminProductsReviewScreen} />
-
-      {/* الشاشات الجديدة */}
       <Stack.Screen name="TermsScreen" component={TermsScreen} />
       <Stack.Screen name="VerificationRequestsScreen" component={VerificationRequestsScreen} />
       <Stack.Screen name="RateOrderScreen" component={RateOrderScreen} />
@@ -231,23 +215,44 @@ function RootStack() {
 
 export default function App() {
   const [appIsReady, setAppIsReady] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     async function prepare() {
       try {
-        // ✅ تحميل الخطوط (الآن بترجع true مباشرة)
-        await loadFonts();
-        console.log('✅ تم تحميل الخطوط');
+        console.log('🚀 بدء تحميل التطبيق...');
+        
+        // ✅ تحميل الخطوط
+        try {
+          await loadFonts();
+          console.log('✅ تم تحميل الخطوط');
+        } catch (fontError) {
+          console.error('❌ خطأ في الخطوط:', fontError);
+          setError('Font Error: ' + fontError.message);
+          return;
+        }
 
-        await loadSounds();
-        console.log('✅ تم تحميل الأصوات');
+        // ✅ تحميل الأصوات (معطل مؤقتاً للتجربة)
+        // try {
+        //   await loadSounds();
+        //   console.log('✅ تم تحميل الأصوات');
+        // } catch (soundError) {
+        //   console.error('❌ خطأ في الأصوات:', soundError);
+        // }
 
-        console.log('🚀 بدء تهيئة الخدمات الأساسية...');
-        await initializeCoreServices();
-        console.log('✅ تم تهيئة الخدمات الأساسية');
+        console.log('🚀 بدء تهيئة الخدمات...');
+        try {
+          await initializeCoreServices();
+          console.log('✅ تم تهيئة الخدمات');
+        } catch (serviceError) {
+          console.error('❌ خطأ في الخدمات:', serviceError);
+          setError('Service Error: ' + serviceError.message);
+          return;
+        }
 
       } catch (error) {
-        console.error('❌ خطأ في التحميل:', error);
+        console.error('❌ خطأ عام:', error);
+        setError('General Error: ' + error.message);
       } finally {
         setAppIsReady(true);
       }
@@ -259,6 +264,10 @@ export default function App() {
       cleanup();
     };
   }, []);
+
+  if (error) {
+    return <DebugScreen error={error} />;
+  }
 
   if (!appIsReady) {
     return (
@@ -295,5 +304,41 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: '#6B7280',
     fontSize: 14,
+  },
+  debugContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    padding: 20,
+  },
+  debugTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#EF4444',
+    marginBottom: 20,
+  },
+  debugScroll: {
+    maxHeight: 300,
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+  },
+  debugMessage: {
+    fontSize: 14,
+    color: '#1F2937',
+    lineHeight: 20,
+  },
+  debugButtons: {
+    marginTop: 30,
+    alignItems: 'center',
+  },
+  debugHint: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 8,
   },
 });
