@@ -1,4 +1,4 @@
-import { File } from 'expo-file-system/next'; // ✅ استيراد File من المسار الجديد
+import { File } from 'expo-file-system/next';
 import { Platform } from 'react-native';
 
 const IMAGEKIT_PRIVATE_KEY = 'private_EWamixKcyYNZI2xJmmO0iQBN53k=';
@@ -18,25 +18,21 @@ const sanitizeFolderName = (name) => {
   return clean;
 };
 
-// ✅ دالة للتحقق من صحة الملف باستخدام File API
+// دالة للتحقق من صحة الملف
 const validateFile = async (uri) => {
   try {
     if (!uri) {
       return { valid: false, error: 'uri غير موجود' };
     }
 
-    // إنشاء كائن File
     const file = new File(uri);
-    
-    // التحقق من وجود الملف
     const exists = await file.exists;
     if (!exists) {
       return { valid: false, error: 'الملف غير موجود على الجهاز' };
     }
 
-    // الحصول على معلومات الملف
     const fileInfo = await file.info();
-    
+
     if (fileInfo.size && fileInfo.size > 10 * 1024 * 1024) {
       return { valid: false, error: 'حجم الملف كبير جداً (أقصى حد 10MB)' };
     }
@@ -56,7 +52,7 @@ export const uploadToImageKit = async (uri, fileName, folderType = 'general', us
 
     console.log(`📤 بدء رفع إلى ImageKit:`, { fileName, folderType, userName });
 
-    // التحقق من صحة الملف باستخدام File API
+    // التحقق من صحة الملف
     const validation = await validateFile(uri);
     if (!validation.valid) {
       throw new Error(`الملف غير صالح: ${validation.error}`);
@@ -68,14 +64,14 @@ export const uploadToImageKit = async (uri, fileName, folderType = 'general', us
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const response = await fetch('https://www.google.com', { 
+
+      const response = await fetch('https://www.google.com', {
         method: 'HEAD',
-        signal: controller.signal 
+        signal: controller.signal
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       if (!response.ok) throw new Error('لا يوجد اتصال بالإنترنت');
       console.log('✅ اتصال الإنترنت نشط');
     } catch (netError) {
@@ -115,7 +111,7 @@ export const uploadToImageKit = async (uri, fileName, folderType = 'general', us
 
     console.log('📁 الرفع إلى مجلد:', baseFolder);
 
-    // قراءة الملف كـ base64 باستخدام File API
+    // قراءة الملف كـ base64
     let base64;
     try {
       const file = new File(uri);
@@ -172,15 +168,15 @@ export const uploadToImageKit = async (uri, fileName, folderType = 'general', us
       };
     } else {
       console.error('❌ فشل الرفع:', data);
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: data.message || 'فشل الرفع إلى ImageKit',
-        details: data 
+        details: data
       };
     }
   } catch (error) {
     console.error('❌ خطأ في رفع الملف:', error);
-    
+
     let errorMessage = 'فشل في رفع الملف';
     if (error.name === 'AbortError') {
       errorMessage = 'انتهت مهلة الرفع. تأكد من اتصالك بالإنترنت وحاول مجدداً.';
@@ -191,30 +187,30 @@ export const uploadToImageKit = async (uri, fileName, folderType = 'general', us
     } else {
       errorMessage = error.message || 'خطأ غير متوقع في رفع الملف';
     }
-    
+
     return { success: false, error: errorMessage };
   }
 };
 
-// ✅ دالة رفع صورة الخدمة
+// دالة رفع صورة الخدمة
 export const uploadServiceImage = async (imageUri) => {
   const fileName = `service_${Date.now()}.jpg`;
   return uploadToImageKit(imageUri, fileName, 'service', 'services');
 };
 
-// ✅ دالة رفع صورة المطعم
+// دالة رفع صورة المطعم
 export const uploadRestaurantImage = async (imageUri, restaurantName, type = 'profile') => {
   const fileName = `${type}_${Date.now()}.jpg`;
   return uploadToImageKit(imageUri, fileName, type, restaurantName);
 };
 
-// ✅ دالة رفع PDF للمطعم
+// دالة رفع PDF للمطعم
 export const uploadRestaurantPDF = async (pdfUri, restaurantName) => {
   const fileName = `menu_${Date.now()}.pdf`;
   return uploadToImageKit(pdfUri, fileName, 'general', restaurantName);
 };
 
-// ✅ دوال الأطباق
+// دوال الأطباق
 export const uploadDishImage = (imageUri, userName) => {
   const fileName = `dish_${Date.now()}.jpg`;
   return uploadToImageKit(imageUri, fileName, 'dish', userName);
@@ -225,19 +221,19 @@ export const uploadDishVideo = (videoUri, userName) => {
   return uploadToImageKit(videoUri, fileName, 'video', userName);
 };
 
-// ✅ دالة رفع الصور الشخصية
+// دالة رفع الصور الشخصية
 export const uploadProfileImage = (imageUri, userName) => {
   const fileName = `profile_${Date.now()}.jpg`;
   return uploadToImageKit(imageUri, fileName, 'profile', userName);
 };
 
-// ✅ دالة رفع الصوت
+// دالة رفع الصوت
 export const uploadVoiceFile = (audioUri) => {
   const fileName = `voice_${Date.now()}.m4a`;
   return uploadToImageKit(audioUri, fileName, 'voice');
 };
 
-// ✅ دالة الحذف من ImageKit
+// دالة الحذف من ImageKit
 export const deleteFromImageKit = async (fileUrl) => {
   try {
     const fileId = fileUrl.split('/').pop()?.split('?')[0];
