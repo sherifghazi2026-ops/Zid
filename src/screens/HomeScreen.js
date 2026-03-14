@@ -13,7 +13,7 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.servicesGrid}>
           <TouchableOpacity 
             style={styles.serviceCard}
-            onPress={() => alert('خدمة قيد التطوير')}
+            onPress={() => alert('مطاعم')}
           >
             <Ionicons name="restaurant-outline" size={40} color="#F59E0B" />
             <Text style={styles.serviceText}>مطاعم</Text>
@@ -21,15 +21,33 @@ export default function HomeScreen({ navigation }) {
 
           <TouchableOpacity 
             style={styles.serviceCard}
-            onPress={() => alert('خدمة قيد التطوير')}
+            onPress={() => alert('أكل بيتي')}
           >
             <Ionicons name="home-outline" size={40} color="#EF4444" />
             <Text style={styles.serviceText}>أكل بيتي</Text>
           </TouchableOpacity>
         </View>
 
+        <View style={styles.servicesGrid}>
+          <TouchableOpacity 
+            style={styles.serviceCard}
+            onPress={() => alert('مكوجي')}
+          >
+            <Ionicons name="shirt-outline" size={40} color="#3B82F6" />
+            <Text style={styles.serviceText}>مكوجي</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.serviceCard}
+            onPress={() => alert('صيدلية')}
+          >
+            <Ionicons name="medical-outline" size={40} color="#10B981" />
+            <Text style={styles.serviceText}>صيدلية</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.infoBox}>
-          <Text style={styles.infoText}>نسخة مبسطة للاختبار ✅</Text>
+          <Text style={styles.infoText}>✓ تم إلغاء الخطوط المخصصة</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -42,11 +60,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   content: {
-    padding: 20,
+    padding: 16,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 30,
+    marginTop: 20,
   },
   title: {
     fontSize: 24,
@@ -56,7 +75,7 @@ const styles = StyleSheet.create({
   servicesGrid: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 30,
+    marginBottom: 20,
   },
   serviceCard: {
     backgroundColor: '#FFFFFF',
@@ -66,6 +85,7 @@ const styles = StyleSheet.create({
     width: '45%',
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    elevation: 2,
   },
   serviceText: {
     marginTop: 10,
@@ -75,9 +95,10 @@ const styles = StyleSheet.create({
   },
   infoBox: {
     backgroundColor: '#EEF2FF',
-    padding: 20,
+    padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    marginTop: 20,
   },
   infoText: {
     fontSize: 16,
