@@ -11,27 +11,31 @@ export default function SplashScreen({ navigation }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        setTimeout(async () => {
-          const userData = await AsyncStorage.getItem('userData');
-          const userRole = await AsyncStorage.getItem('userRole');
+        // تأخير بسيط لإظهار الـ Splash
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // التحقق من وجود مستخدم مسجل
+        const userData = await AsyncStorage.getItem('userData');
+        const userRole = await AsyncStorage.getItem('userRole');
 
-          if (userData && userRole) {
-            const parsed = JSON.parse(userData);
+        if (userData && userRole) {
+          const parsed = JSON.parse(userData);
 
-            if (parsed.role === 'merchant') {
-              navigation.replace('MerchantDashboard');
-            } else if (parsed.role === 'driver') {
-              navigation.replace('DriverDashboard');
-            } else if (parsed.role === 'admin') {
-              navigation.replace('AdminHome');
-            } else {
-              navigation.replace('MainTabs');
-            }
+          if (parsed.role === 'merchant') {
+            navigation.replace('MerchantDashboard');
+          } else if (parsed.role === 'driver') {
+            navigation.replace('DriverDashboard');
+          } else if (parsed.role === 'admin') {
+            navigation.replace('AdminHome');
           } else {
             navigation.replace('MainTabs');
           }
-        }, 2000);
+        } else {
+          navigation.replace('MainTabs');
+        }
       } catch (error) {
+        console.log('❌ خطأ في التحقق:', error);
+        // في حالة الخطأ، ننتقل للشاشة الرئيسية
         navigation.replace('MainTabs');
       }
     };
