@@ -1,344 +1,75 @@
 import 'react-native-gesture-handler';
 import React, { useEffect, useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createStackNavigator } from '@react-navigation/stack';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { View, Text, ActivityIndicator, StyleSheet, Alert, ScrollView } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, Text, SafeAreaView, LogBox } from 'react-native';
 
-import { CartProvider } from './src/context/CartContext';
-import { TermsProvider } from './src/context/TermsContext';
-import { loadFonts, fontFamily } from './src/utils/fonts';
-import { loadSounds, cleanup } from './src/utils/SoundHelper';
-import { initializeCoreServices } from './src/services/servicesService';
-
-// ==================== DEBUG SCREEN ====================
-function DebugScreen({ error, onRetry }) {
-  return (
-    <SafeAreaProvider>
-      <View style={styles.debugContainer}>
-        <Text style={styles.debugTitle}>❌ خطأ في التطبيق</Text>
-        <ScrollView style={styles.debugScroll}>
-          <Text style={styles.debugMessage}>{error}</Text>
-        </ScrollView>
-        <View style={styles.debugButtons}>
-          <Text style={styles.debugHint}>اضغط على Retry للمحاولة مرة أخرى</Text>
-          <Text style={styles.debugHint}>أو شوف الـ logs في terminal</Text>
-        </View>
-      </View>
-    </SafeAreaProvider>
-  );
-}
-
-// ==================== IMPORTS ====================
-import SplashScreen from './src/screens/SplashScreen';
-import HomeScreen from './src/screens/HomeScreen';
-import CustomerAuthScreen from './src/screens/CustomerAuthScreen';
-import ServiceProviderScreen from './src/screens/ServiceProviderScreen';
-import CompleteProfileScreen from './src/screens/CompleteProfileScreen';
-import ProfileScreen from './src/screens/ProfileScreen';
-import MyOrdersScreen from './src/screens/MyOrdersScreen';
-import OrderTracking from './src/screens/customer/OrderTracking';
-import ServiceScreen from './src/screens/ServiceScreen';
-import ItemsServiceScreen from './src/screens/ItemsServiceScreen';
-import IroningScreen from './src/screens/IroningScreen';
-import ServiceItemsScreen from './src/screens/ServiceItemsScreen';
-import ProductDetailsScreen from './src/screens/customer/ProductDetailsScreen';
-import MerchantDashboard from './src/screens/merchant/MerchantDashboard';
-import DriverDashboard from './src/screens/driver/DriverDashboard';
-import DriverDeliveriesScreen from './src/screens/driver/DriverDeliveriesScreen';
-import RestaurantListScreen from './src/screens/restaurant/RestaurantListScreen';
-import RestaurantDishesScreen from './src/screens/restaurant/RestaurantDishesScreen';
-import RestaurantPDFViewer from './src/screens/restaurant/RestaurantPDFViewer';
-import RestaurantOrderScreen from './src/screens/restaurant/RestaurantOrderScreen';
-import HomeChefsScreen from './src/screens/homechef/HomeChefsScreen';
-import HomeChefDishesScreen from './src/screens/homechef/HomeChefDishesScreen';
-import AddHomeChefDishScreen from './src/screens/merchant/AddHomeChefDishScreen';
-import AddDishScreen from './src/screens/merchant/AddDishScreen';
-import MyDishesScreen from './src/screens/merchant/MyDishesScreen';
-import EditDishScreen from './src/screens/merchant/EditDishScreen';
-import DishDetailsScreen from './src/screens/customer/DishDetailsScreen';
-import CartScreen from './src/screens/customer/CartScreen';
-import OffersScreen from './src/screens/OffersScreen';
-import EshopScreen from './src/screens/EshopScreen';
-import DriverLoginScreen from './src/screens/auth/DriverLoginScreen';
-import LoginScreen from './src/screens/auth/LoginScreen';
-import MerchantRegisterScreen from './src/screens/auth/MerchantRegisterScreen';
-import AdminHomeScreen from './src/screens/admin/AdminHomeScreen';
-import UserManagement from './src/screens/admin/UserManagement';
-import UserEditScreen from './src/screens/admin/UserEditScreen';
-import AdminOrdersScreen from './src/screens/admin/AdminOrdersScreen';
-import AddUserScreen from './src/screens/admin/AddUserScreen';
-import ServicesManagementScreen from './src/screens/admin/ServicesManagementScreen';
-import AddServiceScreen from './src/screens/admin/AddServiceScreen';
-import AdminAssistantsScreen from './src/screens/admin/AdminAssistantsScreen';
-import EditServiceScreen from './src/screens/admin/EditServiceScreen';
-import ManageOffersScreen from './src/screens/admin/ManageOffersScreen';
-import ManageProductsScreen from './src/screens/admin/ManageProductsScreen';
-import ManageProductCategoriesScreen from './src/screens/admin/ManageProductCategoriesScreen';
-import ManageLaundryItemsScreen from './src/screens/admin/ManageLaundryItemsScreen';
-import ManageRestaurantsScreen from './src/screens/admin/ManageRestaurantsScreen';
-import AddRestaurantScreen from './src/screens/admin/AddRestaurantScreen';
-import EditRestaurantScreen from './src/screens/admin/EditRestaurantScreen';
-import ManagePlacesScreen from './src/screens/admin/ManagePlacesScreen';
-import ReviewDishesScreen from './src/screens/admin/ReviewDishesScreen';
-import ManageHomeChefsScreen from './src/screens/admin/ManageHomeChefsScreen';
-import AdminProductsReviewScreen from './src/screens/admin/AdminProductsReviewScreen';
-import TermsScreen from './src/screens/TermsScreen';
-import VerificationRequestsScreen from './src/screens/admin/VerificationRequestsScreen';
-import RateOrderScreen from './src/screens/customer/RateOrderScreen';
-import MerchantOrdersScreen from './src/screens/merchant/MerchantOrdersScreen';
-import MyProductsScreen from './src/screens/merchant/MyProductsScreen';
-import AddProductScreen from './src/screens/merchant/AddProductScreen';
-import OrderDetailsScreen from './src/screens/merchant/OrderDetailsScreen';
-import ProvidersListScreen from './src/screens/ProvidersListScreen';
-import ProviderProductsScreen from './src/screens/ProviderProductsScreen';
-import OrderTrackingScreen from './src/screens/customer/OrderTrackingScreen';
-
-const Tab = createBottomTabNavigator();
-const Stack = createStackNavigator();
-
-function CustomerStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="CustomerMain" component={HomeScreen} />
-      <Stack.Screen name="ServiceScreen" component={ServiceScreen} />
-      <Stack.Screen name="RestaurantList" component={RestaurantListScreen} />
-      <Stack.Screen name="RestaurantDishesScreen" component={RestaurantDishesScreen} />
-      <Stack.Screen name="RestaurantPDFViewer" component={RestaurantPDFViewer} />
-      <Stack.Screen name="RestaurantOrder" component={RestaurantOrderScreen} />
-      <Stack.Screen name="HomeChefsScreen" component={HomeChefsScreen} />
-      <Stack.Screen name="HomeChefDishesScreen" component={HomeChefDishesScreen} />
-      <Stack.Screen name="DishDetails" component={DishDetailsScreen} />
-      <Stack.Screen name="Cart" component={CartScreen} />
-      <Stack.Screen name="AddHomeChefDishScreen" component={AddHomeChefDishScreen} />
-      <Stack.Screen name="MyChefDishesScreen" component={HomeChefDishesScreen} />
-      <Stack.Screen name="AddDishScreen" component={AddDishScreen} />
-      <Stack.Screen name="MyDishesScreen" component={MyDishesScreen} />
-      <Stack.Screen name="EditDishScreen" component={EditDishScreen} />
-      <Stack.Screen name="ServiceItemsScreen" component={ServiceItemsScreen} />
-      <Stack.Screen name="ProductDetailsScreen" component={ProductDetailsScreen} />
-      <Stack.Screen name="ProvidersListScreen" component={ProvidersListScreen} />
-      <Stack.Screen name="ProviderProductsScreen" component={ProviderProductsScreen} />
-      <Stack.Screen name="OrderTrackingScreen" component={OrderTrackingScreen} />
-      <Stack.Screen name="RateOrderScreen" component={RateOrderScreen} />
-    </Stack.Navigator>
-  );
-}
-
-function MainTabs() {
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
-          if (route.name === 'طلب') iconName = focused ? 'cart' : 'cart-outline';
-          else if (route.name === 'عروض') iconName = focused ? 'pricetag' : 'pricetag-outline';
-          else if (route.name === 'متجر') iconName = focused ? 'storefront' : 'storefront-outline';
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: '#F59E0B',
-        tabBarInactiveTintColor: '#9CA3AF',
-        tabBarStyle: { backgroundColor: '#FFF', borderTopColor: '#E5E7EB', paddingBottom: 5, height: 60 },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '500' },
-        headerShown: false,
-      })}
-    >
-      <Tab.Screen name="طلب" component={CustomerStack} />
-      <Tab.Screen name="عروض" component={OffersScreen} />
-      <Tab.Screen name="متجر" component={EshopScreen} />
-    </Tab.Navigator>
-  );
-}
-
-function RootStack() {
-  return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-        presentation: 'card',
-        animation: 'slide_from_right',
-      }}
-      initialRouteName="Splash"
-    >
-      <Stack.Screen name="Splash" component={SplashScreen} />
-      <Stack.Screen name="MainTabs" component={MainTabs} />
-      <Stack.Screen name="CustomerAuth" component={CustomerAuthScreen} />
-      <Stack.Screen name="ServiceProvider" component={ServiceProviderScreen} />
-      <Stack.Screen name="DriverLogin" component={DriverLoginScreen} />
-      <Stack.Screen name="LoginScreen" component={LoginScreen} />
-      <Stack.Screen name="MerchantRegister" component={MerchantRegisterScreen} />
-      <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-      <Stack.Screen name="MyOrders" component={MyOrdersScreen} />
-      <Stack.Screen name="MerchantDashboard" component={MerchantDashboard} />
-      <Stack.Screen name="MerchantOrdersScreen" component={MerchantOrdersScreen} />
-      <Stack.Screen name="OrderDetailsScreen" component={OrderDetailsScreen} />
-      <Stack.Screen name="MyProductsScreen" component={MyProductsScreen} />
-      <Stack.Screen name="AddProductScreen" component={AddProductScreen} />
-      <Stack.Screen name="DriverDashboard" component={DriverDashboard} />
-      <Stack.Screen name="DriverDeliveries" component={DriverDeliveriesScreen} />
-      <Stack.Screen name="OrderTracking" component={OrderTracking} />
-      <Stack.Screen name="ItemsServiceScreen" component={ItemsServiceScreen} />
-      <Stack.Screen name="IroningScreen" component={IroningScreen} />
-      <Stack.Screen name="ServiceItemsScreen" component={ServiceItemsScreen} />
-      <Stack.Screen name="ProductDetailsScreen" component={ProductDetailsScreen} />
-      <Stack.Screen name="ManageLaundryItemsScreen" component={ManageLaundryItemsScreen} />
-      <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
-      <Stack.Screen name="UserManagement" component={UserManagement} />
-      <Stack.Screen name="UserEditScreen" component={UserEditScreen} />
-      <Stack.Screen name="AdminOrders" component={AdminOrdersScreen} />
-      <Stack.Screen name="AddUser" component={AddUserScreen} />
-      <Stack.Screen name="ServicesManagement" component={ServicesManagementScreen} />
-      <Stack.Screen name="AddService" component={AddServiceScreen} />
-      <Stack.Screen name="AdminAssistants" component={AdminAssistantsScreen} />
-      <Stack.Screen name="EditService" component={EditServiceScreen} />
-      <Stack.Screen name="ManageOffers" component={ManageOffersScreen} />
-      <Stack.Screen name="ManageProducts" component={ManageProductsScreen} />
-      <Stack.Screen name="ManageProductCategories" component={ManageProductCategoriesScreen} />
-      <Stack.Screen name="ManageLaundryItems" component={ManageLaundryItemsScreen} />
-      <Stack.Screen name="ManageRestaurants" component={ManageRestaurantsScreen} />
-      <Stack.Screen name="AddRestaurant" component={AddRestaurantScreen} />
-      <Stack.Screen name="EditRestaurant" component={EditRestaurantScreen} />
-      <Stack.Screen name="ManagePlacesScreen" component={ManagePlacesScreen} />
-      <Stack.Screen name="ReviewDishes" component={ReviewDishesScreen} />
-      <Stack.Screen name="ManageHomeChefs" component={ManageHomeChefsScreen} />
-      <Stack.Screen name="AdminProductsReview" component={AdminProductsReviewScreen} />
-      <Stack.Screen name="TermsScreen" component={TermsScreen} />
-      <Stack.Screen name="VerificationRequestsScreen" component={VerificationRequestsScreen} />
-      <Stack.Screen name="RateOrderScreen" component={RateOrderScreen} />
-    </Stack.Navigator>
-  );
-}
+// تجاهل التحذيرات المؤقتة
+LogBox.ignoreAllLogs();
 
 export default function App() {
-  const [appIsReady, setAppIsReady] = useState(false);
+  const [status, setStatus] = useState('Starting...');
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    async function prepare() {
+    // دالة لاختبار كل خطوة على حدة
+    async function initApp() {
       try {
-        console.log('🚀 بدء تحميل التطبيق...');
+        // الخطوة 1: التحقق من البيئة
+        setStatus('Step 1: Environment OK');
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // الخطوة 2: محاولة تحميل الخطوط
+        setStatus('Step 2: Loading fonts...');
+        try {
+          const fonts = await import('./src/utils/fonts');
+          await fonts.loadFonts();
+          setStatus('Step 3: Fonts loaded ✅');
+        } catch (e) {
+          setError('Fonts Error: ' + e.message);
+          return;
+        }
+
+        // الخطوة 3: محاولة تحميل الأصوات (معطل)
+        setStatus('Step 4: Sounds skipped ⏭️');
+
+        // الخطوة 4: محاولة تهيئة الخدمات
+        setStatus('Step 5: Initializing services...');
+        try {
+          const services = await import('./src/services/servicesService');
+          await services.initializeCoreServices();
+          setStatus('Step 6: Services OK ✅');
+        } catch (e) {
+          setError('Services Error: ' + e.message);
+          return;
+        }
+
+        // الخطوة 5: محاولة تحميل الشاشات
+        setStatus('Step 7: Loading screens...');
+        await import('./src/screens/HomeScreen');
+        setStatus('Step 8: Screens OK ✅');
+
+        // كل شيء تمام
+        setStatus('Ready!');
         
-        // ✅ تحميل الخطوط
-        try {
-          await loadFonts();
-          console.log('✅ تم تحميل الخطوط');
-        } catch (fontError) {
-          console.error('❌ خطأ في الخطوط:', fontError);
-          setError('Font Error: ' + fontError.message);
-          return;
-        }
-
-        // ✅ تحميل الأصوات (معطل مؤقتاً للتجربة)
-        // try {
-        //   await loadSounds();
-        //   console.log('✅ تم تحميل الأصوات');
-        // } catch (soundError) {
-        //   console.error('❌ خطأ في الأصوات:', soundError);
-        // }
-
-        console.log('🚀 بدء تهيئة الخدمات...');
-        try {
-          await initializeCoreServices();
-          console.log('✅ تم تهيئة الخدمات');
-        } catch (serviceError) {
-          console.error('❌ خطأ في الخدمات:', serviceError);
-          setError('Service Error: ' + serviceError.message);
-          return;
-        }
-
-      } catch (error) {
-        console.error('❌ خطأ عام:', error);
-        setError('General Error: ' + error.message);
-      } finally {
-        setAppIsReady(true);
+      } catch (e) {
+        setError('Fatal: ' + e.message);
       }
     }
 
-    prepare();
-
-    return () => {
-      cleanup();
-    };
+    initApp();
   }, []);
 
   if (error) {
-    return <DebugScreen error={error} />;
-  }
-
-  if (!appIsReady) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4F46E5" />
-        <Text style={styles.loadingText}>
-          جاري تحميل التطبيق...
-        </Text>
-      </View>
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FEE2E2', padding: 20 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#EF4444', marginBottom: 10 }}>❌ ERROR</Text>
+        <Text style={{ fontSize: 14, color: '#1F2937', textAlign: 'center' }}>{error}</Text>
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaProvider>
-      <TermsProvider>
-        <CartProvider>
-          <NavigationContainer>
-            <RootStack />
-          </NavigationContainer>
-        </CartProvider>
-      </TermsProvider>
-    </SafeAreaProvider>
+    <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
+      <Text style={{ fontSize: 16, color: '#4F46E5' }}>{status}</Text>
+    </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  loadingText: {
-    marginTop: 12,
-    color: '#6B7280',
-    fontSize: 14,
-  },
-  debugContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    padding: 20,
-  },
-  debugTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#EF4444',
-    marginBottom: 20,
-  },
-  debugScroll: {
-    maxHeight: 300,
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#EF4444',
-  },
-  debugMessage: {
-    fontSize: 14,
-    color: '#1F2937',
-    lineHeight: 20,
-  },
-  debugButtons: {
-    marginTop: 30,
-    alignItems: 'center',
-  },
-  debugHint: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 8,
-  },
-});
