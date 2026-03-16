@@ -68,3 +68,4 @@ secrets/
 *.jks
 google-services.json
 add-*-secrets.sh
+.env
