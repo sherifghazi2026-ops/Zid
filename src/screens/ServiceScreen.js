@@ -17,6 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
 import { createOrder, uploadFile } from '../services/orderService';
 import { getServiceById } from '../services/servicesService';
+import { getMerchantsByType } from '../services/merchantService';
 import { playSendSound } from '../utils/SoundHelper';
 import DynamicMongez from '../components/DynamicMongez';
 
@@ -38,20 +39,16 @@ export default function ServiceScreen({ navigation, route }) {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const timerRef = useRef(null);
   const [sending, setSending] = useState(false);
-  
-  // ✅ useRef للتحقق من أن المكون لا يزال مثبتاً
   const isMounted = useRef(true);
 
   useEffect(() => {
     isMounted.current = true;
     loadService();
     loadSavedData();
-    
-    // ✅ تنظيف الصوت عند الخروج من الشاشة
+
     return () => {
       isMounted.current = false;
       if (sound) {
-        console.log('🧹 تفريغ الصوت من الذاكرة...');
         sound.unloadAsync().catch(e => console.log('خطأ في تفريغ الصوت:', e));
       }
     };
@@ -72,9 +69,7 @@ export default function ServiceScreen({ navigation, route }) {
       Alert.alert('خطأ', 'فشل في تحميل الخدمة');
       navigation.goBack();
     } finally {
-      if (isMounted.current) {
-        setLoading(false);
-      }
+      if (isMounted.current) setLoading(false);
     }
   };
 
@@ -167,20 +162,14 @@ export default function ServiceScreen({ navigation, route }) {
   const playVoice = async () => {
     if (!voiceUri) return;
     try {
-      // ✅ إيقاف أي صوت سابق
-      if (sound) {
-        await sound.unloadAsync();
-      }
-      
+      if (sound) await sound.unloadAsync();
       const { sound: newSound } = await Audio.Sound.createAsync({ uri: voiceUri }, { shouldPlay: true });
-      
       if (isMounted.current) {
         setSound(newSound);
         setIsPlaying(true);
       }
-      
-      newSound.setOnPlaybackStatusUpdate((status) => { 
-        if (status.didJustFinish && isMounted.current) setIsPlaying(false); 
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish && isMounted.current) setIsPlaying(false);
       });
     } catch (error) {
       Alert.alert('خطأ', 'فشل تشغيل التسجيل');
@@ -190,10 +179,10 @@ export default function ServiceScreen({ navigation, route }) {
   const deleteVoice = () => {
     setVoiceUri(null);
     setRecordingDuration(0);
-    if (sound) { 
-      sound.unloadAsync(); 
-      setSound(null); 
-      setIsPlaying(false); 
+    if (sound) {
+      sound.unloadAsync();
+      setSound(null);
+      setIsPlaying(false);
     }
   };
 
@@ -210,36 +199,42 @@ export default function ServiceScreen({ navigation, route }) {
     setSending(true);
 
     try {
+      // ✅ جلب تجار هذه الخدمة
+      console.log(`🔍 جلب تجار الخدمة: ${serviceType}`);
+      const merchantsResult = await getMerchantsByType(serviceType);
+      
+      let merchantId = null;
+      let merchantName = null;
+      let merchantPhone = null;
+
+      if (merchantsResult.success && merchantsResult.data.length > 0) {
+        const randomIndex = Math.floor(Math.random() * merchantsResult.data.length);
+        const selectedMerchant = merchantsResult.data[randomIndex];
+        merchantId = selectedMerchant.$id;
+        merchantName = selectedMerchant.name;
+        merchantPhone = selectedMerchant.phone || '';
+        console.log(`✅ تم اختيار تاجر: ${merchantName} (${merchantId})`);
+      } else {
+        console.log('⚠️ لا يوجد تجار لهذه الخدمة');
+      }
+
       let voiceFileUrl = null;
       if (voiceUri) {
         setUploadingVoice(true);
-        console.log('🎤 بدء رفع الصوت إلى ImageKit...');
         const uploadResult = await uploadFile(voiceUri, `voice_${Date.now()}.m4a`, 'voice');
         setUploadingVoice(false);
-
-        if (uploadResult.success) {
-          voiceFileUrl = uploadResult.fileUrl;
-          console.log('✅ تم رفع الصوت:', voiceFileUrl);
-        } else {
-          console.log('⚠️ فشل رفع الصوت:', uploadResult.error);
-        }
+        if (uploadResult.success) voiceFileUrl = uploadResult.fileUrl;
       }
 
       const imageUrls = [];
       if (images.length > 0) {
         setUploadingImages(true);
-        console.log(`🖼️ بدء رفع ${images.length} صورة...`);
-
         for (let i = 0; i < images.length; i++) {
           const uri = images[i];
-          console.log(`🖼️ رفع صورة ${i+1}/${images.length}`);
           const imageResult = await uploadFile(uri, `image_${Date.now()}_${i}.jpg`, 'image');
-          if (imageResult.success) {
-            imageUrls.push(imageResult.fileUrl);
-          }
+          if (imageResult.success) imageUrls.push(imageResult.fileUrl);
         }
         setUploadingImages(false);
-        console.log(`✅ تم رفع ${imageUrls.length} صورة بنجاح`);
       }
 
       const orderData = {
@@ -253,6 +248,9 @@ export default function ServiceScreen({ navigation, route }) {
         voiceUrl: voiceFileUrl,
         imageUrls: imageUrls,
         notes: '',
+        merchantId: merchantId,
+        merchantName: merchantName,
+        merchantPhone: merchantPhone,
       };
 
       const result = await createOrder(orderData);
@@ -261,11 +259,24 @@ export default function ServiceScreen({ navigation, route }) {
         await AsyncStorage.setItem('zayed_phone', phoneNumber);
         await AsyncStorage.setItem('zayed_address', address);
         await playSendSound();
-        Alert.alert(
-          '✅ تم استلام طلبك',
-          service?.responseMessage || 'سيتم التواصل معك قريباً',
-          [{ text: 'حسناً', onPress: () => navigation.goBack() }]
-        );
+
+        // ✅ تحديد رسالة التأكيد حسب نوع الخدمة
+        let successMessage = '';
+        
+        if (service?.type === 'regular' || service?.type === 'items_service') {
+          // خدمات عادية أو خدمات بأصناف → نستخدم اسم الخدمة
+          successMessage = `تم إرسال طلبك لخدمة ${service?.name || serviceType}\nيمكنك متابعة حالة الطلب من الشاشة الرئيسية`;
+        } else {
+          // خدمات بمنتجات (items, products) → نستخدم اسم التاجر
+          successMessage = merchantName 
+            ? `تم إرسال طلبك إلى ${merchantName}\nيمكنك متابعة حالة الطلب من الشاشة الرئيسية`
+            : `تم إرسال طلبك\nيمكنك متابعة حالة الطلب من الشاشة الرئيسية`;
+        }
+
+        Alert.alert('✅ تم استلام طلبك', successMessage, [
+          { text: 'متابعة', onPress: () => navigation.goBack() }
+        ]);
+        
         setDescription('');
         setImages([]);
         setVoiceUri(null);
@@ -300,6 +311,7 @@ export default function ServiceScreen({ navigation, route }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        {/* رقم الموبايل والعنوان */}
         <View style={styles.section}>
           <View style={styles.inputContainer}>
             <Ionicons name="call-outline" size={20} color="#9CA3AF" />
@@ -326,6 +338,7 @@ export default function ServiceScreen({ navigation, route }) {
           </View>
         </View>
 
+        {/* وصف الطلب (نص) */}
         <View style={styles.section}>
           <Text style={styles.label}>📝 وصف الطلب</Text>
           <TextInput
@@ -341,6 +354,7 @@ export default function ServiceScreen({ navigation, route }) {
           />
         </View>
 
+        {/* صور توضيحية */}
         <View style={styles.section}>
           <Text style={styles.label}>🖼️ صور توضيحية (اختياري)</Text>
           <View style={styles.imageButtons}>
@@ -374,6 +388,7 @@ export default function ServiceScreen({ navigation, route }) {
           )}
         </View>
 
+        {/* تسجيل صوتي */}
         <View style={styles.section}>
           <Text style={styles.label}>🎤 تسجيل صوتي (اختياري)</Text>
           {!voiceUri ? (
@@ -540,3 +555,4 @@ const styles = StyleSheet.create({
   },
   sendingText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
 });
+

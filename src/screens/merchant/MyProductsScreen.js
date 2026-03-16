@@ -11,79 +11,70 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getItemsByProvider, deleteItem, updateItem } from '../../services/itemService';
-import { getAllServices } from '../../services/servicesService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getMerchantProducts, deleteProduct } from '../../services/productService';
 
 export default function MyProductsScreen({ navigation }) {
   const [products, setProducts] = useState([]);
-  const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [userData, setUserData] = useState(null);
+  const [merchantId, setMerchantId] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    loadUserData();
+    loadUserAndProducts();
   }, []);
 
-  const loadUserData = async () => {
-    const data = await AsyncStorage.getItem('userData');
-    if (data) {
-      const user = JSON.parse(data);
-      setUserData(user);
-      loadServices(user);
-    }
-  };
-
-  const loadServices = async (user) => {
-    const servicesResult = await getAllServices();
-    if (servicesResult.success) {
-      // فلترة الخدمات اللي ليها منتجات ونوع التاجر مناسب
-      const relevantServices = servicesResult.data.filter(s => 
-        s.hasItems && (s.merchantType === user.merchantType || s.merchantType === 'merchant')
-      );
-      setServices(relevantServices);
-      
-      // جلب منتجات التاجر من كل خدمة
-      await loadAllProducts(relevantServices, user.$id);
-    }
-  };
-
-  const loadAllProducts = async (servicesList, providerId) => {
-    let allProducts = [];
-    
-    for (const service of servicesList) {
-      if (service.itemsCollection) {
-        const result = await getItemsByProvider(service.itemsCollection, providerId);
-        if (result.success) {
-          const productsWithService = result.data.map(p => ({
-            ...p,
-            serviceName: service.name,
-            serviceColor: service.color,
-            collectionName: service.itemsCollection
-          }));
-          allProducts = [...allProducts, ...productsWithService];
-        }
+  const loadUserAndProducts = async () => {
+    try {
+      const userData = await AsyncStorage.getItem('userData');
+      if (userData) {
+        const user = JSON.parse(userData);
+        console.log('✅ المستخدم الحالي:', user.$id);
+        setMerchantId(user.$id);
+        await loadProducts(user.$id);
+      } else {
+        setError('لم يتم العثور على بيانات المستخدم');
+        setLoading(false);
       }
+    } catch (error) {
+      console.error('خطأ في تحميل بيانات المستخدم:', error);
+      setError(error.message);
+      setLoading(false);
     }
-    
-    setProducts(allProducts);
-    setLoading(false);
+  };
+
+  const loadProducts = async (mId) => {
+    try {
+      console.log(`🔍 جلب منتجات التاجر: ${mId}`);
+      const result = await getMerchantProducts(mId);
+      if (result.success) {
+        setProducts(result.data);
+        console.log(`✅ تم جلب ${result.data.length} منتج`);
+      } else {
+        console.error('❌ فشل جلب المنتجات:', result.error);
+        setError(result.error);
+      }
+    } catch (error) {
+      console.error('❌ خطأ في جلب المنتجات:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = (product) => {
     Alert.alert(
-      'تأكيد الحذف',
+      'حذف المنتج',
       `هل أنت متأكد من حذف "${product.name}"؟`,
       [
-        { text: 'إلغاء', style: 'cancel' },
+        { text: 'إلغاء' },
         {
           text: 'حذف',
           style: 'destructive',
           onPress: async () => {
-            const result = await deleteItem(product.collectionName, product.$id);
+            const result = await deleteProduct(product.$id);
             if (result.success) {
-              setProducts(products.filter(p => p.$id !== product.$id));
-              Alert.alert('✅ تم', 'تم حذف المنتج بنجاح');
+              loadProducts(merchantId);
             } else {
               Alert.alert('خطأ', result.error);
             }
@@ -93,91 +84,66 @@ export default function MyProductsScreen({ navigation }) {
     );
   };
 
-  const toggleAvailability = async (product) => {
-    const result = await updateItem(product.collectionName, product.$id, {
-      isAvailable: !product.isAvailable
-    });
-    if (result.success) {
-      setProducts(products.map(p => 
-        p.$id === product.$id ? { ...p, isAvailable: !p.isAvailable } : p
-      ));
-    }
-  };
-
-  const getStatusColor = (status) => {
+  const getStatusBadge = (status) => {
     switch(status) {
-      case 'approved': return '#10B981';
-      case 'pending': return '#F59E0B';
-      case 'rejected': return '#EF4444';
-      default: return '#6B7280';
+      case 'pending': return { text: 'قيد المراجعة', color: '#F59E0B', bg: '#FEF3C7' };
+      case 'approved': return { text: 'مقبول', color: '#10B981', bg: '#D1FAE5' };
+      case 'rejected': return { text: 'مرفوض', color: '#EF4444', bg: '#FEE2E2' };
+      default: return { text: status, color: '#6B7280', bg: '#F3F4F6' };
     }
   };
 
-  const getStatusText = (status) => {
-    switch(status) {
-      case 'approved': return 'مقبول';
-      case 'pending': return 'قيد المراجعة';
-      case 'rejected': return 'مرفوض';
-      default: return status;
-    }
-  };
-
-  const renderProduct = ({ item }) => (
-    <View style={styles.productCard}>
-      <View style={styles.productHeader}>
-        <View style={styles.productImageContainer}>
-          {item.images && item.images.length > 0 ? (
-            <Image source={{ uri: item.images[0] }} style={styles.productImage} />
-          ) : (
-            <View style={[styles.productImage, styles.placeholder]}>
-              <Ionicons name="image-outline" size={24} color="#9CA3AF" />
-            </View>
-          )}
-        </View>
+  const renderProduct = ({ item }) => {
+    const badge = getStatusBadge(item.status);
+    return (
+      <View style={styles.productCard}>
+        {item.imageUrl ? (
+          <Image source={{ uri: item.imageUrl }} style={styles.productImage} />
+        ) : (
+          <View style={[styles.productImage, styles.placeholderImage]}>
+            <Ionicons name="image-outline" size={24} color="#9CA3AF" />
+          </View>
+        )}
         <View style={styles.productInfo}>
           <Text style={styles.productName}>{item.name}</Text>
           <Text style={styles.productPrice}>{item.price} ج</Text>
-          <View style={styles.badgeContainer}>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-              <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-                {getStatusText(item.status)}
-              </Text>
-            </View>
-            <View style={[styles.serviceBadge, { backgroundColor: item.serviceColor + '20' }]}>
-              <Text style={[styles.serviceText, { color: item.serviceColor }]}>
-                {item.serviceName}
-              </Text>
-            </View>
+          <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+            <Text style={[styles.statusText, { color: badge.color }]}>{badge.text}</Text>
           </View>
         </View>
+        <TouchableOpacity onPress={() => handleDelete(item)} style={styles.deleteButton}>
+          <Ionicons name="trash-outline" size={24} color="#EF4444" />
+        </TouchableOpacity>
       </View>
+    );
+  };
 
-      {item.status === 'approved' && (
-        <View style={styles.productActions}>
-          <TouchableOpacity 
-            style={[styles.actionButton, item.isAvailable ? styles.availableButton : styles.unavailableButton]}
-            onPress={() => toggleAvailability(item)}
-          >
-            <Ionicons 
-              name={item.isAvailable ? "checkmark-circle" : "close-circle"} 
-              size={20} 
-              color="#FFF" 
-            />
-            <Text style={styles.actionText}>
-              {item.isAvailable ? 'متاح' : 'غير متاح'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.deleteButton]}
-            onPress={() => handleDelete(item)}
-          >
-            <Ionicons name="trash-outline" size={20} color="#FFF" />
-            <Text style={styles.actionText}>حذف</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#4F46E5" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.center}>
+        <Ionicons name="alert-circle-outline" size={60} color="#EF4444" />
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => {
+            setLoading(true);
+            setError(null);
+            loadUserAndProducts();
+          }}
+        >
+          <Text style={styles.retryText}>إعادة المحاولة</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -191,60 +157,34 @@ export default function MyProductsScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#4F46E5" />
-        </View>
-      ) : (
-        <FlatList
-          data={products}
-          renderItem={renderProduct}
-          keyExtractor={item => item.$id}
-          contentContainerStyle={styles.list}
-          ListHeaderComponent={
-            services.length > 0 ? (
-              <View style={styles.servicesHeader}>
-                <Text style={styles.servicesTitle}>الخدمات المتاحة للإضافة:</Text>
-                <View style={styles.servicesList}>
-                  {services.map(service => (
-                    <TouchableOpacity
-                      key={service.$id}
-                      style={[styles.serviceChip, { backgroundColor: service.color + '20' }]}
-                      onPress={() => navigation.navigate('AddProductScreen', {
-                        service,
-                        providerId: userData?.$id,
-                        providerName: userData?.name,
-                        providerType: userData?.merchantType
-                      })}
-                    >
-                      <Text style={[styles.serviceChipText, { color: service.color }]}>
-                        + {service.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            ) : null
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="cube-outline" size={80} color="#E5E7EB" />
-              <Text style={styles.emptyText}>لا توجد منتجات</Text>
-              {services.length > 0 && (
-                <Text style={styles.emptySubText}>
-                  اضغط على إحدى الخدمات أعلاه لإضافة منتج جديد
-                </Text>
-              )}
-            </View>
-          }
-        />
-      )}
+      <FlatList
+        data={products}
+        renderItem={renderProduct}
+        keyExtractor={item => item.$id}
+        contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="cube-outline" size={80} color="#E5E7EB" />
+            <Text style={styles.emptyText}>لا توجد منتجات</Text>
+            <TouchableOpacity 
+              style={styles.addButton}
+              onPress={() => navigation.navigate('AddProductScreen', {
+                serviceId: 'products',
+                serviceName: 'منتجات'
+              })}
+            >
+              <Text style={styles.addButtonText}>إضافة منتج جديد</Text>
+            </TouchableOpacity>
+          </View>
+        }
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -255,135 +195,30 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   list: { padding: 16 },
-  servicesHeader: {
-    marginBottom: 20,
-  },
-  servicesTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4B5563',
-    marginBottom: 10,
-  },
-  servicesList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  serviceChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  serviceChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
   productCard: {
+    flexDirection: 'row',
     backgroundColor: '#FFF',
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-  },
-  productHeader: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  productImageContainer: {
-    marginRight: 12,
-  },
-  productImage: {
-    width: 70,
-    height: 70,
-    borderRadius: 8,
-  },
-  placeholder: {
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
     alignItems: 'center',
   },
+  productImage: { width: 60, height: 60, borderRadius: 8, marginRight: 12 },
+  placeholderImage: { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
   productInfo: { flex: 1 },
-  productName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  productPrice: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#F59E0B',
-    marginBottom: 6,
-  },
-  badgeContainer: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  serviceBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  serviceText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  productActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingTop: 12,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 4,
-  },
-  availableButton: {
-    backgroundColor: '#10B981',
-  },
-  unavailableButton: {
-    backgroundColor: '#6B7280',
-  },
-  deleteButton: {
-    backgroundColor: '#EF4444',
-  },
-  actionText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginTop: 12,
-  },
-  emptySubText: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 8,
-    textAlign: 'center',
-  },
+  productName: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
+  productPrice: { fontSize: 14, color: '#F59E0B', fontWeight: '600', marginTop: 2 },
+  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, marginTop: 4 },
+  statusText: { fontSize: 10, fontWeight: '600' },
+  deleteButton: { padding: 8 },
+  emptyContainer: { alignItems: 'center', padding: 40 },
+  emptyText: { fontSize: 16, color: '#6B7280', marginBottom: 20 },
+  addButton: { backgroundColor: '#4F46E5', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 8 },
+  addButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
+  errorText: { fontSize: 16, color: '#EF4444', textAlign: 'center', marginTop: 12 },
+  retryButton: { marginTop: 20, backgroundColor: '#4F46E5', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
+  retryText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
 });

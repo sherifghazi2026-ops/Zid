@@ -18,9 +18,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { databases, DATABASE_ID } from '../../appwrite/config';
-import { 
+import {
   setOrderPrice, assignDriver, startDelivery, completeDelivery,
-  updateOrderStatus, ORDER_STATUS 
+  updateOrderStatus, startPickup, completePickup, ORDER_STATUS
 } from '../../services/orderService';
 import { getAvailableDrivers } from '../../services/driverService';
 import { fontFamily } from '../../utils/fonts';
@@ -40,20 +40,17 @@ export default function OrderDetailsScreen({ route, navigation }) {
   const [sound, setSound] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
-  
-  // ✅ useRef للتحقق من أن المكون لا يزال مثبتاً
+
   const isMounted = useRef(true);
 
   useEffect(() => {
     isMounted.current = true;
     loadOrder();
     loadDrivers();
-    
-    // ✅ تنظيف الصوت عند الخروج من الشاشة بطريقة آمنة
+
     return () => {
       isMounted.current = false;
       if (sound) {
-        console.log('🧹 تفريغ الصوت من الذاكرة...');
         sound.unloadAsync().catch(e => console.log('خطأ في تفريغ الصوت:', e));
       }
     };
@@ -90,21 +87,20 @@ export default function OrderDetailsScreen({ route, navigation }) {
 
   const playVoice = async (voiceUrl) => {
     try {
-      // ✅ إيقاف أي صوت سابق
       if (sound) {
         await sound.unloadAsync();
       }
-      
+
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: voiceUrl },
         { shouldPlay: true }
       );
-      
+
       if (isMounted.current) {
         setSound(newSound);
         setPlayingVoice(voiceUrl);
       }
-      
+
       newSound.setOnPlaybackStatusUpdate((status) => {
         if (status.didJustFinish && isMounted.current) {
           setPlayingVoice(null);
@@ -136,6 +132,48 @@ export default function OrderDetailsScreen({ route, navigation }) {
     } else {
       Alert.alert('خطأ', result.error);
     }
+  };
+
+  const handleStartPickup = async () => {
+    Alert.alert(
+      'بدء الاستلام',
+      'هل أنت متأكد من بدء عملية استلام الملابس؟',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'بدء الاستلام',
+          onPress: async () => {
+            const result = await startPickup(orderId);
+            if (result.success && isMounted.current) {
+              loadOrder();
+            } else {
+              Alert.alert('خطأ', result.error);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleCompletePickup = async () => {
+    Alert.alert(
+      'إكمال الاستلام',
+      'هل تم استلام الملابس بنجاح؟',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'نعم',
+          onPress: async () => {
+            const result = await completePickup(orderId);
+            if (result.success && isMounted.current) {
+              loadOrder();
+            } else {
+              Alert.alert('خطأ', result.error);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleAssignDriver = (driver) => {
@@ -185,6 +223,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
     const colors = {
       [ORDER_STATUS.PENDING]: '#F59E0B',
       [ORDER_STATUS.ACCEPTED]: '#3B82F6',
+      [ORDER_STATUS.PICKUP]: '#8B5CF6', // ✅ لون أرجواني للاستلام
       [ORDER_STATUS.PREPARING]: '#8B5CF6',
       [ORDER_STATUS.READY]: '#10B981',
       [ORDER_STATUS.DRIVER_ASSIGNED]: '#3B82F6',
@@ -199,6 +238,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
     const texts = {
       [ORDER_STATUS.PENDING]: 'معلق',
       [ORDER_STATUS.ACCEPTED]: 'تم القبول',
+      [ORDER_STATUS.PICKUP]: 'بانتظار الاستلام', // ✅ مرحلة الاستلام
       [ORDER_STATUS.PREPARING]: 'جاري التجهيز',
       [ORDER_STATUS.READY]: 'جاهز للتسليم',
       [ORDER_STATUS.DRIVER_ASSIGNED]: 'تم تعيين مندوب',
@@ -212,21 +252,49 @@ export default function OrderDetailsScreen({ route, navigation }) {
   const renderActionButtons = () => {
     if (!order) return null;
 
+    // ✅ إذا كان الطلب من نوع مكوجي
+    const isLaundry = order.serviceType === 'laundry';
+
     switch(order.status) {
       case ORDER_STATUS.ACCEPTED:
+        if (isLaundry) {
+          return (
+            <View style={styles.actions}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.pickupButton]}
+                onPress={handleStartPickup}
+              >
+                <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>بدء الاستلام</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        } else {
+          return (
+            <View style={styles.actions}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => updateOrderStatus(orderId, ORDER_STATUS.PREPARING).then(loadOrder)}
+              >
+                <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>بدء التجهيز</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.priceButton]}
+                onPress={() => setShowPriceModal(true)}
+              >
+                <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>تحديد السعر</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        }
+
+      case ORDER_STATUS.PICKUP:
         return (
           <View style={styles.actions}>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => updateOrderStatus(orderId, ORDER_STATUS.PREPARING).then(loadOrder)}
+            <TouchableOpacity
+              style={[styles.actionButton, styles.pickupButton]}
+              onPress={handleCompletePickup}
             >
-              <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>بدء التجهيز</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.priceButton]}
-              onPress={() => setShowPriceModal(true)}
-            >
-              <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>تحديد السعر</Text>
+              <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>تم الاستلام</Text>
             </TouchableOpacity>
           </View>
         );
@@ -234,8 +302,8 @@ export default function OrderDetailsScreen({ route, navigation }) {
       case ORDER_STATUS.PREPARING:
         return (
           <View style={styles.actions}>
-            <TouchableOpacity 
-              style={styles.actionButton}
+            <TouchableOpacity
+              style={[styles.actionButton, styles.priceButton]}
               onPress={() => setShowPriceModal(true)}
             >
               <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>تحديد السعر</Text>
@@ -248,14 +316,14 @@ export default function OrderDetailsScreen({ route, navigation }) {
           <View>
             <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>اختيار طريقة التوصيل:</Text>
             <View style={styles.deliveryOptions}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.deliveryOption, styles.selfDelivery]}
                 onPress={handleStartDelivery}
               >
                 <Ionicons name="person-outline" size={30} color="#FFF" />
                 <Text style={[styles.deliveryOptionText, { fontFamily: fontFamily.arabic }]}>توصيل بنفسي</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.deliveryOption, styles.driverDelivery]}
                 onPress={() => setShowDriversModal(true)}
               >
@@ -269,7 +337,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
       case ORDER_STATUS.DRIVER_ASSIGNED:
         return (
           <View style={styles.actions}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.actionButton}
               onPress={handleStartDelivery}
             >
@@ -281,29 +349,11 @@ export default function OrderDetailsScreen({ route, navigation }) {
       case ORDER_STATUS.ON_THE_WAY:
         return (
           <View style={styles.actions}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.actionButton, styles.completeButton]}
               onPress={handleCompleteDelivery}
             >
               <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>تم التوصيل</Text>
-            </TouchableOpacity>
-          </View>
-        );
-
-      case ORDER_STATUS.DELIVERED:
-        return (
-          <View style={styles.actions}>
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.reviewButton]}
-              onPress={() => navigation.navigate('RateOrderScreen', {
-                orderId: order.$id,
-                providerId: order.merchantId,
-                customerId: order.customerPhone,
-                providerName: order.merchantName,
-              })}
-            >
-              <Ionicons name="star-outline" size={20} color="#FFF" />
-              <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>تقييم الخدمة</Text>
             </TouchableOpacity>
           </View>
         );
@@ -332,7 +382,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* حالة الطلب */}
+        {/* حالة الطلب الحالية */}
         <View style={[styles.statusCard, { backgroundColor: getStatusColor(order.status) + '20' }]}>
           <Ionicons name="information-circle" size={40} color={getStatusColor(order.status)} />
           <View style={styles.statusInfo}>
@@ -360,59 +410,15 @@ export default function OrderDetailsScreen({ route, navigation }) {
           </View>
         </View>
 
-        {/* وصف الطلب */}
-        {order.description && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>📝 وصف الطلب</Text>
-            <View style={styles.descriptionCard}>
-              <Text style={[styles.descriptionText, { fontFamily: fontFamily.arabic }]}>{order.description}</Text>
-            </View>
-          </View>
-        )}
-
         {/* المنتجات */}
         {order.items && order.items.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>📋 المنتجات</Text>
+            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>📋 تفاصيل الطلب</Text>
             <View style={styles.itemsCard}>
               {order.items.map((item, index) => (
                 <Text key={index} style={[styles.itemText, { fontFamily: fontFamily.arabic }]}>• {item}</Text>
               ))}
             </View>
-          </View>
-        )}
-
-        {/* الصور المرفقة */}
-        {order.imageUrls && order.imageUrls.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>🖼️ الصور المرفقة</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagesContainer}>
-              {order.imageUrls.map((url, index) => (
-                <TouchableOpacity key={index} onPress={() => openImage(url)}>
-                  <Image source={{ uri: url }} style={styles.thumbnail} />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* ✅ التسجيل الصوتي - مع إمكانية الإيقاف */}
-        {order.voiceUrl && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>🎤 التسجيل الصوتي</Text>
-            <TouchableOpacity
-              style={styles.voiceButton}
-              onPress={() => playVoice(order.voiceUrl)}
-            >
-              <Ionicons
-                name={playingVoice === order.voiceUrl ? "pause" : "play"}
-                size={24}
-                color="#FFF"
-              />
-              <Text style={[styles.voiceButtonText, { fontFamily: fontFamily.arabic }]}>
-                {playingVoice === order.voiceUrl ? 'جاري التشغيل' : 'استمع للتسجيل'}
-              </Text>
-            </TouchableOpacity>
           </View>
         )}
 
@@ -435,27 +441,6 @@ export default function OrderDetailsScreen({ route, navigation }) {
                 <Text style={[styles.totalLabel, { fontFamily: fontFamily.arabic }]}>الإجمالي:</Text>
                 <Text style={[styles.totalValue, { fontFamily: fontFamily.arabic }]}>{order.finalTotal || order.totalPrice} ج</Text>
               </View>
-              <View style={styles.paymentMethod}>
-                <Text style={[styles.paymentLabel, { fontFamily: fontFamily.arabic }]}>طريقة الدفع:</Text>
-                <Text style={[styles.paymentValue, { fontFamily: fontFamily.arabic }]}>الدفع عند الاستلام</Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* معلومات المندوب */}
-        {order.driverName && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>🚚 معلومات المندوب</Text>
-            <View style={styles.driverCard}>
-              <View style={styles.driverRow}>
-                <Ionicons name="person-outline" size={20} color="#3B82F6" />
-                <Text style={[styles.driverName, { fontFamily: fontFamily.arabic }]}>{order.driverName}</Text>
-              </View>
-              <TouchableOpacity style={styles.driverRow} onPress={() => makePhoneCall(order.driverPhone)}>
-                <Ionicons name="call-outline" size={20} color="#3B82F6" />
-                <Text style={[styles.driverPhone, styles.phoneLink, { fontFamily: fontFamily.arabic }]}>{order.driverPhone}</Text>
-              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -463,18 +448,6 @@ export default function OrderDetailsScreen({ route, navigation }) {
         {/* أزرار الإجراءات */}
         {renderActionButtons()}
       </ScrollView>
-
-      {/* Modal عرض الصورة */}
-      <Modal visible={showImageModal} transparent animationType="fade">
-        <View style={styles.imageModalOverlay}>
-          <TouchableOpacity style={styles.closeImageButton} onPress={() => setShowImageModal(false)}>
-            <Ionicons name="close" size={30} color="#FFF" />
-          </TouchableOpacity>
-          {selectedImage && (
-            <Image source={{ uri: selectedImage }} style={styles.fullImage} resizeMode="contain" />
-          )}
-        </View>
-      </Modal>
 
       {/* Modal اختيار مندوب */}
       <Modal visible={showDriversModal} transparent animationType="slide">
@@ -514,7 +487,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
         <View style={styles.modalOverlay}>
           <View style={styles.priceModalContent}>
             <Text style={[styles.modalTitle, { fontFamily: fontFamily.arabic }]}>تحديد السعر</Text>
-            
+
             <Text style={[styles.inputLabel, { fontFamily: fontFamily.arabic }]}>قيمة الطلب *</Text>
             <TextInput
               style={[styles.priceInput, { fontFamily: fontFamily.arabic }]}
@@ -585,43 +558,8 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: 14, color: '#1F2937', flex: 1 },
   phoneLink: { color: '#3B82F6', textDecorationLine: 'underline' },
 
-  descriptionCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-  descriptionText: { fontSize: 14, color: '#4B5563', lineHeight: 20 },
-
   itemsCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E5E7EB' },
   itemText: { fontSize: 13, color: '#4B5563', marginBottom: 2 },
-
-  imagesContainer: { flexDirection: 'row', marginBottom: 8 },
-  thumbnail: { width: 80, height: 80, borderRadius: 8, marginRight: 8 },
-
-  imageModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeImageButton: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    zIndex: 10,
-    padding: 10,
-  },
-  fullImage: {
-    width: width,
-    height: height * 0.8,
-  },
-
-  voiceButton: {
-    backgroundColor: '#3B82F6',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  voiceButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
 
   invoiceCard: { backgroundColor: '#FEF3C7', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#F59E0B' },
   invoiceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
@@ -630,14 +568,6 @@ const styles = StyleSheet.create({
   invoiceTotal: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F59E0B' },
   totalLabel: { fontSize: 16, fontWeight: '600', color: '#92400E' },
   totalValue: { fontSize: 18, fontWeight: 'bold', color: '#92400E' },
-  paymentMethod: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F59E0B' },
-  paymentLabel: { fontSize: 14, color: '#92400E' },
-  paymentValue: { fontSize: 14, fontWeight: '600', color: '#10B981' },
-
-  driverCard: { backgroundColor: '#DBEAFE', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#3B82F6' },
-  driverRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
-  driverName: { fontSize: 16, fontWeight: '600', color: '#1E40AF' },
-  driverPhone: { fontSize: 14, color: '#1E40AF' },
 
   actions: { marginTop: 10, marginBottom: 30 },
   actionButton: {
@@ -647,9 +577,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
+  pickupButton: { backgroundColor: '#8B5CF6' }, // ✅ لون أرجواني للاستلام
   priceButton: { backgroundColor: '#F59E0B' },
   completeButton: { backgroundColor: '#10B981' },
-  reviewButton: { backgroundColor: '#F59E0B' },
   actionButtonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
 
   deliveryOptions: { flexDirection: 'row', gap: 12 },

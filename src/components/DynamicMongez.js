@@ -10,12 +10,11 @@ export default function DynamicMongez({ screen, navigation, contextData = {} }) 
   const mountedRef = useRef(true);
   const loadedRef = useRef(false);
 
-  // استخراج serviceId من contextData إذا كانت موجودة
-  const serviceId = contextData?.serviceId || null;
+  // ✅ استخراج serviceId من contextData
+  const serviceId = contextData?.serviceId || contextData?.serviceType || null;
 
   useEffect(() => {
     mountedRef.current = true;
-
     console.log(`🔍 DynamicMongez - screen: ${screen}, serviceId: ${serviceId}`);
 
     if (!loadedRef.current) {
@@ -25,7 +24,7 @@ export default function DynamicMongez({ screen, navigation, contextData = {} }) 
     return () => {
       mountedRef.current = false;
     };
-  }, [screen, serviceId]); // إعادة التحميل إذا تغيرت الشاشة أو الخدمة
+  }, [screen, serviceId]);
 
   const loadAssistants = async () => {
     if (!mountedRef.current || loadedRef.current) return;
@@ -33,9 +32,8 @@ export default function DynamicMongez({ screen, navigation, contextData = {} }) 
     setLoading(true);
 
     try {
-      // تمرير serviceId إذا كنا في شاشة خدمة
       console.log(`📥 جلب المساعدين للشاشة: ${screen}, الخدمة: ${serviceId || 'عام'}`);
-      
+
       const result = await getAssistantsForScreen(screen, serviceId);
 
       if (!mountedRef.current) return;
@@ -45,7 +43,7 @@ export default function DynamicMongez({ screen, navigation, contextData = {} }) 
         setAssistants(result.data);
         loadedRef.current = true;
       } else {
-        console.log(`⚠️ لا يوجد مساعدين للشاشة ${screen} والخدمة ${serviceId}`);
+        console.log(`⚠️ لا يوجد مساعدين`);
         setAssistants([]);
       }
     } catch (error) {

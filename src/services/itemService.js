@@ -1,159 +1,88 @@
-import { databases, DATABASE_ID, SERVICE_ITEMS_COLLECTION_ID } from '../appwrite/config';
+import { databases, DATABASE_ID } from '../appwrite/config';
 import { ID, Query } from 'appwrite';
 
-// جلب أصناف خدمة معينة
-export const getItemsByService = async (serviceId) => {
+// جلب جميع الأصناف من أي Collection
+export const getItems = async (collectionName) => {
   try {
-    if (!serviceId) {
-      return { success: false, error: 'serviceId مطلوب', data: [] };
-    }
-
+    console.log(`🔍 جلب الأصناف من: ${collectionName}`);
     const response = await databases.listDocuments(
       DATABASE_ID,
-      SERVICE_ITEMS_COLLECTION_ID,
-      [
-        Query.equal('serviceId', serviceId),
-        Query.limit(100)
-      ]
+      collectionName,
+      [Query.orderAsc('name')]
     );
-    
-    // تحويل النص المخزن إلى كائن إذا كان موجوداً
-    const processedData = response.documents.map(item => {
-      if (item.pricesData) {
-        try {
-          item.prices = JSON.parse(item.pricesData);
-        } catch (e) {
-          item.prices = [];
-        }
-      } else {
-        item.prices = [];
-      }
-      return item;
-    });
-    
-    return { success: true, data: processedData };
+    return { success: true, data: response.documents };
   } catch (error) {
-    console.error(`❌ خطأ في جلب الأصناف:`, error);
+    console.error('❌ خطأ في جلب الأصناف:', error);
     return { success: false, error: error.message, data: [] };
   }
 };
 
-// إنشاء صنف جديد
-export const createItem = async (serviceId, itemData) => {
+// ✅ إضافة صنف جديد (نسخة مبسطة جداً)
+export const addItem = async (collectionName, itemData) => {
   try {
-    if (!serviceId) {
-      return { success: false, error: 'serviceId مطلوب' };
-    }
-
-    console.log(`📦 إنشاء صنف للخدمة: ${serviceId}`);
-    console.log('📦 البيانات المستلمة:', JSON.stringify(itemData, null, 2));
-
-    // استخراج السعر الأول
-    let firstPrice = 0;
-    const pricesArray = [];
+    console.log(`📦 إضافة صنف إلى: ${collectionName}`);
+    console.log('📦 البيانات:', JSON.stringify(itemData, null, 2));
     
-    if (itemData.subServices) {
-      Object.entries(itemData.subServices).forEach(([subService, data]) => {
-        pricesArray.push({
-          subService: subService,
-          price: parseFloat(data.price || 0),
-          qty: parseInt(data.qty || 0)
-        });
-      });
-      
-      if (pricesArray.length > 0) {
-        firstPrice = pricesArray[0].price;
-      }
+    // التأكد من وجود الاسم
+    if (!itemData.name) {
+      return { success: false, error: 'اسم الصنف مطلوب' };
     }
 
-    // تحويل المصفوفة إلى نص JSON
-    const pricesDataString = JSON.stringify(pricesArray);
-
-    // ✅ استخدام الحقول الموجودة فقط في قاعدة البيانات
+    // إنشاء كائن نظيف بدون حقول إضافية
     const newItem = {
-      serviceId: serviceId,
       name: itemData.name,
-      price: firstPrice,
-      imageUrl: itemData.imageUrl || null,
-      isActive: itemData.isAvailable !== undefined ? itemData.isAvailable : true,
-      pricesData: pricesDataString,
-      createdAt: new Date().toISOString(),
-      // ❌ تم إزالة updatedAt - Appwrite يديره تلقائياً
+      isActive: itemData.isActive !== false,
     };
 
-    console.log('📦 البيانات المرسلة إلى Appwrite:', JSON.stringify(newItem, null, 2));
+    // إضافة الأسعار حسب النوع
+    if (itemData.ironPrice !== undefined) {
+      newItem.ironPrice = parseFloat(itemData.ironPrice);
+    }
+    if (itemData.cleanPrice !== undefined) {
+      newItem.cleanPrice = parseFloat(itemData.cleanPrice);
+    }
+    if (itemData.price !== undefined) {
+      newItem.price = parseFloat(itemData.price);
+    }
+    if (itemData.imageUrl) {
+      newItem.imageUrl = itemData.imageUrl;
+    }
+    if (itemData.serviceId) {
+      newItem.serviceId = itemData.serviceId;
+    }
+
+    console.log('📦 الإرسال إلى Appwrite:', JSON.stringify(newItem, null, 2));
 
     const response = await databases.createDocument(
       DATABASE_ID,
-      SERVICE_ITEMS_COLLECTION_ID,
+      collectionName,
       ID.unique(),
       newItem
     );
-
-    // إضافة حقل prices للرد
-    response.prices = pricesArray;
-
+    
     return { success: true, data: response };
   } catch (error) {
-    console.error('❌ خطأ في إنشاء الصنف:', error);
+    console.error('❌ خطأ في إضافة الصنف:', error);
     return { success: false, error: error.message };
   }
 };
 
 // تحديث صنف
-export const updateItem = async (itemId, updateData) => {
+export const updateItem = async (collectionName, itemId, itemData) => {
   try {
-    console.log(`📦 تحديث صنف: ${itemId}`);
-    
-    // تحويل البيانات إلى مصفوفة
-    let firstPrice = 0;
-    const pricesArray = [];
-    
-    if (updateData.subServices) {
-      Object.entries(updateData.subServices).forEach(([subService, data]) => {
-        pricesArray.push({
-          subService: subService,
-          price: parseFloat(data.price || 0),
-          qty: parseInt(data.qty || 0)
-        });
-      });
-      
-      if (pricesArray.length > 0) {
-        firstPrice = pricesArray[0].price;
-      }
+    if (!itemId) {
+      return { success: false, error: 'معرف الصنف مطلوب' };
     }
 
-    // تحويل المصفوفة إلى نص JSON
-    const pricesDataString = JSON.stringify(pricesArray);
-
-    // ✅ استخدام الحقول الموجودة فقط - بدون updatedAt
-    const updateFields = {
-      name: updateData.name,
-      price: firstPrice,
-      imageUrl: updateData.imageUrl || null,
-      isActive: updateData.isAvailable !== undefined ? updateData.isAvailable : true,
-      pricesData: pricesDataString,
-    };
-
-    // إزالة الحقول الفارغة
-    Object.keys(updateFields).forEach(key => {
-      if (updateFields[key] === undefined) {
-        delete updateFields[key];
-      }
-    });
-
-    console.log('📦 بيانات التحديث:', JSON.stringify(updateFields, null, 2));
-
+    const updateData = { ...itemData };
+    
     const response = await databases.updateDocument(
       DATABASE_ID,
-      SERVICE_ITEMS_COLLECTION_ID,
+      collectionName,
       itemId,
-      updateFields
+      updateData
     );
-
-    // إضافة حقل prices للرد
-    response.prices = pricesArray;
-
+    
     return { success: true, data: response };
   } catch (error) {
     console.error('❌ خطأ في تحديث الصنف:', error);
@@ -162,11 +91,15 @@ export const updateItem = async (itemId, updateData) => {
 };
 
 // حذف صنف
-export const deleteItem = async (itemId) => {
+export const deleteItem = async (collectionName, itemId) => {
   try {
+    if (!itemId) {
+      return { success: false, error: 'معرف الصنف مطلوب' };
+    }
+
     await databases.deleteDocument(
       DATABASE_ID,
-      SERVICE_ITEMS_COLLECTION_ID,
+      collectionName,
       itemId
     );
     return { success: true };
@@ -176,35 +109,44 @@ export const deleteItem = async (itemId) => {
   }
 };
 
-// جلب الأصناف المتاحة للعملاء
-export const getAvailableItemsByService = async (serviceId) => {
+// تغيير حالة الصنف
+export const toggleItemStatus = async (collectionName, itemId, isActive) => {
   try {
+    if (!itemId) {
+      return { success: false, error: 'معرف الصنف مطلوب' };
+    }
+
+    const response = await databases.updateDocument(
+      DATABASE_ID,
+      collectionName,
+      itemId,
+      { isActive }
+    );
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('❌ خطأ في تغيير حالة الصنف:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// جلب الأصناف النشطة فقط
+export const getActiveItems = async (collectionName) => {
+  try {
+    if (!collectionName) {
+      return { success: false, error: 'collectionName مطلوب', data: [] };
+    }
+
     const response = await databases.listDocuments(
       DATABASE_ID,
-      SERVICE_ITEMS_COLLECTION_ID,
+      collectionName,
       [
-        Query.equal('serviceId', serviceId),
         Query.equal('isActive', true),
-        Query.limit(100)
+        Query.orderAsc('name')
       ]
     );
-    
-    // تحويل النص المخزن إلى كائن
-    const processedData = response.documents.map(item => {
-      if (item.pricesData) {
-        try {
-          item.prices = JSON.parse(item.pricesData);
-        } catch (e) {
-          item.prices = [];
-        }
-      } else {
-        item.prices = [];
-      }
-      return item;
-    });
-    
-    return { success: true, data: processedData };
+    return { success: true, data: response.documents };
   } catch (error) {
+    console.error('❌ خطأ في جلب الأصناف النشطة:', error);
     return { success: false, error: error.message, data: [] };
   }
 };

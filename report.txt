@@ -1,3 +1,4 @@
+=== App.js ===
 import 'react-native-gesture-handler';
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
@@ -5,7 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, ActivityIndicator, StyleSheet, Alert } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { CartProvider } from './src/context/CartContext';
@@ -27,15 +28,13 @@ import TermsScreen from './src/screens/TermsScreen';
 // شاشات الخدمات للعميل
 import ServiceScreen from './src/screens/ServiceScreen';
 import MerchantsListScreen from './src/screens/MerchantsListScreen';
-import MerchantProductsScreen from './src/screens/merchant/MerchantProductsScreen';
+import MerchantProductsScreen from './src/screens/MerchantProductsScreen';
 import IroningScreen from './src/screens/IroningScreen';
 import CartScreen from './src/screens/customer/CartScreen';
 import OrderTrackingScreen from './src/screens/customer/OrderTrackingScreen';
 import RateOrderScreen from './src/screens/customer/RateOrderScreen';
 import ProductDetailsScreen from './src/screens/customer/ProductDetailsScreen';
 import DishDetailsScreen from './src/screens/customer/DishDetailsScreen';
-import ItemsServiceScreen from './src/screens/ItemsServiceScreen';
-import ProductsServiceScreen from './src/screens/ProductsServiceScreen';
 
 // شاشات المطاعم والأكل البيتي
 import RestaurantListScreen from './src/screens/restaurant/RestaurantListScreen';
@@ -84,25 +83,6 @@ import ReviewProductsScreen from './src/screens/admin/ReviewProductsScreen';
 import OffersScreen from './src/screens/OffersScreen';
 import EshopScreen from './src/screens/EshopScreen';
 
-// شاشة AI مؤقتة (حتى يتم إنشاؤها)
-const AiMainModal = ({ navigation }) => {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' }}>
-      <Ionicons name="flash" size={80} color="#8B5CF6" />
-      <Text style={{ fontSize: 20, fontWeight: 'bold', marginTop: 20 }}>خدمات الذكاء الاصطناعي</Text>
-      <Text style={{ fontSize: 14, color: '#6B7280', marginTop: 10, textAlign: 'center', paddingHorizontal: 20 }}>
-        هذه الخدمة قيد التطوير حالياً
-      </Text>
-      <TouchableOpacity 
-        style={{ marginTop: 30, backgroundColor: '#8B5CF6', paddingHorizontal: 30, paddingVertical: 12, borderRadius: 8 }}
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={{ color: '#FFF', fontSize: 16 }}>رجوع</Text>
-      </TouchableOpacity>
-    </View>
-  );
-};
-
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
@@ -124,8 +104,6 @@ function CustomerStack() {
       <Stack.Screen name="Cart" component={CartScreen} />
       <Stack.Screen name="OrderTrackingScreen" component={OrderTrackingScreen} />
       <Stack.Screen name="RateOrderScreen" component={RateOrderScreen} />
-      <Stack.Screen name="ItemsServiceScreen" component={ItemsServiceScreen} />
-      <Stack.Screen name="ProductsServiceScreen" component={ProductsServiceScreen} />
     </Stack.Navigator>
   );
 }
@@ -177,7 +155,7 @@ function RootStack() {
       <Stack.Screen name="LoginScreen" component={LoginScreen} />
       <Stack.Screen name="MerchantRegister" component={MerchantRegisterScreen} />
       <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
-
+      
       {/* شاشات الملف الشخصي والطلبات */}
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="MyOrders" component={MyOrdersScreen} />
@@ -214,9 +192,6 @@ function RootStack() {
       <Stack.Screen name="VerificationRequestsScreen" component={VerificationRequestsScreen} />
       <Stack.Screen name="ManageLaundryItemsScreen" component={ManageLaundryItemsScreen} />
       <Stack.Screen name="ReviewProductsScreen" component={ReviewProductsScreen} />
-
-      {/* شاشات إضافية */}
-      <Stack.Screen name="AiMainModal" component={AiMainModal} />
     </Stack.Navigator>
   );
 }
@@ -289,3 +264,179 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+
+
+=== app.json ===
+{
+  "expo": {
+    "name": "Zid",
+    "slug": "zayedid",
+    "version": "1.0.3",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#4F46E5"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "package": "com.sherif.zid",
+      "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+    },
+    "plugins": [
+      "expo-av",
+      "expo-font",
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": { "projectId": "6fb89af9-0810-42de-9023-bbbbbfa63509" }
+    }
+  }
+}
+
+
+=== package.json ===
+{
+  "name": "zayedid",
+  "version": "1.0.0",
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@expo-google-fonts/cairo": "^0.4.2",
+    "@expo/vector-icons": "^15.0.3",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-picker/picker": "2.11.1",
+    "@react-navigation/bottom-tabs": "^7.15.3",
+    "@react-navigation/native": "^7.1.31",
+    "@react-navigation/stack": "^7.8.2",
+    "appwrite": "^22.4.1",
+    "axios": "^1.13.6",
+    "babel-preset-expo": "~54.0.10",
+    "expo": "^54.0.33",
+    "expo-application": "~7.0.8",
+    "expo-asset": "~12.0.12",
+    "expo-auth-session": "~7.0.10",
+    "expo-av": "~16.0.8",
+    "expo-checkbox": "~5.0.8",
+    "expo-constants": "~18.0.13",
+    "expo-crypto": "~15.0.8",
+    "expo-dev-client": "~6.0.20",
+    "expo-document-picker": "~14.0.8",
+    "expo-file-system": "~19.0.21",
+    "expo-font": "~14.0.11",
+    "expo-image-picker": "~17.0.10",
+    "expo-linear-gradient": "~15.0.8",
+    "expo-location": "~19.0.8",
+    "expo-sharing": "~14.0.8",
+    "expo-splash-screen": "~0.29.24",
+    "expo-status-bar": "~3.0.9",
+    "expo-web-browser": "~15.0.10",
+    "groq-sdk": "^0.37.0",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-gesture-handler": "~2.28.0",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-webview": "13.15.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0"
+  }
+}
+
+
+=== babel.config.js ===
+module.exports = function(api) {
+  api.cache(true);
+  return {
+    presets: ['babel-preset-expo'],
+    plugins: []
+  };
+};
+
+
+=== eas.json ===
+{
+  "cli": {
+    "version": ">= 3.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./secrets/google-play-service-account.json",
+        "track": "internal"
+      }
+    }
+  }
+}
+
+
+
+=== src/appwrite/config.js ===
+import { Client, Account, Databases, Storage } from 'appwrite';
+import { Platform } from 'react-native';
+
+// ✅ استخدام متغيرات البيئة
+const APPWRITE_ENDPOINT = process.env.EXPO_PUBLIC_APPWRITE_ENDPOINT || 'https://sgp.cloud.appwrite.io/v1';
+const APPWRITE_PROJECT_ID = process.env.EXPO_PUBLIC_APPWRITE_PROJECT_ID || '699c510d00378e48ffbd';
+export const DATABASE_ID = process.env.EXPO_PUBLIC_DATABASE_ID || '699db754000ef283ad3c';
+
+// Collections
+export const USERS_COLLECTION_ID = process.env.EXPO_PUBLIC_USERS_COLLECTION_ID || 'users';
+export const ORDERS_COLLECTION_ID = process.env.EXPO_PUBLIC_ORDERS_COLLECTION_ID || 'orders';
+export const SERVICES_COLLECTION_ID = process.env.EXPO_PUBLIC_SERVICES_COLLECTION_ID || 'services';
+export const RESTAURANTS_COLLECTION_ID = process.env.EXPO_PUBLIC_RESTAURANTS_COLLECTION_ID || 'restaurants';
+export const DISHES_COLLECTION_ID = process.env.EXPO_PUBLIC_DISHES_COLLECTION_ID || 'dishes';
+export const HOME_CHEF_DISHES_COLLECTION_ID = process.env.EXPO_PUBLIC_HOME_CHEF_DISHES_COLLECTION_ID || 'home_chef_dishes';
+export const ASSISTANTS_COLLECTION_ID = process.env.EXPO_PUBLIC_ASSISTANTS_COLLECTION_ID || 'assistants';
+export const BUCKET_ID = process.env.EXPO_PUBLIC_BUCKET_ID || 'files';
+
+// Service Items Collection
+export const SERVICE_ITEMS_COLLECTION_ID = 'serviceitems';
+
+// تهيئة العميل
+const client = new Client()
+    .setEndpoint(APPWRITE_ENDPOINT)
+    .setProject(APPWRITE_PROJECT_ID);
+
+// تصدير الخدمات
+export const account = new Account(client);
+export const databases = new Databases(client);
+export const storage = new Storage(client);
+
+console.log('✅ Appwrite initialized with:', {
+  endpoint: APPWRITE_ENDPOINT,
+  projectId: APPWRITE_PROJECT_ID,
+  databaseId: DATABASE_ID
+});
+
+// Item Prices Collection (للأسعار المتعددة)
+export const ITEM_PRICES_COLLECTION_ID = 'item_prices';

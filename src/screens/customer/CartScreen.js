@@ -13,22 +13,24 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
 import { useCart } from '../../context/CartContext';
-import { createOrder, uploadFile } from '../../services/orderService';
+import { createOrder } from '../../services/orderService';
+import { playSendSound } from '../../utils/SoundHelper';
 
-export default function CartScreen({ navigation }) {
-  const { cartItems, updateQuantity, removeFromCart, clearCart, getTotalPrice } = useCart();
+export default function CartScreen({ navigation, route }) {
+  const { cartItems, currentMerchant, updateQuantity, removeFromCart, clearCart, getTotalPrice } = useCart();
+  const { fromService } = route.params || {};
+
   const [notes, setNotes] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [address, setAddress] = useState('');
+  const [deliveryFee, setDeliveryFee] = useState(10);
   const [sending, setSending] = useState(false);
-  const [recordedUri, setRecordedUri] = useState(null);
-  const [uploadingVoice, setUploadingVoice] = useState(false);
 
   useEffect(() => {
     loadSavedData();
-  }, []);
+    console.log('🛒 عناصر السلة:', cartItems);
+  }, [cartItems]);
 
   const loadSavedData = async () => {
     try {
@@ -37,9 +39,53 @@ export default function CartScreen({ navigation }) {
       if (savedPhone) setPhoneNumber(savedPhone);
       if (savedAddress) setAddress(savedAddress);
     } catch (error) {
-      console.log('خطأ في تحميل البيانات المحفوظة:', error);
+      console.log('خطأ في تحميل البيانات المحفوظة');
     }
   };
+
+  const saveData = async () => {
+    try {
+      if (phoneNumber) await AsyncStorage.setItem('zayed_phone', phoneNumber);
+      if (address) await AsyncStorage.setItem('zayed_address', address);
+    } catch (error) {
+      console.log('خطأ في حفظ البيانات');
+    }
+  };
+
+  const getTotalWithDelivery = () => {
+    const subtotal = getTotalPrice();
+    return subtotal + deliveryFee;
+  };
+
+  // ✅ عرض المنتجات العادية
+  const renderRegularItem = (item) => (
+    <View key={item.cartItemId} style={styles.cartItem}>
+      <Image
+        source={{ uri: item.imageUrl || 'https://via.placeholder.com/60' }}
+        style={styles.itemImage}
+      />
+      <View style={styles.itemInfo}>
+        <Text style={styles.itemName}>{item.name}</Text>
+        <Text style={styles.itemPrice}>{item.price} ج × {item.quantity || 1}</Text>
+        <Text style={styles.itemTotal}>{item.price * (item.quantity || 1)} ج</Text>
+      </View>
+      <View style={styles.quantityControls}>
+        <TouchableOpacity onPress={() => updateQuantity(item.cartItemId, -1)}>
+          <Ionicons name="remove-circle" size={28} color="#EF4444" />
+        </TouchableOpacity>
+        <Text style={styles.quantityText}>{item.quantity || 1}</Text>
+        <TouchableOpacity onPress={() => updateQuantity(item.cartItemId, 1)}>
+          <Ionicons name="add-circle" size={28} color="#10B981" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => removeFromCart(item.cartItemId)}
+          style={{ marginLeft: 8 }}
+        >
+          <Ionicons name="close-circle" size={28} color="#9CA3AF" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 
   const sendOrder = async () => {
     if (cartItems.length === 0) {
@@ -60,79 +106,60 @@ export default function CartScreen({ navigation }) {
     setSending(true);
 
     try {
-      let voiceFileUrl = null;
+      // ✅ تجهيز عناصر الطلب
+      const itemsList = cartItems.map(item => 
+        `${item.name} x${item.quantity || 1} = ${item.price * (item.quantity || 1)} ج`
+      );
 
-      if (recordedUri) {
-        setUploadingVoice(true);
-        const fileInfo = await FileSystem.getInfoAsync(recordedUri);
-        if (!fileInfo.exists) {
-          throw new Error('الملف الصوتي غير موجود');
-        }
-
-        const uploadResult = await uploadFile(recordedUri, `voice_${Date.now()}.m4a`, 'voice');
-
-        setUploadingVoice(false);
-
-        if (uploadResult.success) {
-          voiceFileUrl = uploadResult.fileUrl;
-        } else {
-          Alert.alert(
-            'تنبيه',
-            `فشل رفع التسجيل الصوتي: ${uploadResult.error}. سيتم إرسال الطلب بدون صوت.`,
-            [{ text: 'حسناً' }]
-          );
-        }
-      }
-
-      const itemsList = cartItems.map(item => `${item.name} x${item.quantity} = ${item.price * item.quantity} ج`);
-      const total = getTotalPrice();
-
-      const firstItem = cartItems[0];
-      const merchantId = firstItem.providerId;
-      const merchantName = firstItem.providerName;
-      const serviceType = firstItem.providerType;
+      const subtotal = getTotalPrice();
+      const total = subtotal + deliveryFee;
 
       const orderData = {
         customerPhone: phoneNumber,
         customerAddress: address,
-        serviceType: serviceType,
-        serviceName: `طلب من ${merchantName}`,
+        serviceType: fromService || cartItems[0]?.serviceType || 'products',
+        serviceName: currentMerchant?.name || 'طلب منتجات',
+        merchantId: currentMerchant?.id,
+        merchantName: currentMerchant?.name,
         items: itemsList,
-        totalPrice: total,
+        totalPrice: subtotal,
+        deliveryFee: deliveryFee,
+        finalTotal: total,
         notes,
-        voiceUrl: voiceFileUrl,
-        merchantId,
-        merchantName,
+        paymentMethod: 'cash_on_delivery',
+        createdAt: new Date().toISOString(),
       };
+
+      console.log('📦 إرسال الطلب:', orderData);
 
       const result = await createOrder(orderData);
 
       if (result.success) {
-        await AsyncStorage.setItem('zayed_phone', phoneNumber);
-        await AsyncStorage.setItem('zayed_address', address);
+        await saveData();
+        await playSendSound();
 
-        if (recordedUri) {
-          try {
-            await FileSystem.deleteAsync(recordedUri);
-          } catch (e) { }
-        }
-
-        Alert.alert('✅ تم', 'تم إرسال طلبك بنجاح', [
-          {
-            text: 'حسناً', onPress: () => {
-              clearCart();
-              navigation.popToTop();
+        // ✅ رسالة التأكيد المطلوبة
+        Alert.alert(
+          '✅ تم إرسال طلبك',
+          `تم إرسال طلبك إلى ${currentMerchant?.name || 'التاجر'}\nيمكنك متابعة حالة الطلب من الشاشة الرئيسية`,
+          [
+            {
+              text: 'حسناً',
+              onPress: () => {
+                clearCart();
+                navigation.popToTop(); // يروح للشاشة الرئيسية
+              }
             }
-          }
-        ]);
+          ]
+        );
       } else {
-        Alert.alert('خطأ', `فشل في إرسال الطلب: ${result.error || 'خطأ غير معروف'}`);
+        Alert.alert('خطأ', result.error || 'فشل في إرسال الطلب');
       }
     } catch (error) {
-      Alert.alert('خطأ', `فشل في إرسال الطلب: ${error.message || 'خطأ غير معروف'}`);
+      console.error('❌ خطأ في الإرسال:', error);
+      Alert.alert('خطأ', 'فشل في إرسال الطلب');
     } finally {
       setSending(false);
-      setUploadingVoice(false);
     }
   };
 
@@ -149,12 +176,6 @@ export default function CartScreen({ navigation }) {
         <View style={styles.emptyContainer}>
           <Ionicons name="cart-outline" size={80} color="#E5E7EB" />
           <Text style={styles.emptyText}>السلة فارغة</Text>
-          <TouchableOpacity
-            style={styles.continueButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.continueButtonText}>متابعة التسوق</Text>
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -173,92 +194,99 @@ export default function CartScreen({ navigation }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {cartItems.map(item => (
-          <View key={item.id} style={styles.cartItem}>
-            <Image
-              source={{ uri: item.imageUrl || 'https://via.placeholder.com/60' }}
-              style={styles.itemImage}
-            />
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemName}>{item.name}</Text>
-              <Text style={styles.itemPrice}>{item.price} ج</Text>
-              <View style={styles.quantityControls}>
-                <TouchableOpacity onPress={() => updateQuantity(item.id, -1)}>
-                  <Ionicons name="remove-circle" size={24} color="#EF4444" />
-                </TouchableOpacity>
-                <Text style={styles.quantityText}>{item.quantity}</Text>
-                <TouchableOpacity onPress={() => updateQuantity(item.id, 1)}>
-                  <Ionicons name="add-circle" size={24} color="#10B981" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => removeFromCart(item.id)}
-                  style={{ marginLeft: 'auto' }}
-                >
-                  <Ionicons name="close-circle" size={24} color="#9CA3AF" />
-                </TouchableOpacity>
-              </View>
-            </View>
+        {/* معلومات التاجر */}
+        {currentMerchant && (
+          <View style={styles.merchantInfo}>
+            <Ionicons name="storefront-outline" size={20} color="#4F46E5" />
+            <Text style={styles.merchantName}>تاجر: {currentMerchant.name}</Text>
           </View>
-        ))}
+        )}
 
+        {/* عناصر السلة */}
+        <View style={styles.itemsSection}>
+          <Text style={styles.sectionTitle}>المنتجات المختارة ({cartItems.length})</Text>
+          {cartItems.map((item, index) => renderRegularItem(item))}
+        </View>
+
+        {/* بيانات العميل */}
         <View style={styles.section}>
-          <Text style={styles.label}>📞 رقم الموبايل</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="01xxxxxxxxx"
-            value={phoneNumber}
-            onChangeText={setPhoneNumber}
-            keyboardType="phone-pad"
-            editable={!sending}
-          />
+          <Text style={styles.sectionTitle}>📞 بيانات التوصيل</Text>
+          
+          <View style={styles.inputContainer}>
+            <Ionicons name="call-outline" size={20} color="#4F46E5" />
+            <TextInput
+              style={styles.input}
+              placeholder="رقم الموبايل"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              keyboardType="phone-pad"
+              editable={!sending}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="location-outline" size={20} color="#EF4444" />
+            <TextInput
+              style={styles.input}
+              placeholder="العنوان بالتفصيل"
+              value={address}
+              onChangeText={setAddress}
+              multiline
+              editable={!sending}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="document-text-outline" size={20} color="#F59E0B" />
+            <TextInput
+              style={styles.input}
+              placeholder="ملاحظات (اختياري)"
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              editable={!sending}
+            />
+          </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>📍 العنوان</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="العنوان بالتفصيل"
-            value={address}
-            onChangeText={setAddress}
-            multiline
-            editable={!sending}
-          />
+        {/* الفاتورة */}
+        <View style={styles.invoiceSection}>
+          <Text style={styles.sectionTitle}>💰 الفاتورة</Text>
+          
+          <View style={styles.invoiceRow}>
+            <Text style={styles.invoiceLabel}>إجمالي المنتجات:</Text>
+            <Text style={styles.invoiceValue}>{getTotalPrice()} ج</Text>
+          </View>
+
+          <View style={styles.invoiceRow}>
+            <Text style={styles.invoiceLabel}>رسوم التوصيل:</Text>
+            <Text style={styles.invoiceValue}>{deliveryFee} ج</Text>
+          </View>
+
+          <View style={styles.invoiceTotal}>
+            <Text style={styles.totalLabel}>الإجمالي الكلي:</Text>
+            <Text style={styles.totalValue}>{getTotalWithDelivery()} ج</Text>
+          </View>
+
+          <View style={styles.paymentMethod}>
+            <Ionicons name="cash-outline" size={20} color="#10B981" />
+            <Text style={styles.paymentText}>الدفع عند الاستلام</Text>
+          </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>📝 ملاحظات إضافية (اختياري)</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="أي ملاحظات..."
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-            editable={!sending}
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>🎤 تسجيل صوتي (اختياري)</Text>
-          <TouchableOpacity style={styles.voiceButton}>
-            <Ionicons name="mic" size={24} color="#4F46E5" />
-            <Text style={styles.voiceButtonText}>اضغط للتسجيل</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.totalContainer}>
-          <Text style={styles.totalLabel}>الإجمالي:</Text>
-          <Text style={styles.totalPrice}>{getTotalPrice()} ج</Text>
-        </View>
-
+        {/* زر الإرسال */}
         <TouchableOpacity
           style={[styles.sendButton, sending && styles.disabled]}
           onPress={sendOrder}
           disabled={sending}
         >
           {sending ? (
-            <ActivityIndicator color="#FFF" />
+            <View style={styles.sendingContainer}>
+              <ActivityIndicator color="#FFF" />
+              <Text style={styles.sendingText}>جاري إرسال الطلب...</Text>
+            </View>
           ) : (
-            <Text style={styles.sendButtonText}>إرسال الطلب</Text>
+            <Text style={styles.sendButtonText}>تأكيد الطلب</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -279,15 +307,29 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  emptyText: { marginTop: 12, fontSize: 16, color: '#9CA3AF', marginBottom: 20 },
-  continueButton: {
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+  emptyText: { marginTop: 12, fontSize: 16, color: '#9CA3AF' },
+  content: { padding: 16, paddingBottom: 30 },
+
+  merchantInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    padding: 12,
     borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
   },
-  continueButtonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
-  content: { padding: 16 },
+  merchantName: { fontSize: 14, color: '#4F46E5', fontWeight: '600' },
+
+  section: { marginBottom: 20 },
+  itemsSection: { marginBottom: 20 },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+
   cartItem: {
     flexDirection: 'row',
     backgroundColor: '#FFF',
@@ -300,47 +342,83 @@ const styles = StyleSheet.create({
   },
   itemImage: { width: 60, height: 60, borderRadius: 8, marginRight: 12 },
   itemInfo: { flex: 1 },
-  itemName: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginBottom: 2 },
-  itemPrice: { fontSize: 14, color: '#F59E0B', marginBottom: 4 },
-  quantityControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  itemName: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginBottom: 4 },
+  itemPrice: { fontSize: 12, color: '#4B5563', marginBottom: 2 },
+  itemTotal: { fontSize: 14, fontWeight: '600', color: '#F59E0B' },
+  
+  quantityControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   quantityText: { fontSize: 16, fontWeight: '600', color: '#1F2937', minWidth: 20, textAlign: 'center' },
-  section: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: '600', color: '#4B5563', marginBottom: 6 },
-  input: {
+
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFF',
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-  },
-  textArea: { minHeight: 80, textAlignVertical: 'top' },
-  voiceButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EEF2FF',
-    padding: 12,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
     gap: 8,
   },
-  voiceButtonText: { fontSize: 14, color: '#4F46E5' },
-  totalContainer: {
+  input: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+    textAlign: 'right',
+  },
+
+  invoiceSection: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  invoiceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
-    marginTop: 8,
+    marginBottom: 8,
   },
-  totalLabel: { fontSize: 18, fontWeight: '600', color: '#92400E' },
-  totalPrice: { fontSize: 20, fontWeight: 'bold', color: '#F59E0B' },
+  invoiceLabel: { fontSize: 14, color: '#92400E' },
+  invoiceValue: { fontSize: 14, fontWeight: '600', color: '#92400E' },
+  invoiceTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F59E0B',
+  },
+  totalLabel: { fontSize: 16, fontWeight: '600', color: '#92400E' },
+  totalValue: { fontSize: 18, fontWeight: 'bold', color: '#F59E0B' },
+  paymentMethod: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F59E0B',
+    gap: 8,
+  },
+  paymentText: { fontSize: 14, color: '#10B981', fontWeight: '600' },
+
   sendButton: {
     backgroundColor: '#4F46E5',
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 10,
   },
   sendButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
   disabled: { opacity: 0.6 },
+  sendingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  sendingText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
 });

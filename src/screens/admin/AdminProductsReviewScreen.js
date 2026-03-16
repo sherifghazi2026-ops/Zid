@@ -13,8 +13,7 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getAllServices } from '../../services/servicesService';
-import { getAllPendingItems, reviewItem } from '../../services/itemService';
+import { getPendingProducts, approveProduct, rejectProduct } from '../../services/productService';
 
 export default function AdminProductsReviewScreen({ navigation }) {
   const [pendingProducts, setPendingProducts] = useState([]);
@@ -29,36 +28,10 @@ export default function AdminProductsReviewScreen({ navigation }) {
 
   const loadPendingProducts = async () => {
     setLoading(true);
-    
-    // جلب كل الخدمات اللي ليها منتجات
-    const servicesResult = await getAllServices();
-    if (servicesResult.success) {
-      // جمع أسماء الـ collections
-      const collections = servicesResult.data
-        .filter(s => s.hasItems && s.itemsCollection)
-        .map(s => s.itemsCollection);
-      
-      console.log('📚 Collections:', collections);
-      
-      // جلب كل المنتجات المعلقة
-      const result = await getAllPendingItems(collections);
-      if (result.success) {
-        console.log(`📦 تم جلب ${result.data.length} منتج معلق`);
-        
-        // إضافة اسم الخدمة لكل منتج
-        const productsWithService = result.data.map(product => {
-          const service = servicesResult.data.find(s => s.id === product.serviceId);
-          console.log(`🔍 المنتج: ${product.name}, collection: ${product.collectionName}`);
-          return {
-            ...product,
-            serviceName: service?.name || 'خدمة غير معروفة',
-            serviceColor: service?.color || '#6B7280',
-          };
-        });
-        setPendingProducts(productsWithService);
-      }
+    const result = await getPendingProducts();
+    if (result.success) {
+      setPendingProducts(result.data);
     }
-    
     setLoading(false);
   };
 
@@ -71,16 +44,7 @@ export default function AdminProductsReviewScreen({ navigation }) {
         {
           text: 'موافقة',
           onPress: async () => {
-            // استخدام collectionName اللي ضفناها
-            const collectionId = product.collectionName;
-            console.log('📤 محاولة الموافقة:', { collectionId, productId: product.$id });
-            
-            if (!collectionId) {
-              Alert.alert('خطأ', 'معرف المجموعة غير موجود');
-              return;
-            }
-            
-            const result = await reviewItem(collectionId, product.$id, 'approved', '');
+            const result = await approveProduct(product.$id);
             if (result.success) {
               Alert.alert('✅ تم', 'تمت الموافقة على المنتج');
               loadPendingProducts();
@@ -101,18 +65,9 @@ export default function AdminProductsReviewScreen({ navigation }) {
 
   const handleReject = async () => {
     if (!selectedProduct) return;
-    
-    const collectionId = selectedProduct.collectionName;
-    console.log('📤 محاولة الرفض:', { collectionId, productId: selectedProduct.$id });
-    
-    if (!collectionId) {
-      Alert.alert('خطأ', 'معرف المجموعة غير موجود');
-      setModalVisible(false);
-      return;
-    }
-    
-    const result = await reviewItem(collectionId, selectedProduct.$id, 'rejected', reviewNotes);
-    
+
+    const result = await rejectProduct(selectedProduct.$id, reviewNotes);
+
     if (result.success) {
       Alert.alert('✅ تم', 'تم رفض المنتج');
       setModalVisible(false);
@@ -123,10 +78,7 @@ export default function AdminProductsReviewScreen({ navigation }) {
   };
 
   const renderProduct = ({ item }) => {
-    // محاولة الحصول على الصورة (سواء كانت imageUrl أو images array)
-    const imageSource = item.imageUrl 
-      ? item.imageUrl 
-      : (item.images && item.images.length > 0 ? item.images[0] : null);
+    const imageSource = item.imageUrl || null;
 
     return (
       <View style={styles.productCard}>
@@ -141,32 +93,27 @@ export default function AdminProductsReviewScreen({ navigation }) {
           <View style={styles.productInfo}>
             <Text style={styles.productName}>{item.name}</Text>
             <Text style={styles.productPrice}>{item.price} ج</Text>
-            <View style={[styles.serviceBadge, { backgroundColor: item.serviceColor + '20' }]}>
-              <Text style={[styles.serviceText, { color: item.serviceColor }]}>
-                {item.serviceName}
-              </Text>
-            </View>
           </View>
         </View>
-        
+
         <Text style={styles.providerInfo}>
-          مقدم من: {item.providerName} ({item.providerType})
+          مقدم من: {item.merchantName}
         </Text>
-        
+
         {item.description ? (
           <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
         ) : null}
-        
+
         <View style={styles.actionsContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.actionButton, styles.approveButton]}
             onPress={() => handleApprove(item)}
           >
             <Ionicons name="checkmark-circle" size={20} color="#FFF" />
             <Text style={styles.actionText}>موافقة</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={[styles.actionButton, styles.rejectButton]}
             onPress={() => openRejectModal(item)}
           >
@@ -215,7 +162,7 @@ export default function AdminProductsReviewScreen({ navigation }) {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>رفض المنتج</Text>
             <Text style={styles.modalSubtitle}>{selectedProduct?.name}</Text>
-            
+
             <Text style={styles.label}>سبب الرفض (اختياري)</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
@@ -225,15 +172,15 @@ export default function AdminProductsReviewScreen({ navigation }) {
               multiline
               numberOfLines={3}
             />
-            
+
             <View style={styles.modalButtons}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.modalButton, styles.cancelModalButton]}
                 onPress={() => setModalVisible(false)}
               >
                 <Text style={styles.cancelButtonText}>إلغاء</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.modalButton, styles.confirmRejectButton]}
                 onPress={handleReject}
               >
@@ -296,16 +243,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#F59E0B',
     marginBottom: 4,
-  },
-  serviceBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  serviceText: {
-    fontSize: 10,
-    fontWeight: '600',
   },
   providerInfo: {
     fontSize: 12,

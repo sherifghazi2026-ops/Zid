@@ -9,7 +9,6 @@ import {
   Image,
   ActivityIndicator,
   Alert,
-  RefreshControl,
   Modal,
   TextInput,
   ScrollView,
@@ -17,108 +16,84 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { databases, DATABASE_ID } from '../../appwrite/config';
-import { ID, Query } from 'appwrite';
+import { getItems, addItem, updateItem, deleteItem, toggleItemStatus } from '../../services/itemService';
 import { uploadServiceImage } from '../../services/uploadService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const COLLECTION_NAME = 'laundry_items';
+export default function ManageItemsScreen({ navigation, route }) {
+  // استقبال البيانات من الراوتر
+  const { collectionName, serviceName } = route.params;
+  const isLaundry = collectionName === 'laundry_items';
 
-export default function ManageLaundryItemsScreen({ navigation }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [currentMerchant, setCurrentMerchant] = useState(null);
 
   // حقول النموذج
   const [itemName, setName] = useState('');
+  const [itemPrice, setPrice] = useState('');
   const [ironPrice, setIronPrice] = useState('');
   const [cleanPrice, setCleanPrice] = useState('');
   const [itemImage, setImage] = useState(null);
   const [isActive, setIsActive] = useState(true);
 
+  // تحميل الأصناف عند فتح الشاشة
   useEffect(() => {
-    loadCurrentUser();
     loadItems();
   }, []);
 
-  const loadCurrentUser = async () => {
-    try {
-      const userData = await AsyncStorage.getItem('userData');
-      if (userData) {
-        const user = JSON.parse(userData);
-        setCurrentMerchant(user);
-      }
-    } catch (error) {
-      console.error('خطأ في تحميل بيانات المستخدم:', error);
-    }
-  };
-
   const loadItems = async () => {
     setLoading(true);
-    try {
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        COLLECTION_NAME,
-        [Query.orderAsc('name')]
-      );
-      setItems(response.documents);
-    } catch (error) {
-      console.error('خطأ في تحميل الأصناف:', error);
+    const result = await getItems(collectionName);
+    if (result.success) {
+      setItems(result.data);
+    } else {
       Alert.alert('خطأ', 'فشل تحميل الأصناف');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
+    setLoading(false);
   };
 
+  // اختيار صورة من المعرض
   const pickImage = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('خطأ', 'يجب السماح بالوصول للمعرض');
-        return;
-      }
-
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.7,
-        allowsEditing: true,
       });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
+      
+      if (!result.canceled) {
         setUploading(true);
         const uploadResult = await uploadServiceImage(result.assets[0].uri);
         setUploading(false);
-
+        
         if (uploadResult.success) {
           setImage(uploadResult.fileUrl);
         } else {
-          Alert.alert('خطأ', 'فشل في رفع الصورة');
+          Alert.alert('خطأ', 'فشل رفع الصورة');
         }
       }
     } catch (error) {
-      console.error('❌ خطأ في اختيار الصورة:', error);
-      Alert.alert('خطأ', 'فشل في اختيار الصورة');
+      Alert.alert('خطأ', 'فشل اختيار الصورة');
     }
   };
 
+  // إعادة تعيين النموذج
   const resetForm = () => {
     setEditingItem(null);
     setName('');
+    setPrice('');
     setIronPrice('');
     setCleanPrice('');
     setImage(null);
     setIsActive(true);
   };
 
+  // فتح نافذة التعديل
   const openEditModal = (item) => {
     setEditingItem(item);
     setName(item.name || '');
+    setPrice(item.price?.toString() || '');
     setIronPrice(item.ironPrice?.toString() || '');
     setCleanPrice(item.cleanPrice?.toString() || '');
     setImage(item.imageUrl || null);
@@ -126,114 +101,91 @@ export default function ManageLaundryItemsScreen({ navigation }) {
     setModalVisible(true);
   };
 
+  // حفظ الصنف (إضافة أو تحديث)
   const handleSave = async () => {
-    if (!currentMerchant) {
-      Alert.alert('خطأ', 'يجب تسجيل الدخول أولاً');
-      return;
-    }
-
     if (!itemName.trim()) {
       Alert.alert('تنبيه', 'اسم الصنف مطلوب');
       return;
     }
 
-    if (!ironPrice || !cleanPrice) {
-      Alert.alert('تنبيه', 'جميع الأسعار مطلوبة');
-      return;
+    // التحقق من الأسعار حسب نوع الخدمة
+    if (isLaundry) {
+      if (!ironPrice || !cleanPrice) {
+        Alert.alert('تنبيه', 'جميع الأسعار مطلوبة');
+        return;
+      }
+    } else {
+      if (!itemPrice) {
+        Alert.alert('تنبيه', 'السعر مطلوب');
+        return;
+      }
     }
 
-    setSubmitting(true);
+    setUploading(true);
 
-    try {
-      const itemData = {
-        name: itemName.trim(),
-        ironPrice: parseFloat(ironPrice),
-        cleanPrice: parseFloat(cleanPrice),
-        imageUrl: itemImage || null,
-        isActive,
-        merchantId: currentMerchant.$id, // ✅ إضافة merchantId
-      };
+    // تجهيز بيانات الصنف
+    const itemData = {
+      name: itemName.trim(),
+      imageUrl: itemImage,
+      isActive,
+    };
 
-      if (editingItem) {
-        await databases.updateDocument(
-          DATABASE_ID,
-          COLLECTION_NAME,
-          editingItem.$id,
-          itemData
-        );
-        Alert.alert('✅ تم', 'تم تحديث الصنف');
-      } else {
-        await databases.createDocument(
-          DATABASE_ID,
-          COLLECTION_NAME,
-          ID.unique(),
-          itemData
-        );
-        Alert.alert('✅ تم', 'تم إضافة الصنف');
-      }
+    if (isLaundry) {
+      itemData.ironPrice = parseFloat(ironPrice);
+      itemData.cleanPrice = parseFloat(cleanPrice);
+    } else {
+      itemData.price = parseFloat(itemPrice);
+    }
 
+    let result;
+    if (editingItem) {
+      result = await updateItem(collectionName, editingItem.$id, itemData);
+    } else {
+      result = await addItem(collectionName, itemData);
+    }
+
+    if (result.success) {
+      Alert.alert('✅ تم', editingItem ? 'تم التحديث' : 'تم الإضافة');
       setModalVisible(false);
       resetForm();
       loadItems();
-    } catch (error) {
-      Alert.alert('خطأ', error.message);
-    } finally {
-      setSubmitting(false);
+    } else {
+      Alert.alert('خطأ', result.error);
     }
+    setUploading(false);
   };
 
+  // حذف صنف
   const handleDelete = (item) => {
-    Alert.alert(
-      'حذف الصنف',
-      `هل أنت متأكد من حذف "${item.name}"؟`,
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'حذف',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await databases.deleteDocument(
-                DATABASE_ID,
-                COLLECTION_NAME,
-                item.$id
-              );
-              loadItems();
-            } catch (error) {
-              Alert.alert('خطأ', error.message);
-            }
+    Alert.alert('تأكيد الحذف', `هل تريد حذف "${item.name}"؟`, [
+      { text: 'إلغاء' },
+      {
+        text: 'حذف',
+        style: 'destructive',
+        onPress: async () => {
+          const result = await deleteItem(collectionName, item.$id);
+          if (result.success) {
+            loadItems();
+          } else {
+            Alert.alert('خطأ', result.error);
           }
         }
-      ]
-    );
+      }
+    ]);
   };
 
+  // تغيير حالة التفعيل
   const toggleActive = async (item) => {
-    try {
-      await databases.updateDocument(
-        DATABASE_ID,
-        COLLECTION_NAME,
-        item.$id,
-        { isActive: !item.isActive }
-      );
+    const result = await toggleItemStatus(collectionName, item.$id, !item.isActive);
+    if (result.success) {
       loadItems();
-    } catch (error) {
-      Alert.alert('خطأ', error.message);
     }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadItems();
-  };
-
+  // عرض كل صنف
   const renderItem = ({ item }) => (
     <View style={[styles.itemCard, !item.isActive && styles.itemCardDisabled]}>
-      <TouchableOpacity
-        style={styles.itemContent}
-        onPress={() => openEditModal(item)}
-        activeOpacity={0.7}
-      >
+      <TouchableOpacity style={styles.itemContent} onPress={() => openEditModal(item)}>
         {item.imageUrl ? (
           <Image source={{ uri: item.imageUrl }} style={styles.itemImage} />
         ) : (
@@ -241,26 +193,25 @@ export default function ManageLaundryItemsScreen({ navigation }) {
             <Ionicons name="image-outline" size={24} color="#9CA3AF" />
           </View>
         )}
-
         <View style={styles.itemInfo}>
           <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemPrice}>كوي فقط: {item.ironPrice} ج</Text>
-          <Text style={styles.itemPrice}>غسيل وكوي: {item.cleanPrice} ج</Text>
+          {isLaundry ? (
+            <>
+              <Text style={styles.itemPrice}>كوي: {item.ironPrice} ج</Text>
+              <Text style={styles.itemPrice}>غسيل: {item.cleanPrice} ج</Text>
+            </>
+          ) : (
+            <Text style={styles.itemPrice}>{item.price} ج</Text>
+          )}
         </View>
       </TouchableOpacity>
-
       <View style={styles.actionButtons}>
         <TouchableOpacity
           style={[styles.actionButton, item.isActive ? styles.disableButton : styles.enableButton]}
           onPress={() => toggleActive(item)}
         >
-          <Ionicons
-            name={item.isActive ? 'close-outline' : 'checkmark-outline'}
-            size={16}
-            color="#FFF"
-          />
+          <Ionicons name={item.isActive ? 'close-outline' : 'checkmark-outline'} size={16} color="#FFF" />
         </TouchableOpacity>
-
         <TouchableOpacity
           style={[styles.actionButton, styles.deleteButton]}
           onPress={() => handleDelete(item)}
@@ -285,7 +236,7 @@ export default function ManageLaundryItemsScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-forward" size={28} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>إدارة أصناف المكوجي</Text>
+        <Text style={styles.headerTitle}>إدارة {serviceName || 'الأصناف'}</Text>
         <TouchableOpacity onPress={() => { resetForm(); setModalVisible(true); }}>
           <Ionicons name="add-circle" size={28} color="#4F46E5" />
         </TouchableOpacity>
@@ -296,9 +247,6 @@ export default function ManageLaundryItemsScreen({ navigation }) {
         renderItem={renderItem}
         keyExtractor={item => item.$id}
         contentContainerStyle={styles.list}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="cube-outline" size={80} color="#E5E7EB" />
@@ -308,7 +256,7 @@ export default function ManageLaundryItemsScreen({ navigation }) {
         }
       />
 
-      {/* Modal إضافة/تعديل صنف */}
+      {/* نافذة إضافة/تعديل صنف */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <ScrollView contentContainerStyle={styles.modalScrollContent}>
@@ -322,40 +270,54 @@ export default function ManageLaundryItemsScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.label}>اسم الصنف *</Text>
+              <Text style={styles.label}>اسم الصنف</Text>
               <TextInput
                 style={styles.input}
-                placeholder="مثال: بنطلون"
                 value={itemName}
                 onChangeText={setName}
+                placeholder="مثال: بنطلون"
               />
 
-              <Text style={styles.label}>سعر الكوي فقط *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="10"
-                value={ironPrice}
-                onChangeText={setIronPrice}
-                keyboardType="numeric"
-              />
+              {isLaundry ? (
+                <>
+                  <Text style={styles.label}>سعر الكوي فقط</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={ironPrice}
+                    onChangeText={setIronPrice}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                  <Text style={styles.label}>سعر الكوي والتنظيف</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={cleanPrice}
+                    onChangeText={setCleanPrice}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                </>
+              ) : (
+                <>
+                  <Text style={styles.label}>السعر</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={itemPrice}
+                    onChangeText={setPrice}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                </>
+              )}
 
-              <Text style={styles.label}>سعر الغسيل والكوي *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="15"
-                value={cleanPrice}
-                onChangeText={setCleanPrice}
-                keyboardType="numeric"
-              />
-
-              <Text style={styles.label}>صورة الصنف (اختياري)</Text>
-              <TouchableOpacity style={styles.imagePicker} onPress={pickImage} disabled={uploading}>
+              <Text style={styles.label}>الصورة (اختياري)</Text>
+              <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
                 {itemImage ? (
                   <Image source={{ uri: itemImage }} style={styles.previewImage} />
                 ) : (
                   <View style={styles.imagePlaceholder}>
                     {uploading ? (
-                      <ActivityIndicator size="large" color="#4F46E5" />
+                      <ActivityIndicator color="#4F46E5" />
                     ) : (
                       <>
                         <Ionicons name="camera-outline" size={40} color="#9CA3AF" />
@@ -367,20 +329,16 @@ export default function ManageLaundryItemsScreen({ navigation }) {
               </TouchableOpacity>
 
               <View style={styles.switchContainer}>
-                <Text style={styles.label}>الصنف نشط</Text>
-                <Switch
-                  value={isActive}
-                  onValueChange={setIsActive}
-                  trackColor={{ false: '#E5E7EB', true: '#4F46E5' }}
-                />
+                <Text style={styles.label}>متاح</Text>
+                <Switch value={isActive} onValueChange={setIsActive} />
               </View>
 
               <TouchableOpacity
-                style={[styles.saveButton, (submitting || uploading) && styles.disabled]}
+                style={[styles.saveButton, uploading && styles.disabled]}
                 onPress={handleSave}
-                disabled={submitting || uploading}
+                disabled={uploading}
               >
-                {(submitting || uploading) ? (
+                {uploading ? (
                   <ActivityIndicator color="#FFF" />
                 ) : (
                   <Text style={styles.saveButtonText}>
@@ -403,17 +361,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 20,
+    padding: 16,
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
   list: { padding: 16 },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
-  emptyText: { marginTop: 12, fontSize: 16, color: '#1F2937', fontWeight: '600' },
-  emptySubText: { marginTop: 4, fontSize: 14, color: '#9CA3AF' },
-
+  emptyContainer: { alignItems: 'center', padding: 40 },
+  emptyText: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
+  emptySubText: { fontSize: 14, color: '#9CA3AF', marginTop: 8 },
   itemCard: {
     flexDirection: 'row',
     backgroundColor: '#FFF',
@@ -425,7 +382,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  itemCardDisabled: { opacity: 0.6, backgroundColor: '#F9FAFB' },
+  itemCardDisabled: { opacity: 0.6 },
   itemContent: { flexDirection: 'row', flex: 1, alignItems: 'center' },
   itemImage: { width: 50, height: 50, borderRadius: 8, marginRight: 12 },
   placeholderImage: { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
@@ -437,7 +394,6 @@ const styles = StyleSheet.create({
   disableButton: { backgroundColor: '#EF4444' },
   enableButton: { backgroundColor: '#10B981' },
   deleteButton: { backgroundColor: '#6B7280' },
-
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -453,7 +409,6 @@ const styles = StyleSheet.create({
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 20,
   },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1F2937' },
@@ -489,10 +444,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    marginVertical: 10,
   },
   saveButton: {
     backgroundColor: '#4F46E5',
@@ -500,7 +452,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 10,
-    marginBottom: 20,
   },
   disabled: { opacity: 0.6 },
   saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },

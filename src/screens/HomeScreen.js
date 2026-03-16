@@ -12,7 +12,6 @@ import {
   Alert,
   Modal,
   TextInput,
-  Linking,
   Platform,
   StatusBar,
   BackHandler,
@@ -25,7 +24,7 @@ import { getVisibleServicesForHome } from '../services/servicesService';
 import { useFocusEffect } from '@react-navigation/native';
 import { databases, DATABASE_ID } from '../appwrite/config';
 import { Query } from 'appwrite';
-import DynamicMongez from '../components/DynamicMongez';
+import { fontFamily } from '../utils/fonts';
 
 const { width } = Dimensions.get('window');
 const CARD_SIZE = (width - 48) / 2;
@@ -33,6 +32,7 @@ const CARD_SIZE = (width - 48) / 2;
 const appIcon = require('../../assets/icons/ZidiconSP.png');
 const restaurantImage = require('../../assets/icons/restaurant-8k.png');
 const chefImage = require('../../assets/icons/Chef.png');
+const laundryImage = require('../../assets/icons/ironing-8k.png');
 
 // تعريف التصنيفات وترتيبها
 const CATEGORY_ORDER = {
@@ -56,12 +56,22 @@ const CATEGORY_COLORS = {
   'other': '#6B7280'
 };
 
+// حالات الطلب الحالية
+const CURRENT_ORDER_STATUSES = [
+  ORDER_STATUS.PENDING,
+  ORDER_STATUS.ACCEPTED,
+  ORDER_STATUS.PREPARING,
+  ORDER_STATUS.READY,
+  ORDER_STATUS.DRIVER_ASSIGNED,
+  ORDER_STATUS.ON_THE_WAY,
+  ORDER_STATUS.PICKUP
+];
+
 const HomeScreen = ({ navigation }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userData, setUserData] = useState(null);
   const [userPhone, setUserPhone] = useState('');
-  const [activeOrders, setActiveOrders] = useState([]);
-  const [completedOrders, setCompletedOrders] = useState([]);
+  const [currentOrders, setCurrentOrders] = useState([]);
   const [services, setServices] = useState([]);
   const [groupedServices, setGroupedServices] = useState({});
   const [chefsCount, setChefsCount] = useState(0);
@@ -70,14 +80,12 @@ const HomeScreen = ({ navigation }) => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [adminModalVisible, setAdminModalVisible] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
-  const [showActiveOrders, setShowActiveOrders] = useState(true);
+  const [showCurrentOrders, setShowCurrentOrders] = useState(true);
   const [userRole, setUserRole] = useState(null);
 
   useFocusEffect(
     React.useCallback(() => {
-      const onBackPress = () => {
-        return true;
-      };
+      const onBackPress = () => true;
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => subscription.remove();
     }, [])
@@ -92,7 +100,7 @@ const HomeScreen = ({ navigation }) => {
   useFocusEffect(
     React.useCallback(() => {
       if (isLoggedIn && userPhone) {
-        fetchAllOrders();
+        fetchCurrentOrders();
       }
     }, [isLoggedIn, userPhone])
   );
@@ -111,13 +119,8 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const loadServices = async () => {
-    console.log('📥 جلب الخدمات من Appwrite...');
     const result = await getVisibleServicesForHome();
-
     if (result.success) {
-      console.log('✅ تم جلب', result.data.length, 'خدمة');
-
-      // تصفية الخدمات غير المرغوب فيها
       const filteredServices = result.data.filter(service => {
         const excludeIds = ['mongez', 'assistant', 'vegetables', 'fruits'];
         const excludeNames = ['منحز', 'Mongez', 'الخضار والفاكهة', 'خضار', 'فاكهة'];
@@ -126,7 +129,6 @@ const HomeScreen = ({ navigation }) => {
         return true;
       });
 
-      // ترتيب الخدمات حسب الطلب
       const sortedServices = filteredServices.sort((a, b) => {
         if (a.isActive && !b.isActive) return -1;
         if (!a.isActive && b.isActive) return 1;
@@ -135,19 +137,13 @@ const HomeScreen = ({ navigation }) => {
 
       setServices(sortedServices);
 
-      // تجميع الخدمات حسب التصنيف
       const grouped = {};
       sortedServices.forEach(service => {
         const category = service.category || 'other';
-        if (!grouped[category]) {
-          grouped[category] = [];
-        }
+        if (!grouped[category]) grouped[category] = [];
         grouped[category].push(service);
       });
-
       setGroupedServices(grouped);
-    } else {
-      console.log('❌ فشل جلب الخدمات:', result.error);
     }
   };
 
@@ -166,103 +162,91 @@ const HomeScreen = ({ navigation }) => {
       );
       setChefsCount(response.total || 0);
     } catch (error) {
-      console.error('خطأ في جلب عدد الشيفات:', error);
       setChefsCount(0);
     }
   };
 
-  const fetchAllOrders = async () => {
+  const fetchCurrentOrders = async () => {
     if (!isLoggedIn || !userPhone) return;
-    setLoading(true);
-    try {
-      const activeResult = await getOrders({
-        customerPhone: userPhone,
-        status: [ORDER_STATUS.PENDING, ORDER_STATUS.ACCEPTED, ORDER_STATUS.PREPARING, ORDER_STATUS.READY, ORDER_STATUS.DRIVER_ASSIGNED, ORDER_STATUS.ON_THE_WAY]
-      });
-
-      const completedResult = await getOrders({
-        customerPhone: userPhone,
-        status: ORDER_STATUS.DELIVERED
-      });
-
-      if (activeResult.success) {
-        setActiveOrders(activeResult.data);
-      }
-      if (completedResult.success) {
-        setCompletedOrders(completedResult.data);
-      }
-    } catch (error) {
-      console.error('خطأ في جلب الطلبات:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    const result = await getOrders({
+      customerPhone: userPhone,
+      status: CURRENT_ORDER_STATUSES
+    });
+    if (result.success) {
+      const sortedOrders = result.data.sort((a, b) =>
+        new Date(b.createdAt) - new Date(a.createdAt)
+      );
+      setCurrentOrders(sortedOrders);
     }
+    setRefreshing(false);
   };
 
   const onRefresh = () => {
     setRefreshing(true);
     loadServices();
-    if (isLoggedIn) {
-      fetchAllOrders();
-    }
+    if (isLoggedIn) fetchCurrentOrders();
     loadChefsCount();
   };
 
+  // دالة التنقل
   const navigateToService = (service) => {
-    // ✅ التحقق من تسجيل الدخول أولاً
     if (!isLoggedIn) {
-      Alert.alert(
-        'تنبيه',
-        'يجب تسجيل الدخول أولاً لاستخدام الخدمات',
-        [
-          { text: 'إلغاء', style: 'cancel' },
-          { text: 'تسجيل الدخول', onPress: () => navigation.navigate('CustomerAuth') }
-        ]
-      );
+      Alert.alert('تنبيه', 'يجب تسجيل الدخول أولاً', [
+        { text: 'إلغاء', style: 'cancel' },
+        { text: 'تسجيل الدخول', onPress: () => navigation.navigate('CustomerAuth') }
+      ]);
       return;
     }
 
     if (!service.isActive) {
-      Alert.alert('تنبيه', service.maintenanceText || 'هذه الخدمة غير متاحة حالياً');
+      Alert.alert('تنبيه', service.maintenanceText || 'الخدمة غير متاحة');
       return;
     }
 
-    if (service.id === 'restaurant') {
-      navigation.navigate('RestaurantList');
+    console.log('🔍 الخدمة:', service.id, service.name, service.type);
+
+    // خدمات AI
+    if (service.type === 'ai') {
+      console.log('👉 توجيه إلى AiMainModal (AI)');
+      Alert.alert('AI', 'خدمة الذكاء الاصطناعي قيد التطوير');
+      return;
     }
-    else if (service.id === 'home_chef') {
-      navigation.navigate('HomeChefsScreen');
-    }
-    else if (service.hasItems && service.itemsCollection && service.type === 'items') {
-      navigation.navigate('ProvidersListScreen', {
-        serviceId: service.id,
-        serviceName: service.name,
-        merchantType: service.merchantType || service.id
-      });
-    }
-    else if (service.hasItems && service.type === 'items_service') {
+
+    // خدمات بأصناف (مثل المكوجي)
+    if (service.type === 'items_service') {
+      console.log('👉 توجيه إلى ItemsServiceScreen (أصناف)');
       navigation.navigate('ItemsServiceScreen', {
         serviceId: service.id,
         serviceName: service.name,
-        serviceColor: service.color
+        collectionName: service.itemsCollection || `${service.id}_items`,
+        subServices: service.subServices || []
       });
+      return;
     }
-    else {
-      navigation.navigate('ServiceScreen', {
+
+    // خدمات بمنتجات (مطاعم، سوبر ماركت، مخابز)
+    if (service.type === 'items' || service.type === 'products') {
+      console.log('👉 توجيه إلى MerchantsListScreen (قائمة التجار)');
+      navigation.navigate('MerchantsListScreen', {
         serviceType: service.id,
         serviceName: service.name,
-        serviceColor: service.color
+        collectionName: service.itemsCollection || `${service.id}_items`
       });
+      return;
     }
+
+    // خدمات عادية (نص + صوت + صور)
+    console.log('👉 توجيه إلى ServiceScreen (خدمة عادية)');
+    navigation.navigate('ServiceScreen', {
+      serviceType: service.id,
+      serviceName: service.name,
+      serviceColor: service.color
+    });
   };
 
-  const handleLoginPress = () => {
-    navigation.navigate('CustomerAuth');
-  };
-
+  const handleLoginPress = () => navigation.navigate('CustomerAuth');
   const handleAdminAccess = () => {
-    const SECRET_ADMIN_PASSWORD = "admin2026";
-    if (adminPassword === SECRET_ADMIN_PASSWORD) {
+    if (adminPassword === "admin2026") {
       setAdminModalVisible(false);
       setAdminPassword('');
       navigation.navigate('AdminHome');
@@ -271,14 +255,7 @@ const HomeScreen = ({ navigation }) => {
       setAdminPassword('');
     }
   };
-
-  const openAdminModal = () => {
-    setAdminModalVisible(true);
-  };
-
-  const makePhoneCall = (phone) => {
-    Linking.openURL(`tel:${phone}`);
-  };
+  const openAdminModal = () => setAdminModalVisible(true);
 
   const getStatusColor = (status) => {
     switch(status) {
@@ -288,7 +265,7 @@ const HomeScreen = ({ navigation }) => {
       case ORDER_STATUS.READY: return '#10B981';
       case ORDER_STATUS.DRIVER_ASSIGNED: return '#3B82F6';
       case ORDER_STATUS.ON_THE_WAY: return '#3B82F6';
-      case ORDER_STATUS.DELIVERED: return '#10B981';
+      case ORDER_STATUS.PICKUP: return '#8B5CF6';
       default: return '#6B7280';
     }
   };
@@ -298,27 +275,20 @@ const HomeScreen = ({ navigation }) => {
       case ORDER_STATUS.PENDING: return 'معلق';
       case ORDER_STATUS.ACCEPTED: return 'تم القبول';
       case ORDER_STATUS.PREPARING: return 'قيد التجهيز';
-      case ORDER_STATUS.READY: return 'جاهز للتسليم';
+      case ORDER_STATUS.READY: return 'جاهز';
       case ORDER_STATUS.DRIVER_ASSIGNED: return 'تم تعيين مندوب';
       case ORDER_STATUS.ON_THE_WAY: return 'جاري التوصيل';
-      case ORDER_STATUS.DELIVERED: return 'تم التوصيل';
+      case ORDER_STATUS.PICKUP: return 'استلام';
       default: return status;
     }
   };
 
   const getServiceImage = (service) => {
-    if (service.id === 'restaurant') {
-      return restaurantImage;
-    } else if (service.id === 'home_chef') {
-      return chefImage;
-    } else if (service.imageUrl) {
-      return { uri: service.imageUrl };
-    }
+    if (service.id === 'restaurant') return restaurantImage;
+    if (service.id === 'home_chef') return chefImage;
+    if (service.id === 'laundry') return laundryImage;
+    if (service.imageUrl) return { uri: service.imageUrl };
     return null;
-  };
-
-  const isAIService = (service) => {
-    return service.type === 'ai' || service.id === 'restaurant' || service.id === 'home_chef';
   };
 
   const renderOrderCard = (order) => (
@@ -328,36 +298,18 @@ const HomeScreen = ({ navigation }) => {
       onPress={() => navigation.navigate('OrderTrackingScreen', { orderId: order.$id })}
     >
       <View style={styles.orderHeader}>
-        <Text style={styles.orderId}>طلب #{order.$id.slice(-6)}</Text>
+        <Text style={[styles.orderId, { fontFamily: fontFamily.arabic }]}>#{order.$id.slice(-6)}</Text>
         <View style={[styles.orderStatusBadge, { backgroundColor: getStatusColor(order.status) + '20' }]}>
-          <Text style={[styles.orderStatusText, { color: getStatusColor(order.status) }]}>{getStatusText(order.status)}</Text>
+          <Text style={[styles.orderStatusText, { color: getStatusColor(order.status), fontFamily: fontFamily.arabic }]}>{getStatusText(order.status)}</Text>
         </View>
       </View>
-
-      <Text style={styles.orderService}>{order.serviceName}</Text>
-
-      <View style={styles.orderContactRow}>
-        {order.merchantPhone && (
-          <TouchableOpacity onPress={() => makePhoneCall(order.merchantPhone)}>
-            <Ionicons name="call" size={16} color="#3B82F6" />
-          </TouchableOpacity>
+      <Text style={[styles.orderService, { fontFamily: fontFamily.arabic }]} numberOfLines={1}>{order.serviceName}</Text>
+      <View style={styles.orderFooter}>
+        {order.finalTotal > 0 && (
+          <Text style={[styles.orderPrice, { fontFamily: fontFamily.arabic }]}>{order.finalTotal} ج</Text>
         )}
-        {order.driverPhone && (
-          <TouchableOpacity onPress={() => makePhoneCall(order.driverPhone)}>
-            <Ionicons name="bicycle" size={16} color="#10B981" />
-          </TouchableOpacity>
-        )}
+        <Text style={[styles.orderDate, { fontFamily: fontFamily.arabic }]}>{new Date(order.createdAt).toLocaleDateString('ar-EG')}</Text>
       </View>
-
-      {order.finalTotal > 0 && (
-        <View style={styles.orderPriceContainer}>
-          <Text style={styles.orderPriceLabel}>الإجمالي:</Text>
-          <Text style={styles.orderPrice}>{order.finalTotal} ج</Text>
-          <Text style={styles.paymentMethod}>نقداً</Text>
-        </View>
-      )}
-
-      <Text style={styles.orderDate}>{new Date(order.createdAt).toLocaleDateString('ar-EG')}</Text>
     </TouchableOpacity>
   );
 
@@ -366,17 +318,17 @@ const HomeScreen = ({ navigation }) => {
       return (
         <View style={styles.emptyContainer}>
           <Ionicons name="restaurant-outline" size={80} color="#E5E7EB" />
-          <Text style={styles.emptyText}>لا توجد خدمات متاحة</Text>
+          <Text style={[styles.emptyText, { fontFamily: fontFamily.arabic }]}>لا توجد خدمات</Text>
           <TouchableOpacity style={styles.refreshButton} onPress={loadServices}>
-            <Text style={styles.refreshButtonText}>إعادة تحميل</Text>
+            <Text style={[styles.refreshButtonText, { fontFamily: fontFamily.arabic }]}>إعادة تحميل</Text>
           </TouchableOpacity>
         </View>
       );
     }
 
-    const sortedCategories = Object.keys(groupedServices).sort((a, b) => {
-      return (CATEGORY_ORDER[a] || 999) - (CATEGORY_ORDER[b] || 999);
-    });
+    const sortedCategories = Object.keys(groupedServices).sort((a, b) =>
+      (CATEGORY_ORDER[a] || 999) - (CATEGORY_ORDER[b] || 999)
+    );
 
     return (
       <>
@@ -393,76 +345,43 @@ const HomeScreen = ({ navigation }) => {
                 <View style={[styles.sectionIcon, { backgroundColor: categoryColor + '20' }]}>
                   <Ionicons name="apps-outline" size={24} color={categoryColor} />
                 </View>
-                <Text style={[styles.sectionTitle, { color: categoryColor }]}>
+                <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic, color: categoryColor }]}>
                   {categoryTitle}
                 </Text>
-                {category === 'ai' && (
-                  <View style={styles.aiBadge}>
-                    <Ionicons name="flash" size={12} color="#FFF" />
-                    <Text style={styles.aiBadgeText}>AI</Text>
-                  </View>
-                )}
               </View>
 
               <View style={styles.grid}>
                 {categoryServices.map((service) => {
-                  const key = service.$id ? service.$id : service.id;
+                  const key = service.$id || service.id;
                   const serviceImage = getServiceImage(service);
                   const isActive = service.isActive === true;
-                  const isAI = isAIService(service);
 
                   return (
                     <TouchableOpacity
                       key={key}
-                      style={[
-                        styles.card,
-                        { width: CARD_SIZE },
-                        !isActive && styles.disabledCard
-                      ]}
+                      style={[styles.card, { width: CARD_SIZE }, !isActive && styles.disabledCard]}
                       onPress={() => navigateToService(service)}
                       activeOpacity={0.8}
                       disabled={!isActive}
                     >
                       {serviceImage ? (
-                        <Image
-                          source={serviceImage}
-                          style={[
-                            styles.cardImage,
-                            !isActive && styles.disabledImage
-                          ]}
-                        />
+                        <Image source={serviceImage} style={[styles.cardImage, !isActive && styles.disabledImage]} />
                       ) : (
-                        <View style={[
-                          styles.cardImage,
-                          styles.placeholderImage,
-                          { backgroundColor: (service.color || categoryColor) + (isActive ? '30' : '15') }
-                        ]}>
-                          <Ionicons
-                            name={service.icon || 'apps-outline'}
-                            size={40}
-                            color={(service.color || categoryColor) + (isActive ? '' : '80')}
-                          />
+                        <View style={[styles.cardImage, styles.placeholderImage, { backgroundColor: (service.color || categoryColor) + (isActive ? '30' : '15') }]}>
+                          <Ionicons name={service.icon || 'apps-outline'} size={40} color={(service.color || categoryColor) + (isActive ? '' : '80')} />
                         </View>
                       )}
-                      <View style={[
-                        styles.overlay,
-                        !isActive && styles.disabledOverlay
-                      ]}>
-                        <Text style={[
-                          styles.cardTitle,
-                          !isActive && styles.disabledCardTitle
-                        ]}>{service.name}</Text>
-
-                        {isActive && isAI && (
-                          <View style={styles.cardAIBadge}>
-                            <Ionicons name="flash" size={10} color="#FFF" />
-                            <Text style={styles.cardAIBadgeText}>AI</Text>
+                      <View style={[styles.overlay, !isActive && styles.disabledOverlay]}>
+                        <Text style={[styles.cardTitle, { fontFamily: fontFamily.arabic }, !isActive && styles.disabledCardTitle]}>{service.name}</Text>
+                        {service.type === 'ai' && (
+                          <View style={styles.aiBadge}>
+                            <Ionicons name="flash" size={16} color="#FFF" />
+                            <Text style={styles.aiBadgeText}>AI</Text>
                           </View>
                         )}
-
                         {!isActive && (
                           <View style={styles.maintenanceBadge}>
-                            <Text style={styles.maintenanceText}>
+                            <Text style={[styles.maintenanceText, { fontFamily: fontFamily.arabic }]}>
                               {service.maintenanceText || 'غير متاح'}
                             </Text>
                           </View>
@@ -482,34 +401,23 @@ const HomeScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.statusBarSpace} />
-
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity
-            onPress={() => setDrawerVisible(true)}
-            style={styles.menuButton}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity onPress={() => setDrawerVisible(true)} style={styles.menuButton}>
             <Ionicons name="menu" size={28} color="#1F2937" />
           </TouchableOpacity>
           <Image source={appIcon} style={styles.logo} />
         </View>
         <View style={styles.headerRight}>
           {!isLoggedIn ? (
-            <TouchableOpacity
-              onPress={handleLoginPress}
-              style={styles.registerButton}
-            >
+            <TouchableOpacity onPress={handleLoginPress} style={styles.registerButton}>
               <Ionicons name="log-in-outline" size={20} color="#4F46E5" />
-              <Text style={styles.registerText}>دخول</Text>
+              <Text style={[styles.registerText, { fontFamily: fontFamily.arabic }]}>دخول</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity
-              onPress={() => setDrawerVisible(true)}
-              style={styles.profileButton}
-            >
+            <TouchableOpacity onPress={() => setDrawerVisible(true)} style={styles.profileButton}>
               <View style={styles.avatarSmall}>
-                <Text style={styles.avatarText}>{userData?.name?.charAt(0) || 'م'}</Text>
+                <Text style={[styles.avatarText, { fontFamily: fontFamily.arabic }]}>{userData?.name?.charAt(0) || 'م'}</Text>
               </View>
             </TouchableOpacity>
           )}
@@ -518,41 +426,29 @@ const HomeScreen = ({ navigation }) => {
 
       {isLoggedIn && (
         <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeText}>مرحباً، {userData?.name || 'عميلنا العزيز'}</Text>
+          <Text style={[styles.welcomeText, { fontFamily: fontFamily.arabic }]}>مرحباً، {userData?.name || 'عميلنا العزيز'}</Text>
         </View>
       )}
 
-      {!isLoggedIn && (
-        <View style={styles.promoSection}>
-          <Text style={styles.promoText}>✨ سجل الآن لتستفيد بتجربة أفضل ومتابعة طلباتك</Text>
-        </View>
-      )}
-
-      {/* الطلبات النشطة - تظهر فقط للمستخدمين المسجلين */}
-      {isLoggedIn && activeOrders.length > 0 && (
+      {isLoggedIn && currentOrders.length > 0 && (
         <View style={styles.ordersSection}>
           <View style={styles.ordersHeader}>
-            <Text style={styles.ordersTitle}>طلباتك الحالية</Text>
-            <TouchableOpacity onPress={() => setShowActiveOrders(!showActiveOrders)}>
-              <Ionicons name={showActiveOrders ? "chevron-up" : "chevron-down"} size={20} color="#6B7280" />
+            <Text style={[styles.ordersTitle, { fontFamily: fontFamily.arabic }]}>طلباتك الحالية ({currentOrders.length})</Text>
+            <TouchableOpacity onPress={() => setShowCurrentOrders(!showCurrentOrders)}>
+              <Ionicons name={showCurrentOrders ? "chevron-up" : "chevron-down"} size={20} color="#6B7280" />
             </TouchableOpacity>
           </View>
-
-          {showActiveOrders && (
+          {showCurrentOrders && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.ordersScroll}>
-              {activeOrders.map(renderOrderCard)}
+              {currentOrders.map(renderOrderCard)}
             </ScrollView>
           )}
         </View>
       )}
 
-      {/* الطلبات المكتملة - تظهر فقط للمستخدمين المسجلين */}
-      {isLoggedIn && completedOrders.length > 0 && (
-        <View style={styles.completedOrdersSection}>
-          <Text style={styles.completedOrdersTitle}>الطلبات السابقة</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.ordersScroll}>
-            {completedOrders.map(renderOrderCard)}
-          </ScrollView>
+      {isLoggedIn && currentOrders.length === 0 && (
+        <View style={styles.noOrdersContainer}>
+          <Text style={[styles.noOrdersText, { fontFamily: fontFamily.arabic }]}>لا توجد طلبات حالية</Text>
         </View>
       )}
 
@@ -582,8 +478,8 @@ const HomeScreen = ({ navigation }) => {
       <Modal visible={adminModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>دخول الأدمن</Text>
-            <Text style={styles.modalSubtitle}>أدخل كلمة المرور الخاصة</Text>
+            <Text style={[styles.modalTitle, { fontFamily: fontFamily.arabic }]}>دخول الأدمن</Text>
+            <Text style={[styles.modalSubtitle, { fontFamily: fontFamily.arabic }]}>أدخل كلمة المرور الخاصة</Text>
             <TextInput
               style={styles.modalInput}
               placeholder="كلمة المرور"
@@ -594,31 +490,18 @@ const HomeScreen = ({ navigation }) => {
               autoFocus
             />
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancel]}
-                onPress={() => { setAdminModalVisible(false); setAdminPassword(''); }}
-              >
-                <Text style={styles.modalCancelText}>إلغاء</Text>
+              <TouchableOpacity style={[styles.modalButton, styles.modalCancel]} onPress={() => { setAdminModalVisible(false); setAdminPassword(''); }}>
+                <Text style={[styles.modalCancelText, { fontFamily: fontFamily.arabic }]}>إلغاء</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalConfirm]}
-                onPress={handleAdminAccess}
-              >
-                <Text style={styles.modalConfirmText}>دخول</Text>
+              <TouchableOpacity style={[styles.modalButton, styles.modalConfirm]} onPress={handleAdminAccess}>
+                <Text style={[styles.modalConfirmText, { fontFamily: fontFamily.arabic }]}>دخول</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      <DynamicMongez
-        screen="home"
-        navigation={navigation}
-        contextData={{
-          user: userData,
-          isLoggedIn
-        }}
-      />
+      {/* ✅ تم إزالة DynamicMongez من هنا */}
     </SafeAreaView>
   );
 };
@@ -648,56 +531,36 @@ const styles = StyleSheet.create({
   avatarText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
   welcomeSection: { paddingHorizontal: 16, paddingVertical: 8 },
   welcomeText: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
-  promoSection: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#FEF3C7', marginHorizontal: 16, marginVertical: 8, borderRadius: 8 },
-  promoText: { fontSize: 12, color: '#92400E', textAlign: 'center' },
-
-  // الطلبات
-  ordersSection: { marginTop: 8, marginBottom: 12, paddingHorizontal: 16 },
-  completedOrdersSection: { marginTop: 8, marginBottom: 12, paddingHorizontal: 16, opacity: 0.8 },
-  ordersHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  ordersTitle: { fontSize: 15, fontWeight: '600', color: '#1F2937', textAlign: 'right' },
-  completedOrdersTitle: { fontSize: 14, fontWeight: '500', color: '#6B7280', marginBottom: 8, textAlign: 'right' },
+  ordersSection: { marginTop: 4, marginBottom: 8, paddingHorizontal: 16 },
+  noOrdersContainer: { marginHorizontal: 16, marginVertical: 4, padding: 6, backgroundColor: '#F3F4F6', borderRadius: 6, alignItems: 'center' },
+  noOrdersText: { fontSize: 12, color: '#6B7280' },
+  ordersHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  ordersTitle: { fontSize: 14, fontWeight: '600', color: '#1F2937', textAlign: 'right' },
   ordersScroll: { flexDirection: 'row' },
   orderCard: {
     backgroundColor: '#F9FAFB',
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: 8,
+    padding: 8,
     marginRight: 8,
-    minWidth: 180,
+    width: 140,
     borderWidth: 1,
     borderColor: '#E5E7EB'
   },
   orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  orderId: { fontSize: 11, fontWeight: '600', color: '#1F2937' },
-  orderStatusBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
-  orderStatusText: { fontSize: 9, fontWeight: '600' },
-  orderService: { fontSize: 13, fontWeight: '500', color: '#1F2937', marginBottom: 2 },
-  orderContactRow: { flexDirection: 'row', gap: 8, marginBottom: 2 },
-  orderPriceContainer: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
-  orderPriceLabel: { fontSize: 11, color: '#6B7280' },
-  orderPrice: { fontSize: 12, fontWeight: '600', color: '#F59E0B' },
-  paymentMethod: { fontSize: 10, color: '#10B981', marginLeft: 4 },
-  orderDate: { fontSize: 9, color: '#9CA3AF' },
-
+  orderId: { fontSize: 10, fontWeight: '600', color: '#1F2937' },
+  orderStatusBadge: { paddingHorizontal: 4, paddingVertical: 2, borderRadius: 6 },
+  orderStatusText: { fontSize: 8, fontWeight: '600' },
+  orderService: { fontSize: 11, fontWeight: '500', color: '#1F2937', marginBottom: 4 },
+  orderFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
+  orderPrice: { fontSize: 11, fontWeight: '600', color: '#F59E0B' },
+  orderDate: { fontSize: 8, color: '#9CA3AF' },
   content: { padding: 16, paddingTop: 8 },
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 6 },
   sectionIcon: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
   sectionTitle: { fontSize: 17, fontWeight: 'bold', color: '#1F2937' },
-  aiBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F59E0B', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 },
-  aiBadgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  card: { 
-    height: 140, 
-    borderRadius: 14, 
-    overflow: 'hidden', 
-    marginBottom: 12, 
-    elevation: 2, 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 1 }, 
-    shadowOpacity: 0.05, 
-    shadowRadius: 2 
-  },
+  card: { height: 140, borderRadius: 14, overflow: 'hidden', marginBottom: 12, elevation: 2 },
   cardImage: { width: '100%', height: '100%' },
   placeholderImage: { justifyContent: 'center', alignItems: 'center' },
   disabledCard: { opacity: 0.8 },
@@ -705,42 +568,24 @@ const styles = StyleSheet.create({
   disabledOverlay: { backgroundColor: 'rgba(0,0,0,0.4)' },
   disabledCardTitle: { color: '#FFF', opacity: 0.9, fontSize: 16 },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center', padding: 8 },
-  cardTitle: { 
-    color: '#FFF', 
-    fontSize: 20,
-    fontWeight: 'bold', 
-    marginBottom: 4, 
-    textAlign: 'center' 
+  cardTitle: { color: '#FFF', fontSize: 20, fontWeight: 'bold', marginBottom: 4, textAlign: 'center' },
+  aiBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#8B5CF6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
   },
-  cardAIBadge: { 
-    position: 'absolute', 
-    top: 8, 
-    left: 8, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#F59E0B', 
-    paddingHorizontal: 8, 
-    paddingVertical: 4, 
-    borderRadius: 10, 
-    gap: 2 
-  },
-  cardAIBadgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
-  maintenanceBadge: { 
-    position: 'absolute', 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    backgroundColor: '#EF4444', 
-    paddingVertical: 6, 
-    paddingHorizontal: 8, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    borderBottomLeftRadius: 14, 
-    borderBottomRightRadius: 14 
-  },
-  maintenanceText: { color: '#FFF', fontSize: 12, fontWeight: 'bold', textAlign: 'center' },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
-  emptyText: { marginTop: 12, fontSize: 16, color: '#6B7280', textAlign: 'center' },
+  aiBadgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
+  maintenanceBadge: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#EF4444', paddingVertical: 6, alignItems: 'center' },
+  maintenanceText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
+  emptyContainer: { alignItems: 'center', paddingVertical: 60 },
+  emptyText: { marginTop: 12, fontSize: 16, color: '#6B7280' },
   refreshButton: { marginTop: 16, backgroundColor: '#4F46E5', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
   refreshButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
   drawerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },

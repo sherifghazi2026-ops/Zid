@@ -19,6 +19,8 @@ export default function MerchantDashboard({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [pendingOrders, setPendingOrders] = useState(0);
   const [acceptedOrders, setAcceptedOrders] = useState(0);
+  const [pickupOrders, setPickupOrders] = useState(0); // ✅ طلبات بانتظار الاستلام
+  const [preparingOrders, setPreparingOrders] = useState(0); // ✅ طلبات قيد التجهيز
   const [availableServices, setAvailableServices] = useState([]);
 
   useEffect(() => {
@@ -41,24 +43,24 @@ export default function MerchantDashboard({ navigation }) {
     const result = await getMerchantOrders(merchantId);
     if (result.success) {
       const pending = result.data.filter(o => o.status === 'pending').length;
-      const accepted = result.data.filter(o => 
-        ['accepted', 'preparing', 'on_the_way'].includes(o.status)
-      ).length;
+      const accepted = result.data.filter(o => o.status === 'accepted').length;
+      const pickup = result.data.filter(o => o.status === 'pickup').length; // ✅ بانتظار الاستلام
+      const preparing = result.data.filter(o => o.status === 'preparing').length; // ✅ قيد التجهيز
+      
       setPendingOrders(pending);
       setAcceptedOrders(accepted);
+      setPickupOrders(pickup);
+      setPreparingOrders(preparing);
     }
   };
 
   const loadAvailableServices = async (user) => {
     const result = await getAllServices();
     if (result.success) {
-      // فلترة الخدمات اللي:
-      // 1. ليها منتجات (hasItems = true)
-      // 2. ليها itemsCollection حقيقي
-      // 3. مستبعدين الخدمة العامة
-      const services = result.data.filter(s => 
-        s.hasItems && 
-        s.itemsCollection && 
+      // للخدمات ذات الأصناف (مثل المكوجي)، لا نعرض إضافة منتجات
+      const services = result.data.filter(s =>
+        s.hasItems &&
+        s.itemsCollection &&
         s.id !== 'general' &&
         s.merchantType === user.merchantType
       );
@@ -95,6 +97,7 @@ export default function MerchantDashboard({ navigation }) {
       'bakery': 'مخبز',
       'drinks': 'مشروبات',
       'milk': 'منتجات ألبان',
+      'laundry': 'مكوجي', // ✅ مكوجي
       'merchant': 'تاجر',
     };
     return types[type] || type;
@@ -107,6 +110,8 @@ export default function MerchantDashboard({ navigation }) {
       </View>
     );
   }
+
+  const isLaundry = userData?.merchantType === 'laundry'; // ✅ هل هو مكوجي؟
 
   return (
     <SafeAreaView style={styles.container}>
@@ -136,16 +141,32 @@ export default function MerchantDashboard({ navigation }) {
 
           <View style={[styles.statCard, { backgroundColor: '#DBEAFE' }]}>
             <Text style={styles.statNumber}>{acceptedOrders}</Text>
-            <Text style={styles.statLabel}>طلبات نشطة</Text>
+            <Text style={styles.statLabel}>مقبولة</Text>
             <Ionicons name="checkmark-circle-outline" size={24} color="#1E40AF" />
           </View>
+
+          {isLaundry && (
+            <>
+              <View style={[styles.statCard, { backgroundColor: '#FEF3C7' }]}>
+                <Text style={styles.statNumber}>{pickupOrders}</Text>
+                <Text style={styles.statLabel}>بانتظار الاستلام</Text>
+                <Ionicons name="bicycle-outline" size={24} color="#92400E" />
+              </View>
+
+              <View style={[styles.statCard, { backgroundColor: '#D1FAE5' }]}>
+                <Text style={styles.statNumber}>{preparingOrders}</Text>
+                <Text style={styles.statLabel}>قيد التجهيز</Text>
+                <Ionicons name="construct-outline" size={24} color="#065F46" />
+              </View>
+            </>
+          )}
         </View>
 
         {/* القائمة الرئيسية */}
         <View style={styles.menuSection}>
           <Text style={styles.sectionTitle}>القائمة الرئيسية</Text>
 
-          {/* زر الطلبات */}
+          {/* زر الطلبات (لجميع التجار) */}
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate('MerchantOrdersScreen')}
@@ -160,44 +181,38 @@ export default function MerchantDashboard({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
-          {/* زر المنتجات */}
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('MyProductsScreen')}
-          >
-            <View style={[styles.menuIcon, { backgroundColor: '#8B5CF620' }]}>
-              <Ionicons name="cube-outline" size={24} color="#8B5CF6" />
-            </View>
-            <View style={styles.menuTextContainer}>
-              <Text style={styles.menuTitle}>منتجاتي</Text>
-              <Text style={styles.menuSubtitle}>إضافة وتعديل المنتجات</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-          </TouchableOpacity>
-
-          {/* عرض الخدمات المتاحة للإضافة السريعة */}
-          {availableServices.length > 0 && (
-            <View style={styles.quickAddSection}>
-              <Text style={styles.quickAddTitle}>إضافة منتج لـ:</Text>
-              <View style={styles.servicesList}>
-                {availableServices.map(service => (
-                  <TouchableOpacity
-                    key={service.$id}
-                    style={[styles.serviceButton, { backgroundColor: service.color + '20' }]}
-                    onPress={() => navigation.navigate('AddProductScreen', {
-                      service,
-                      providerId: userData.$id,
-                      providerName: userData.name,
-                      providerType: userData.merchantType
-                    })}
-                  >
-                    <Text style={[styles.serviceButtonText, { color: service.color }]}>
-                      {service.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+          {/* للمكوجي: لا نعرض المنتجات */}
+          {!isLaundry && (
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate('MyProductsScreen')}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: '#8B5CF620' }]}>
+                <Ionicons name="cube-outline" size={24} color="#8B5CF6" />
               </View>
-            </View>
+              <View style={styles.menuTextContainer}>
+                <Text style={styles.menuTitle}>منتجاتي</Text>
+                <Text style={styles.menuSubtitle}>إضافة وتعديل المنتجات</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+          )}
+
+          {/* للمكوجي: يمكن إضافة أصناف ثابتة (إذا لزم) */}
+          {isLaundry && (
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate('ManageLaundryItemsScreen')}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: '#3B82F620' }]}>
+                <Ionicons name="shirt-outline" size={24} color="#3B82F6" />
+              </View>
+              <View style={styles.menuTextContainer}>
+                <Text style={styles.menuTitle}>الأصناف الثابتة</Text>
+                <Text style={styles.menuSubtitle}>إدارة أصناف المكوجي</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
           )}
 
           {/* زر الملف الشخصي */}
@@ -268,11 +283,13 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 24,
   },
   statCard: {
     flex: 1,
+    minWidth: '45%',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
@@ -325,36 +342,6 @@ const styles = StyleSheet.create({
   menuSubtitle: {
     fontSize: 12,
     color: '#6B7280',
-  },
-  quickAddSection: {
-    marginTop: 8,
-    marginBottom: 16,
-    padding: 12,
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderStyle: 'dashed',
-  },
-  quickAddTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4B5563',
-    marginBottom: 12,
-  },
-  servicesList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  serviceButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  serviceButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   infoSection: {
     backgroundColor: '#FFF',

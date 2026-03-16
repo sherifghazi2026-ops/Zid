@@ -15,14 +15,15 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { createDish } from '../../services/dishService';
+import { databases, DATABASE_ID } from '../../appwrite/config';
+import { ID } from 'appwrite';
 import { uploadToImageKit } from '../../services/uploadService';
 
 const CATEGORY_SUGGESTIONS = ['مقبلات', 'أطباق رئيسية', 'مشاوي', 'مأكولات بحرية', 'بيتزا', 'باستا', 'برجر', 'سندوتشات', 'شوربة', 'سلطات', 'حلويات', 'مشروبات', 'فطور'];
 
 export default function AddDishScreen({ navigation, route }) {
   const { providerId, providerType, providerName } = route.params;
-  
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
@@ -33,7 +34,7 @@ export default function AddDishScreen({ navigation, route }) {
   const [video, setVideo] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [isAvailable, setIsAvailable] = useState(true); // ✅ حقل التوفر
+  const [isAvailable, setIsAvailable] = useState(true);
 
   const pickImage = async () => {
     try {
@@ -99,15 +100,15 @@ export default function AddDishScreen({ navigation, route }) {
 
     try {
       const uploadedImages = [];
-      
-      // رفع الصور إلى ImageKit في مجلد خاص بالتاجر
+
+      // رفع الصور إلى ImageKit
       for (const imageUri of images) {
         console.log(`🖼️ رفع صورة إلى مجلد ${providerName}...`);
         const uploadResult = await uploadToImageKit(
-          imageUri, 
-          `dish_${Date.now()}.jpg`, 
-          'dish', 
-          providerName // ✅ استخدام اسم التاجر كمجلد
+          imageUri,
+          `dish_${Date.now()}.jpg`,
+          'dish',
+          providerName
         );
         if (uploadResult.success) {
           uploadedImages.push(uploadResult.fileUrl);
@@ -118,16 +119,17 @@ export default function AddDishScreen({ navigation, route }) {
       if (video) {
         console.log(`🎥 رفع فيديو إلى مجلد ${providerName}...`);
         const videoResult = await uploadToImageKit(
-          video, 
-          `video_${Date.now()}.mp4`, 
-          'video', 
-          providerName // ✅ استخدام اسم التاجر كمجلد
+          video,
+          `video_${Date.now()}.mp4`,
+          'video',
+          providerName
         );
         if (videoResult.success) {
           videoUrl = videoResult.fileUrl;
         }
       }
 
+      // ✅ إنشاء الطبق في dishes collection
       const dishData = {
         name: name.trim(),
         description: description.trim() || null,
@@ -137,22 +139,30 @@ export default function AddDishScreen({ navigation, route }) {
         images: uploadedImages,
         videoUrl,
         providerId,
-        providerType,
-        isAvailable, // ✅ إضافة حقل التوفر
+        providerType, // ✅ 'restaurant' أو 'home_chef'
+        isAvailable,
+        status: 'pending', // ✅ بانتظار مراجعة الأدمن
+        createdAt: new Date().toISOString(),
       };
 
       console.log('📦 بيانات الطبق:', dishData);
-      const result = await createDish(dishData);
 
-      if (result.success) {
-        Alert.alert('✅ تم', 'تم إضافة الطبق بنجاح بانتظار مراجعة الأدمن');
-        navigation.goBack();
-      } else {
-        Alert.alert('خطأ', result.error);
-      }
+      const response = await databases.createDocument(
+        DATABASE_ID,
+        'dishes', // ✅ Collection dishes
+        ID.unique(),
+        dishData
+      );
+
+      console.log('✅ تم إضافة الطبق بنجاح:', response.$id);
+
+      Alert.alert('✅ تم', 'تم إضافة الطبق بنجاح بانتظار مراجعة الأدمن', [
+        { text: 'حسناً', onPress: () => navigation.goBack() }
+      ]);
+
     } catch (error) {
-      console.error('❌ خطأ:', error);
-      Alert.alert('خطأ', 'فشل في إضافة الطبق');
+      console.error('❌ خطأ في إضافة الطبق:', error);
+      Alert.alert('خطأ', error.message || 'فشل في إضافة الطبق');
     } finally {
       setSubmitting(false);
       setUploading(false);
@@ -225,7 +235,7 @@ export default function AddDishScreen({ navigation, route }) {
               <Ionicons name="add" size={24} color="#FFF" />
             </TouchableOpacity>
           </View>
-          
+
           {ingredients.length > 0 && (
             <View style={styles.ingredientsList}>
               {ingredients.map((ing, index) => (
@@ -280,7 +290,6 @@ export default function AddDishScreen({ navigation, route }) {
             )}
           </TouchableOpacity>
 
-          {/* ✅ إضافة مفتاح التوفر */}
           <View style={styles.switchContainer}>
             <Text style={styles.label}>متاح للطلب</Text>
             <Switch

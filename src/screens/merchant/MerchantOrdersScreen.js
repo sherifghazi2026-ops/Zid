@@ -11,6 +11,7 @@ import {
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { getOrders, acceptOrder, ORDER_STATUS } from '../../services/orderService';
 import { playNotificationSound, stopNotificationSound } from '../../utils/SoundHelper';
 import useInterval from '../../hooks/useInterval';
@@ -23,10 +24,15 @@ export default function MerchantOrdersScreen({ navigation }) {
   const [userData, setUserData] = useState(null);
   const lastOrderIds = useRef(new Set());
   const [activeTab, setActiveTab] = useState('pending');
+  const [sound, setSound] = useState(null);
+  const soundTimeout = useRef(null);
 
   useEffect(() => {
     loadUserData();
-    return () => stopNotificationSound();
+    return () => {
+      stopNotificationSound();
+      if (soundTimeout.current) clearTimeout(soundTimeout.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -34,15 +40,16 @@ export default function MerchantOrdersScreen({ navigation }) {
       console.log('👤 بيانات التاجر:', userData);
       console.log('📌 merchantType:', userData.merchantType);
       loadOrders();
+      playSoundForPendingOrders();
     }
-  }, [userData, activeTab]);
+  }, [userData]);
 
-  // التحقق من الطلبات الجديدة كل 5 ثواني
+  // التحقق من الطلبات الجديدة كل 3 ثواني
   useInterval(() => {
     if (userData) {
       checkForNewOrders();
     }
-  }, 5000);
+  }, 3000);
 
   const loadUserData = async () => {
     const data = await AsyncStorage.getItem('userData');
@@ -52,17 +59,83 @@ export default function MerchantOrdersScreen({ navigation }) {
     }
   };
 
+  // ✅ تشغيل الصوت للطلبات المعلقة عند فتح الشاشة
+  const playSoundForPendingOrders = async () => {
+    try {
+      const result = await getOrders({ status: ORDER_STATUS.PENDING });
+      if (result.success) {
+        const pendingForMerchant = result.data.filter(order => 
+          order.serviceType === userData?.merchantType
+        );
+        
+        if (pendingForMerchant.length > 0) {
+          console.log('🔔 طلبات معلقة، تشغيل التنبيه');
+          playLoopingSound();
+        }
+      }
+    } catch (error) {
+      console.error('خطأ في التحقق من الطلبات المعلقة:', error);
+    }
+  };
+
+  // ✅ تشغيل الصوت في حلقة لمدة 20 ثانية
+  const playLoopingSound = async () => {
+    try {
+      // إيقاف أي صوت سابق
+      if (sound) {
+        await sound.stopAsync();
+        await sound.unloadAsync();
+      }
+
+      console.log('🔊 تشغيل صوت التنبيه في حلقة لمدة 20 ثانية');
+      
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        require('../../../assets/sounds/notification.wav'),
+        { shouldPlay: true, isLooping: true }
+      );
+      
+      setSound(newSound);
+
+      // إيقاف الصوت بعد 20 ثانية
+      if (soundTimeout.current) clearTimeout(soundTimeout.current);
+      soundTimeout.current = setTimeout(async () => {
+        console.log('⏹️ إيقاف صوت التنبيه بعد 20 ثانية');
+        if (newSound) {
+          await newSound.stopAsync();
+          await newSound.unloadAsync();
+        }
+        setSound(null);
+      }, 20000);
+
+    } catch (error) {
+      console.error('❌ خطأ في تشغيل الصوت:', error);
+    }
+  };
+
+  // ✅ إيقاف الصوت
+  const stopLoopingSound = async () => {
+    if (sound) {
+      console.log('⏹️ إيقاف صوت التنبيه');
+      await sound.stopAsync();
+      await sound.unloadAsync();
+      setSound(null);
+    }
+    if (soundTimeout.current) {
+      clearTimeout(soundTimeout.current);
+      soundTimeout.current = null;
+    }
+  };
+
   const checkForNewOrders = async () => {
     try {
       const result = await getOrders({ status: ORDER_STATUS.PENDING });
       console.log('📦 جميع الطلبات المعلقة:', result.data.length);
-      
+
       if (result.success) {
-        // فلترة حسب نوع خدمة التاجر
         const merchantOrders = result.data.filter(order => {
-          const match = order.serviceType === userData?.merchantType || 
+          const match = order.serviceType === userData?.merchantType ||
                         order.serviceType === userData?.serviceType;
-          console.log(`🔍 طلب ${order.$id}: serviceType=${order.serviceType}, merchantType=${userData?.merchantType}, match=${match}`);
+          console.log(`🔍 طلب ${order.$id}: serviceType=${order.serviceType}, match=${match}`);
           return match;
         });
 
@@ -74,11 +147,11 @@ export default function MerchantOrdersScreen({ navigation }) {
 
         if (hasNewOrder && merchantOrders.length > 0) {
           console.log('🔔 تم اكتشاف طلب جديد، تشغيل notification.wav');
-          playNotificationSound();
+          playLoopingSound();
         }
 
         lastOrderIds.current = newOrderIds;
-        
+
         if (activeTab === 'pending') {
           setOrders(merchantOrders);
         }
@@ -107,12 +180,12 @@ export default function MerchantOrdersScreen({ navigation }) {
 
       console.log(`📥 جلب الطلبات للحالة: ${statusFilter}`);
       const result = await getOrders({ status: statusFilter });
-      
+
       if (result.success) {
         console.log(`📦 إجمالي الطلبات من Appwrite: ${result.data.length}`);
-        
+
         const merchantOrders = result.data.filter(order => {
-          const match = order.serviceType === userData?.merchantType || 
+          const match = order.serviceType === userData?.merchantType ||
                         order.serviceType === userData?.serviceType;
           console.log(`🔍 طلب ${order.$id}: serviceType=${order.serviceType}, match=${match}`);
           return match;
@@ -124,7 +197,7 @@ export default function MerchantOrdersScreen({ navigation }) {
           // تحديث lastOrderIds للطلبات المعلقة
           lastOrderIds.current = new Set(merchantOrders.map(o => o.$id));
         }
-        
+
         setOrders(merchantOrders);
       }
     } catch (error) {
@@ -151,7 +224,8 @@ export default function MerchantOrdersScreen({ navigation }) {
               userData.phone
             );
             if (result.success) {
-              stopNotificationSound();
+              // ✅ إيقاف الصوت فوراً عند قبول الطلب
+              stopLoopingSound();
               loadOrders();
               Alert.alert('✅ تم', 'تم قبول الطلب بنجاح');
             } else {
@@ -197,7 +271,7 @@ export default function MerchantOrdersScreen({ navigation }) {
   };
 
   const renderOrder = ({ item }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.orderCard}
       onPress={() => navigation.navigate('OrderDetailsScreen', { orderId: item.$id })}
     >
@@ -238,8 +312,8 @@ export default function MerchantOrdersScreen({ navigation }) {
       )}
 
       {item.status === ORDER_STATUS.PENDING && (
-        <TouchableOpacity 
-          style={styles.acceptButton} 
+        <TouchableOpacity
+          style={styles.acceptButton}
           onPress={() => handleAcceptOrder(item)}
         >
           <Text style={styles.acceptButtonText}>قبول الطلب</Text>
@@ -326,7 +400,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  
+
   // التبويبات
   tabContainer: {
     flexDirection: 'row',

@@ -2,10 +2,12 @@ import { databases, DATABASE_ID, ORDERS_COLLECTION_ID } from '../appwrite/config
 import { ID, Query } from 'appwrite';
 import { playSendSound } from '../utils/SoundHelper';
 import { uploadToImageKit } from './uploadService';
+import { getMerchantsByType } from './merchantService';
 
 export const ORDER_STATUS = {
   PENDING: 'pending',
   ACCEPTED: 'accepted',
+  PICKUP: 'pickup',
   PREPARING: 'preparing',
   READY: 'ready',
   DRIVER_ASSIGNED: 'driver_assigned',
@@ -18,14 +20,35 @@ export const PAYMENT_METHOD = {
   CASH_ON_DELIVERY: 'cash_on_delivery',
 };
 
+// ✅ إرسال إشعار للتجار عند طلب جديد
+export const notifyNewOrder = async (orderData) => {
+  try {
+    console.log(`🔔 إرسال إشعار طلب جديد لخدمة: ${orderData.serviceType}`);
+    
+    const merchants = await getMerchantsByType(orderData.serviceType);
+    
+    if (merchants.success && merchants.data.length > 0) {
+      console.log(`📢 تم إرسال إشعار لـ ${merchants.data.length} تاجر`);
+      return { success: true, count: merchants.data.length };
+    } else {
+      console.log('⚠️ لا يوجد تجار لهذه الخدمة لإرسال الإشعار');
+      return { success: false, error: 'لا يوجد تجار' };
+    }
+  } catch (error) {
+    console.error('❌ خطأ في إرسال الإشعار:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 export const createOrder = async (orderData) => {
   try {
     const allowedFields = [
-      'customerPhone', 'customerAddress', 'serviceType', 'serviceName',
+      'customerName', 'customerPhone', 'customerAddress', 'serviceType', 'serviceName',
       'items', 'description', 'rawText', 'status', 'totalPrice',
       'deliveryFee', 'finalTotal', 'voiceUrl', 'imageUrls', 'notes',
       'merchantId', 'merchantName', 'merchantPhone', 'driverId',
-      'driverName', 'driverPhone', 'createdAt', 'updatedAt', 'paymentMethod'
+      'driverName', 'driverPhone', 'createdAt', 'updatedAt', 'paymentMethod',
+      'hasPickup', 'pickupAddress', 'orderDetails'
     ];
 
     const cleanOrder = {};
@@ -49,6 +72,15 @@ export const createOrder = async (orderData) => {
     if (cleanOrder.deliveryFee) cleanOrder.deliveryFee = Number(cleanOrder.deliveryFee);
     if (cleanOrder.finalTotal) cleanOrder.finalTotal = Number(cleanOrder.finalTotal);
 
+    // ✅ إذا كان orderDetails string، نحوله لـ array
+    if (orderData.orderDetails && typeof orderData.orderDetails === 'string') {
+      try {
+        cleanOrder.orderDetails = JSON.parse(orderData.orderDetails);
+      } catch (e) {
+        cleanOrder.orderDetails = [orderData.orderDetails];
+      }
+    }
+
     console.log('📦 إنشاء طلب جديد:', cleanOrder);
 
     const response = await databases.createDocument(
@@ -59,6 +91,7 @@ export const createOrder = async (orderData) => {
     );
 
     await playSendSound();
+    await notifyNewOrder(cleanOrder);
 
     return { success: true, data: response };
   } catch (error) {
@@ -120,22 +153,64 @@ export const acceptOrder = async (orderId, merchantId, merchantName, merchantPho
   }
 };
 
+export const startPickup = async (orderId) => {
+  try {
+    const response = await databases.updateDocument(
+      DATABASE_ID,
+      ORDERS_COLLECTION_ID,
+      orderId,
+      {
+        status: ORDER_STATUS.PICKUP,
+        pickupStartedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    );
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('❌ خطأ في بدء الاستلام:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const completePickup = async (orderId) => {
+  try {
+    const response = await databases.updateDocument(
+      DATABASE_ID,
+      ORDERS_COLLECTION_ID,
+      orderId,
+      {
+        status: ORDER_STATUS.PREPARING,
+        pickupCompletedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    );
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('❌ خطأ في إكمال الاستلام:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 export const updateOrderStatus = async (orderId, status, additionalData = {}) => {
   try {
-    const updateData = { 
-      status, 
-      updatedAt: new Date().toISOString(), 
-      ...additionalData 
+    const updateData = {
+      status,
+      updatedAt: new Date().toISOString(),
+      ...additionalData
     };
-    
+
+    if (status === ORDER_STATUS.PICKUP) {
+      updateData.pickupStartedAt = new Date().toISOString();
+    }
+
     if (status === ORDER_STATUS.DELIVERED) {
       updateData.deliveredAt = new Date().toISOString();
     }
-    
+
     const response = await databases.updateDocument(
-      DATABASE_ID, 
-      ORDERS_COLLECTION_ID, 
-      orderId, 
+      DATABASE_ID,
+      ORDERS_COLLECTION_ID,
+      orderId,
       updateData
     );
     return { success: true, data: response };

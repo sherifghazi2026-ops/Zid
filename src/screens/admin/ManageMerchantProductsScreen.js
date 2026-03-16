@@ -22,29 +22,34 @@ import { ID, Query } from 'appwrite';
 import { uploadServiceImage } from '../../services/uploadService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const COLLECTION_NAME = 'laundry_items';
-
-export default function ManageLaundryItemsScreen({ navigation }) {
-  const [items, setItems] = useState([]);
+export default function ManageMerchantProductsScreen({ navigation, route }) {
+  const { collectionName, serviceName } = route.params;
+  
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
+  const [editingProduct, setEditingProduct] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [currentMerchant, setCurrentMerchant] = useState(null);
 
   // حقول النموذج
-  const [itemName, setName] = useState('');
-  const [ironPrice, setIronPrice] = useState('');
-  const [cleanPrice, setCleanPrice] = useState('');
-  const [itemImage, setImage] = useState(null);
-  const [isActive, setIsActive] = useState(true);
+  const [productName, setName] = useState('');
+  const [productPrice, setPrice] = useState('');
+  const [productDescription, setDescription] = useState('');
+  const [productImage, setImage] = useState(null);
+  const [isAvailable, setIsAvailable] = useState(true);
 
   useEffect(() => {
     loadCurrentUser();
-    loadItems();
   }, []);
+
+  useEffect(() => {
+    if (currentMerchant) {
+      loadProducts();
+    }
+  }, [currentMerchant]);
 
   const loadCurrentUser = async () => {
     try {
@@ -52,24 +57,32 @@ export default function ManageLaundryItemsScreen({ navigation }) {
       if (userData) {
         const user = JSON.parse(userData);
         setCurrentMerchant(user);
+      } else {
+        Alert.alert('خطأ', 'يجب تسجيل الدخول أولاً');
+        navigation.goBack();
       }
     } catch (error) {
       console.error('خطأ في تحميل بيانات المستخدم:', error);
     }
   };
 
-  const loadItems = async () => {
+  const loadProducts = async () => {
+    if (!currentMerchant) return;
+    
     setLoading(true);
     try {
       const response = await databases.listDocuments(
         DATABASE_ID,
-        COLLECTION_NAME,
-        [Query.orderAsc('name')]
+        collectionName,
+        [
+          Query.equal('merchantId', currentMerchant.$id),
+          Query.orderAsc('name')
+        ]
       );
-      setItems(response.documents);
+      setProducts(response.documents);
     } catch (error) {
-      console.error('خطأ في تحميل الأصناف:', error);
-      Alert.alert('خطأ', 'فشل تحميل الأصناف');
+      console.error('خطأ في تحميل المنتجات:', error);
+      Alert.alert('خطأ', 'فشل تحميل المنتجات');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -108,73 +121,70 @@ export default function ManageLaundryItemsScreen({ navigation }) {
   };
 
   const resetForm = () => {
-    setEditingItem(null);
+    setEditingProduct(null);
     setName('');
-    setIronPrice('');
-    setCleanPrice('');
+    setPrice('');
+    setDescription('');
     setImage(null);
-    setIsActive(true);
+    setIsAvailable(true);
   };
 
-  const openEditModal = (item) => {
-    setEditingItem(item);
-    setName(item.name || '');
-    setIronPrice(item.ironPrice?.toString() || '');
-    setCleanPrice(item.cleanPrice?.toString() || '');
-    setImage(item.imageUrl || null);
-    setIsActive(item.isActive !== false);
+  const openEditModal = (product) => {
+    setEditingProduct(product);
+    setName(product.name || '');
+    setPrice(product.price?.toString() || '');
+    setDescription(product.description || '');
+    setImage(product.imageUrl || null);
+    setIsAvailable(product.isAvailable !== false);
     setModalVisible(true);
   };
 
   const handleSave = async () => {
-    if (!currentMerchant) {
-      Alert.alert('خطأ', 'يجب تسجيل الدخول أولاً');
+    if (!currentMerchant) return;
+
+    if (!productName.trim()) {
+      Alert.alert('تنبيه', 'اسم المنتج مطلوب');
       return;
     }
 
-    if (!itemName.trim()) {
-      Alert.alert('تنبيه', 'اسم الصنف مطلوب');
-      return;
-    }
-
-    if (!ironPrice || !cleanPrice) {
-      Alert.alert('تنبيه', 'جميع الأسعار مطلوبة');
+    if (!productPrice || isNaN(parseFloat(productPrice))) {
+      Alert.alert('تنبيه', 'السعر مطلوب');
       return;
     }
 
     setSubmitting(true);
 
     try {
-      const itemData = {
-        name: itemName.trim(),
-        ironPrice: parseFloat(ironPrice),
-        cleanPrice: parseFloat(cleanPrice),
-        imageUrl: itemImage || null,
-        isActive,
-        merchantId: currentMerchant.$id, // ✅ إضافة merchantId
+      const productData = {
+        name: productName.trim(),
+        price: parseFloat(productPrice),
+        description: productDescription.trim(),
+        imageUrl: productImage || null,
+        isAvailable,
+        merchantId: currentMerchant.$id,
       };
 
-      if (editingItem) {
+      if (editingProduct) {
         await databases.updateDocument(
           DATABASE_ID,
-          COLLECTION_NAME,
-          editingItem.$id,
-          itemData
+          collectionName,
+          editingProduct.$id,
+          productData
         );
-        Alert.alert('✅ تم', 'تم تحديث الصنف');
+        Alert.alert('✅ تم', 'تم تحديث المنتج');
       } else {
         await databases.createDocument(
           DATABASE_ID,
-          COLLECTION_NAME,
+          collectionName,
           ID.unique(),
-          itemData
+          productData
         );
-        Alert.alert('✅ تم', 'تم إضافة الصنف');
+        Alert.alert('✅ تم', 'تم إضافة المنتج');
       }
 
       setModalVisible(false);
       resetForm();
-      loadItems();
+      loadProducts();
     } catch (error) {
       Alert.alert('خطأ', error.message);
     } finally {
@@ -182,10 +192,10 @@ export default function ManageLaundryItemsScreen({ navigation }) {
     }
   };
 
-  const handleDelete = (item) => {
+  const handleDelete = (product) => {
     Alert.alert(
-      'حذف الصنف',
-      `هل أنت متأكد من حذف "${item.name}"؟`,
+      'حذف المنتج',
+      `هل أنت متأكد من حذف "${product.name}"؟`,
       [
         { text: 'إلغاء', style: 'cancel' },
         {
@@ -195,10 +205,10 @@ export default function ManageLaundryItemsScreen({ navigation }) {
             try {
               await databases.deleteDocument(
                 DATABASE_ID,
-                COLLECTION_NAME,
-                item.$id
+                collectionName,
+                product.$id
               );
-              loadItems();
+              loadProducts();
             } catch (error) {
               Alert.alert('خطأ', error.message);
             }
@@ -208,15 +218,15 @@ export default function ManageLaundryItemsScreen({ navigation }) {
     );
   };
 
-  const toggleActive = async (item) => {
+  const toggleAvailability = async (product) => {
     try {
       await databases.updateDocument(
         DATABASE_ID,
-        COLLECTION_NAME,
-        item.$id,
-        { isActive: !item.isActive }
+        collectionName,
+        product.$id,
+        { isAvailable: !product.isAvailable }
       );
-      loadItems();
+      loadProducts();
     } catch (error) {
       Alert.alert('خطأ', error.message);
     }
@@ -224,38 +234,40 @@ export default function ManageLaundryItemsScreen({ navigation }) {
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadItems();
+    loadProducts();
   };
 
-  const renderItem = ({ item }) => (
-    <View style={[styles.itemCard, !item.isActive && styles.itemCardDisabled]}>
+  const renderProduct = ({ item }) => (
+    <View style={[styles.productCard, !item.isAvailable && styles.productCardDisabled]}>
       <TouchableOpacity
-        style={styles.itemContent}
+        style={styles.productContent}
         onPress={() => openEditModal(item)}
         activeOpacity={0.7}
       >
         {item.imageUrl ? (
-          <Image source={{ uri: item.imageUrl }} style={styles.itemImage} />
+          <Image source={{ uri: item.imageUrl }} style={styles.productImage} />
         ) : (
-          <View style={[styles.itemImage, styles.placeholderImage]}>
+          <View style={[styles.productImage, styles.placeholderImage]}>
             <Ionicons name="image-outline" size={24} color="#9CA3AF" />
           </View>
         )}
 
-        <View style={styles.itemInfo}>
-          <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemPrice}>كوي فقط: {item.ironPrice} ج</Text>
-          <Text style={styles.itemPrice}>غسيل وكوي: {item.cleanPrice} ج</Text>
+        <View style={styles.productInfo}>
+          <Text style={styles.productName}>{item.name}</Text>
+          <Text style={styles.productPrice}>{item.price} ج</Text>
+          {item.description && (
+            <Text style={styles.productDesc} numberOfLines={1}>{item.description}</Text>
+          )}
         </View>
       </TouchableOpacity>
 
       <View style={styles.actionButtons}>
         <TouchableOpacity
-          style={[styles.actionButton, item.isActive ? styles.disableButton : styles.enableButton]}
-          onPress={() => toggleActive(item)}
+          style={[styles.actionButton, item.isAvailable ? styles.disableButton : styles.enableButton]}
+          onPress={() => toggleAvailability(item)}
         >
           <Ionicons
-            name={item.isActive ? 'close-outline' : 'checkmark-outline'}
+            name={item.isAvailable ? 'close-outline' : 'checkmark-outline'}
             size={16}
             color="#FFF"
           />
@@ -285,15 +297,15 @@ export default function ManageLaundryItemsScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-forward" size={28} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>إدارة أصناف المكوجي</Text>
+        <Text style={styles.headerTitle}>إدارة {serviceName}</Text>
         <TouchableOpacity onPress={() => { resetForm(); setModalVisible(true); }}>
           <Ionicons name="add-circle" size={28} color="#4F46E5" />
         </TouchableOpacity>
       </View>
 
       <FlatList
-        data={items}
-        renderItem={renderItem}
+        data={products}
+        renderItem={renderProduct}
         keyExtractor={item => item.$id}
         contentContainerStyle={styles.list}
         refreshControl={
@@ -302,56 +314,57 @@ export default function ManageLaundryItemsScreen({ navigation }) {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="cube-outline" size={80} color="#E5E7EB" />
-            <Text style={styles.emptyText}>لا توجد أصناف</Text>
-            <Text style={styles.emptySubText}>اضغط على + لإضافة صنف جديد</Text>
+            <Text style={styles.emptyText}>لا توجد منتجات</Text>
+            <Text style={styles.emptySubText}>اضغط على + لإضافة منتج جديد</Text>
           </View>
         }
       />
 
-      {/* Modal إضافة/تعديل صنف */}
+      {/* Modal إضافة/تعديل منتج */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <ScrollView contentContainerStyle={styles.modalScrollContent}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>
-                  {editingItem ? 'تعديل الصنف' : 'إضافة صنف جديد'}
+                  {editingProduct ? 'تعديل المنتج' : 'إضافة منتج جديد'}
                 </Text>
                 <TouchableOpacity onPress={() => { setModalVisible(false); resetForm(); }}>
                   <Ionicons name="close" size={24} color="#EF4444" />
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.label}>اسم الصنف *</Text>
+              <Text style={styles.label}>اسم المنتج *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="مثال: بنطلون"
-                value={itemName}
+                placeholder="مثال: حليب طازج"
+                value={productName}
                 onChangeText={setName}
               />
 
-              <Text style={styles.label}>سعر الكوي فقط *</Text>
+              <Text style={styles.label}>السعر (ج) *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="10"
-                value={ironPrice}
-                onChangeText={setIronPrice}
+                placeholder="30"
+                value={productPrice}
+                onChangeText={setPrice}
                 keyboardType="numeric"
               />
 
-              <Text style={styles.label}>سعر الغسيل والكوي *</Text>
+              <Text style={styles.label}>الوصف (اختياري)</Text>
               <TextInput
-                style={styles.input}
-                placeholder="15"
-                value={cleanPrice}
-                onChangeText={setCleanPrice}
-                keyboardType="numeric"
+                style={[styles.input, styles.textArea]}
+                placeholder="وصف المنتج..."
+                value={productDescription}
+                onChangeText={setDescription}
+                multiline
+                numberOfLines={3}
               />
 
-              <Text style={styles.label}>صورة الصنف (اختياري)</Text>
+              <Text style={styles.label}>صورة المنتج (اختياري)</Text>
               <TouchableOpacity style={styles.imagePicker} onPress={pickImage} disabled={uploading}>
-                {itemImage ? (
-                  <Image source={{ uri: itemImage }} style={styles.previewImage} />
+                {productImage ? (
+                  <Image source={{ uri: productImage }} style={styles.previewImage} />
                 ) : (
                   <View style={styles.imagePlaceholder}>
                     {uploading ? (
@@ -367,10 +380,10 @@ export default function ManageLaundryItemsScreen({ navigation }) {
               </TouchableOpacity>
 
               <View style={styles.switchContainer}>
-                <Text style={styles.label}>الصنف نشط</Text>
+                <Text style={styles.label}>المنتج متاح</Text>
                 <Switch
-                  value={isActive}
-                  onValueChange={setIsActive}
+                  value={isAvailable}
+                  onValueChange={setIsAvailable}
                   trackColor={{ false: '#E5E7EB', true: '#4F46E5' }}
                 />
               </View>
@@ -384,7 +397,7 @@ export default function ManageLaundryItemsScreen({ navigation }) {
                   <ActivityIndicator color="#FFF" />
                 ) : (
                   <Text style={styles.saveButtonText}>
-                    {editingItem ? 'حفظ التغييرات' : 'إضافة الصنف'}
+                    {editingProduct ? 'حفظ التغييرات' : 'إضافة المنتج'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -414,7 +427,7 @@ const styles = StyleSheet.create({
   emptyText: { marginTop: 12, fontSize: 16, color: '#1F2937', fontWeight: '600' },
   emptySubText: { marginTop: 4, fontSize: 14, color: '#9CA3AF' },
 
-  itemCard: {
+  productCard: {
     flexDirection: 'row',
     backgroundColor: '#FFF',
     borderRadius: 12,
@@ -425,13 +438,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  itemCardDisabled: { opacity: 0.6, backgroundColor: '#F9FAFB' },
-  itemContent: { flexDirection: 'row', flex: 1, alignItems: 'center' },
-  itemImage: { width: 50, height: 50, borderRadius: 8, marginRight: 12 },
+  productCardDisabled: { opacity: 0.6, backgroundColor: '#F9FAFB' },
+  productContent: { flexDirection: 'row', flex: 1, alignItems: 'center' },
+  productImage: { width: 50, height: 50, borderRadius: 8, marginRight: 12 },
   placeholderImage: { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-  itemInfo: { flex: 1 },
-  itemName: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
-  itemPrice: { fontSize: 12, color: '#4B5563', marginTop: 2 },
+  productInfo: { flex: 1 },
+  productName: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
+  productPrice: { fontSize: 14, fontWeight: '600', color: '#F59E0B', marginTop: 2 },
+  productDesc: { fontSize: 12, color: '#6B7280', marginTop: 2 },
   actionButtons: { flexDirection: 'row', gap: 8 },
   actionButton: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
   disableButton: { backgroundColor: '#EF4444' },
@@ -467,6 +481,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     fontSize: 14,
   },
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
   imagePicker: {
     width: '100%',
     height: 150,

@@ -56,7 +56,7 @@ export default function AdminAssistantsScreen({ navigation }) {
     order: '0',
     serviceId: '',
     serviceName: '',
-    model: 'llama-3.3-70b-versatile' // قيمة افتراضية
+    model: 'llama-3.3-70b-versatile'
   });
 
   useEffect(() => {
@@ -65,19 +65,19 @@ export default function AdminAssistantsScreen({ navigation }) {
 
   const loadData = async () => {
     setLoading(true);
-    
+
     // جلب المساعدين
     const assistantsResult = await assistantService.getAllAssistants();
     if (assistantsResult.success) {
       setAssistants(assistantsResult.data);
     }
-    
+
     // جلب الخدمات
     const servicesResult = await assistantService.getAllServices();
     if (servicesResult.success) {
       setServices(servicesResult.data);
     }
-    
+
     setLoading(false);
   };
 
@@ -119,10 +119,11 @@ export default function AdminAssistantsScreen({ navigation }) {
     setModalVisible(true);
   };
 
+  // ✅ التعديل المهم هنا - نستخدم service.id بدلاً من service.$id
   const selectService = (service) => {
     setFormData({
       ...formData,
-      serviceId: service.$id,
+      serviceId: service.id,        // ✅ الآن "supermarket" وليس رقماً طويلاً
       serviceName: service.name,
       screen: 'service'
     });
@@ -145,13 +146,13 @@ export default function AdminAssistantsScreen({ navigation }) {
       position: formData.position,
       isActive: formData.isActive,
       order: parseInt(formData.order) || 0,
-      model: formData.model.trim() || 'llama-3.3-70b-versatile' // لو فاضي، يحط الافتراضي
+      model: formData.model.trim() || 'llama-3.3-70b-versatile'
     };
 
     // لو فيه serviceId مختار، نضيفه
     if (formData.serviceId) {
-      dataToSave.serviceId = formData.serviceId;
-      dataToSave.serviceName = formData.serviceName;
+      dataToSave.serviceId = formData.serviceId;      // ✅ "supermarket"
+      dataToSave.serviceName = formData.serviceName;  // "سوبر ماركت"
     }
 
     let result;
@@ -219,11 +220,11 @@ export default function AdminAssistantsScreen({ navigation }) {
           trackColor={{ false: '#E5E7EB', true: item.color }}
         />
       </View>
-      
+
       <Text style={styles.promptPreview} numberOfLines={2}>
         {item.welcomeMessage || 'لا توجد رسالة ترحيب'}
       </Text>
-      
+
       <View style={styles.cardActions}>
         <TouchableOpacity style={styles.actionButton} onPress={() => openEditModal(item)}>
           <Ionicons name="create-outline" size={20} color="#4F46E5" />
@@ -344,10 +345,10 @@ export default function AdminAssistantsScreen({ navigation }) {
                   ]}
                   onPress={() => setFormData({...formData, icon})}
                 >
-                  <Ionicons 
-                    name={icon} 
-                    size={24} 
-                    color={formData.icon === icon ? '#FFF' : '#666'} 
+                  <Ionicons
+                    name={icon}
+                    size={24}
+                    color={formData.icon === icon ? '#FFF' : '#666'}
                   />
                 </TouchableOpacity>
               ))}

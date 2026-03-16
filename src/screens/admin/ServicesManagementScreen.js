@@ -12,6 +12,7 @@ import {
   Modal,
   Image,
   TextInput,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -89,6 +90,7 @@ export default function ServicesManagementScreen({ navigation }) {
   const [serviceType, setServiceType] = useState('regular');
   const [merchantType, setMerchantType] = useState('merchant');
   const [itemsCollection, setItemsCollection] = useState('');
+  const [hasPickup, setHasPickup] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   // خدمات فرعية (للخدمات من نوع items_service)
@@ -151,6 +153,7 @@ export default function ServicesManagementScreen({ navigation }) {
     setServiceType('regular');
     setMerchantType('merchant');
     setItemsCollection('');
+    setHasPickup(false);
     setSubServices([]);
     setCurrentSubService('');
     setEditingSubIndex(null);
@@ -166,13 +169,11 @@ export default function ServicesManagementScreen({ navigation }) {
     }
 
     if (editingSubIndex !== null) {
-      // تعديل خدمة فرعية موجودة
       const updated = [...subServices];
       updated[editingSubIndex] = currentSubService.trim();
       setSubServices(updated);
       setEditingSubIndex(null);
     } else {
-      // إضافة خدمة فرعية جديدة
       setSubServices([...subServices, currentSubService.trim()]);
     }
     setCurrentSubService('');
@@ -215,7 +216,6 @@ export default function ServicesManagementScreen({ navigation }) {
       return;
     }
 
-    // التحقق من وجود خدمات فرعية للخدمات من نوع items_service
     if (serviceType === 'items_service' && subServices.length === 0) {
       Alert.alert('تنبيه', 'يجب إضافة خدمة فرعية واحدة على الأقل');
       return;
@@ -224,7 +224,6 @@ export default function ServicesManagementScreen({ navigation }) {
     setUploading(true);
 
     try {
-      // تحديد الـ screen المناسب حسب نوع الخدمة
       let screen = 'ServiceScreen';
       if (serviceType === 'items_service') {
         screen = 'ItemsServiceScreen';
@@ -234,13 +233,18 @@ export default function ServicesManagementScreen({ navigation }) {
         screen = 'AiMainModal';
       }
 
-      // إنشاء اسم collection للمنتجات إذا كانت الخدمة ليها منتجات
       let itemsColl = null;
-      if (serviceType === 'items') {
+      if (serviceType === 'items_service') {
+        itemsColl = `${serviceId}_items`;
+        Alert.alert(
+          'تنبيه',
+          `✅ تم إنشاء اسم الكولكشن تلقائياً: ${itemsColl}\n\nالرجاء إنشاء هذا الكولكشن في Appwrite يدوياً`
+        );
+      } else if (serviceType === 'items') {
         itemsColl = `service_${serviceId}_items`;
         Alert.alert(
           'تنبيه',
-          `محتاج تنشئ collection في Appwrite بإسم: ${itemsColl}\n\nوالـ attributes:\n- name (string)\n- price (double)\n- description (string)\n- images (string[])\n- providerId (string)\n- providerName (string)\n- providerType (string)\n- serviceId (string)\n- status (string)\n- isAvailable (boolean)`
+          `✅ تم إنشاء اسم الكولكشن تلقائياً: ${itemsColl}\n\nالرجاء إنشاء هذا الكولكشن في Appwrite يدوياً`
         );
       }
 
@@ -255,14 +259,15 @@ export default function ServicesManagementScreen({ navigation }) {
         isActive: true,
         isVisible: true,
         hasItems: serviceType === 'items' || serviceType === 'items_service',
+        hasPickup: hasPickup,
         itemsCollection: itemsColl,
         merchantRole: 'merchant',
         merchantType: merchantType,
         imageUrl: serviceImage,
         maintenanceText: serviceMaintenanceText,
         order: parseInt(serviceOrder) || 0,
-        // حفظ الخدمات الفرعية
         subServices: serviceType === 'items_service' ? subServices : [],
+        isCore: false, // ✅ أي خدمة جديدة مش أساسية
       };
 
       const result = await createService(serviceData);
@@ -296,10 +301,10 @@ export default function ServicesManagementScreen({ navigation }) {
         maintenanceText: serviceMaintenanceText,
         category: serviceCategory,
         hasItems: serviceType === 'items' || serviceType === 'items_service',
+        hasPickup: hasPickup,
         order: parseInt(serviceOrder) || 0,
         type: serviceType,
         merchantType: merchantType,
-        // تحديث الخدمات الفرعية
         subServices: serviceType === 'items_service' ? subServices : [],
       };
 
@@ -321,18 +326,6 @@ export default function ServicesManagementScreen({ navigation }) {
   };
 
   const handleToggleService = async (service) => {
-    if (service.isCore) {
-      const newStatus = !service.isActive;
-      const updated = await updateCoreService(service.id, { isActive: newStatus });
-      if (updated.success) {
-        setServices(services.map(s =>
-          s.id === service.id ? { ...s, isActive: newStatus } : s
-        ));
-        Alert.alert('تم', `تم ${newStatus ? 'تفعيل' : 'تعطيل'} خدمة ${service.name}`);
-      }
-      return;
-    }
-
     setUpdating(service.$id);
     const newStatus = !service.isActive;
     const result = await toggleServiceStatus(service.$id, newStatus);
@@ -349,18 +342,6 @@ export default function ServicesManagementScreen({ navigation }) {
   };
 
   const handleToggleVisibility = async (service) => {
-    if (service.isCore) {
-      const newVisibility = !service.isVisible;
-      const updated = await updateCoreService(service.id, { isVisible: newVisibility });
-      if (updated.success) {
-        setServices(services.map(s =>
-          s.id === service.id ? { ...s, isVisible: newVisibility } : s
-        ));
-        Alert.alert('تم', `تم ${newVisibility ? 'إظهار' : 'إخفاء'} خدمة ${service.name}`);
-      }
-      return;
-    }
-
     setUpdating(service.$id);
     const newVisibility = !service.isVisible;
     const result = await toggleServiceVisibility(service.$id, newVisibility);
@@ -379,39 +360,25 @@ export default function ServicesManagementScreen({ navigation }) {
   const handleUpdateMaintenanceText = async () => {
     if (!selectedService || !maintenanceText.trim()) return;
 
-    if (selectedService.isCore) {
-      const updated = await updateCoreService(selectedService.id, { maintenanceText });
-      if (updated.success) {
-        setServices(services.map(s =>
-          s.id === selectedService.id ? { ...s, maintenanceText } : s
-        ));
-        Alert.alert('تم', 'تم تحديث نص الصيانة');
-      }
-    } else {
-      setUpdating(selectedService.$id);
-      const result = await updateService(selectedService.$id, { maintenanceText });
-      if (result.success) {
-        setServices(services.map(s =>
-          s.$id === selectedService.$id ? { ...s, maintenanceText } : s
-        ));
-        Alert.alert('تم', 'تم تحديث نص الصيانة');
-      }
-      setUpdating(null);
+    setUpdating(selectedService.$id);
+    const result = await updateService(selectedService.$id, { maintenanceText });
+    if (result.success) {
+      setServices(services.map(s =>
+        s.$id === selectedService.$id ? { ...s, maintenanceText } : s
+      ));
+      Alert.alert('تم', 'تم تحديث نص الصيانة');
     }
+    setUpdating(null);
 
     setShowMaintenanceInput(false);
     setMaintenanceText('');
   };
 
+  // ✅ دالة حذف الخدمة - متاحة للكل الآن
   const handleDeleteService = (service) => {
-    if (service.isCore) {
-      Alert.alert('تنبيه', 'لا يمكن حذف الخدمات الأساسية');
-      return;
-    }
-
     Alert.alert(
       'حذف الخدمة',
-      `هل أنت متأكد من حذف خدمة ${service.name}؟`,
+      `هل أنت متأكد من حذف خدمة "${service.name}"؟\n\n⚠️ هذا الإجراء لا يمكن التراجع عنه.`,
       [
         { text: 'إلغاء', style: 'cancel' },
         {
@@ -421,7 +388,7 @@ export default function ServicesManagementScreen({ navigation }) {
             setUpdating(service.$id);
             const result = await deleteService(service.$id);
             if (result.success) {
-              Alert.alert('تم', 'تم حذف الخدمة');
+              Alert.alert('✅ تم', 'تم حذف الخدمة بنجاح');
               loadServices();
             } else {
               Alert.alert('خطأ', result.error);
@@ -434,13 +401,6 @@ export default function ServicesManagementScreen({ navigation }) {
   };
 
   const openEditModal = (service) => {
-    if (service.isCore) {
-      setSelectedService(service);
-      setShowMaintenanceInput(true);
-      setMaintenanceText(service.maintenanceText || 'جاري التحديث');
-      return;
-    }
-
     setServiceId(service.id);
     setServiceName(service.name);
     setServiceColor(service.color || '#6B7280');
@@ -451,6 +411,7 @@ export default function ServicesManagementScreen({ navigation }) {
     setServiceType(service.type || 'regular');
     setMerchantType(service.merchantType || 'merchant');
     setItemsCollection(service.itemsCollection || '');
+    setHasPickup(service.hasPickup || false);
     setSubServices(service.subServices || []);
     setIsEditing(true);
     setSelectedService(service);
@@ -551,6 +512,7 @@ export default function ServicesManagementScreen({ navigation }) {
             • التفعيل: الخدمة تعمل بشكل طبيعي
             {'\n'}• التعطيل: الخدمة تظهر معتمة وعليها النص الذي تحدده
             {'\n'}• الإخفاء: الخدمة لا تظهر نهائياً للعملاء
+            {'\n'}• الحذف: يمكنك حذف أي خدمة (سيتم حذفها نهائياً)
           </Text>
         </View>
 
@@ -567,11 +529,6 @@ export default function ServicesManagementScreen({ navigation }) {
               <View style={styles.serviceDetails}>
                 <View style={styles.serviceNameRow}>
                   <Text style={styles.serviceName}>{service.name}</Text>
-                  {service.isCore && (
-                    <View style={styles.coreBadge}>
-                      <Text style={styles.coreBadgeText}>أساسية</Text>
-                    </View>
-                  )}
                   {service.type === 'items_service' && (
                     <View style={[styles.typeBadge, { backgroundColor: '#3B82F620' }]}>
                       <Text style={[styles.typeBadgeText, { color: '#3B82F6' }]}>أصناف</Text>
@@ -580,6 +537,11 @@ export default function ServicesManagementScreen({ navigation }) {
                   {service.type === 'items' && (
                     <View style={[styles.typeBadge, { backgroundColor: '#10B98120' }]}>
                       <Text style={[styles.typeBadgeText, { color: '#10B981' }]}>منتجات</Text>
+                    </View>
+                  )}
+                  {service.hasPickup && (
+                    <View style={[styles.typeBadge, { backgroundColor: '#F59E0B20' }]}>
+                      <Text style={[styles.typeBadgeText, { color: '#F59E0B' }]}>Pickup</Text>
                     </View>
                   )}
                 </View>
@@ -594,6 +556,13 @@ export default function ServicesManagementScreen({ navigation }) {
                         </View>
                       ))}
                     </View>
+                  </View>
+                )}
+                {/* عرض اسم الكولكشن للخدمات ذات الأصناف */}
+                {service.type === 'items_service' && service.itemsCollection && (
+                  <View style={styles.collectionBadge}>
+                    <Ionicons name="folder-outline" size={12} color="#4F46E5" />
+                    <Text style={styles.collectionText}>Collection: {service.itemsCollection}</Text>
                   </View>
                 )}
                 <View style={styles.badgesContainer}>
@@ -617,16 +586,23 @@ export default function ServicesManagementScreen({ navigation }) {
             </View>
 
             <View style={styles.serviceActions}>
-              {service.type === 'items_service' && (
+              {service.type === 'items_service' && service.hasItems && (
                 <TouchableOpacity
-                  style={[styles.itemActionButton, { backgroundColor: '#3B82F6' }]}
-                  onPress={() => navigation.navigate('ItemsServiceScreen', {
-                    serviceId: service.id,
-                    serviceName: service.name,
-                    serviceColor: service.color,
-                    subServices: service.subServices || [],
-                    isAdmin: true
-                  })}
+                  style={[styles.itemActionButton, { backgroundColor: '#10B981' }]}
+                  onPress={() => {
+                    if (!service.itemsCollection) {
+                      Alert.alert('خطأ', 'هذه الخدمة ليس لها Collection مخصص للأصناف');
+                      return;
+                    }
+                    navigation.navigate('ItemsServiceScreen', {
+                      serviceId: service.id,
+                      collectionName: service.itemsCollection,
+                      serviceName: service.name,
+                      serviceColor: service.color,
+                      subServices: service.subServices || [],
+                      isAdmin: true
+                    });
+                  }}
                 >
                   <Ionicons name="list-outline" size={18} color="#FFF" />
                   <Text style={styles.itemActionText}>إدارة الأصناف</Text>
@@ -688,14 +664,8 @@ export default function ServicesManagementScreen({ navigation }) {
             >
               <Ionicons name="create-outline" size={24} color="#4F46E5" />
               <View style={styles.modalOptionTextContainer}>
-                <Text style={styles.modalOptionText}>
-                  {selectedService?.isCore ? 'تعديل نص الصيانة' : 'تعديل الخدمة'}
-                </Text>
-                <Text style={styles.modalOptionDesc}>
-                  {selectedService?.isCore
-                    ? 'تغيير النص الذي يظهر عند التعطيل'
-                    : 'تغيير بيانات الخدمة وإعداداتها'}
-                </Text>
+                <Text style={styles.modalOptionText}>تعديل الخدمة</Text>
+                <Text style={styles.modalOptionDesc}>تغيير بيانات الخدمة وإعداداتها</Text>
               </View>
             </TouchableOpacity>
 
@@ -749,22 +719,20 @@ export default function ServicesManagementScreen({ navigation }) {
               </View>
             </TouchableOpacity>
 
-            {/* زر الحذف */}
-            {!selectedService?.isCore && (
-              <TouchableOpacity
-                style={[styles.modalOption, styles.deleteOption]}
-                onPress={() => {
-                  setModalVisible(false);
-                  handleDeleteService(selectedService);
-                }}
-              >
-                <Ionicons name="trash-outline" size={24} color="#EF4444" />
-                <View style={styles.modalOptionTextContainer}>
-                  <Text style={[styles.modalOptionText, { color: '#EF4444' }]}>حذف الخدمة</Text>
-                  <Text style={styles.modalOptionDesc}>لا يمكن التراجع عن هذا الإجراء</Text>
-                </View>
-              </TouchableOpacity>
-            )}
+            {/* ✅ زر الحذف - متاح للكل الآن */}
+            <TouchableOpacity
+              style={[styles.modalOption, styles.deleteOption]}
+              onPress={() => {
+                setModalVisible(false);
+                handleDeleteService(selectedService);
+              }}
+            >
+              <Ionicons name="trash-outline" size={24} color="#EF4444" />
+              <View style={styles.modalOptionTextContainer}>
+                <Text style={[styles.modalOptionText, { color: '#EF4444' }]}>حذف الخدمة</Text>
+                <Text style={styles.modalOptionDesc}>لا يمكن التراجع عن هذا الإجراء</Text>
+              </View>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.modalOption, styles.cancelOption]}
@@ -833,7 +801,7 @@ export default function ServicesManagementScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* Modal إضافة/تعديل خدمة - مع إضافة الخدمات الفرعية */}
+      {/* Modal إضافة/تعديل خدمة */}
       <Modal visible={editModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <ScrollView contentContainerStyle={styles.modalScrollContent}>
@@ -855,7 +823,7 @@ export default function ServicesManagementScreen({ navigation }) {
                   <Text style={styles.label}>معرف الخدمة</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="ironing, laundry, bakery, etc"
+                    placeholder="laundry, bakery, drinks, etc"
                     value={serviceId}
                     onChangeText={setServiceId}
                     autoCapitalize="none"
@@ -939,6 +907,16 @@ export default function ServicesManagementScreen({ navigation }) {
                 </View>
               )}
 
+              {/* عرض اسم الكولكشن المقترح للخدمات ذات الأصناف */}
+              {serviceType === 'items_service' && serviceId && (
+                <View style={styles.collectionInfo}>
+                  <Ionicons name="information-circle-outline" size={20} color="#4F46E5" />
+                  <Text style={styles.collectionInfoText}>
+                    سيتم إنشاء كولكشن تلقائياً بإسم: {serviceId}_items
+                  </Text>
+                </View>
+              )}
+
               {/* خيارات إضافية للخدمات بمنتجات */}
               {serviceType === 'items' && (
                 <>
@@ -962,6 +940,16 @@ export default function ServicesManagementScreen({ navigation }) {
                   </View>
                 </>
               )}
+
+              {/* خيار Pickup */}
+              <View style={styles.switchContainer}>
+                <Text style={styles.label}>له Pickup (استلام)</Text>
+                <Switch
+                  value={hasPickup}
+                  onValueChange={setHasPickup}
+                  trackColor={{ false: '#E5E7EB', true: '#4F46E5' }}
+                />
+              </View>
 
               <Text style={styles.label}>صورة الخدمة</Text>
               <TouchableOpacity
@@ -1095,7 +1083,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   infoText: { fontSize: 14, color: '#4F46E5', lineHeight: 22 },
-  
+
   serviceCard: {
     backgroundColor: '#FFF',
     borderRadius: 12,
@@ -1116,13 +1104,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   serviceName: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
-  coreBadge: {
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  coreBadgeText: { color: '#FFF', fontSize: 9, fontWeight: '600' },
   typeBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -1140,6 +1121,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   subServiceText: { fontSize: 10, color: '#1F2937' },
+  collectionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+    gap: 4,
+  },
+  collectionText: { fontSize: 9, color: '#4F46E5', fontWeight: '600' },
   badgesContainer: { flexDirection: 'row', gap: 4, marginBottom: 4, flexWrap: 'wrap' },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
   statusText: { fontSize: 10, fontWeight: '600' },
@@ -1376,7 +1369,21 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '600',
   },
-  
+  collectionInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+    gap: 8,
+  },
+  collectionInfoText: {
+    fontSize: 12,
+    color: '#4F46E5',
+    flex: 1,
+  },
+
   // أنماط إضافية للخدمات الفرعية
   subServicesSection: {
     marginBottom: 15,
@@ -1438,5 +1445,14 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 10,
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
 });
