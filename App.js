@@ -5,16 +5,16 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { CartProvider } from './src/context/CartContext';
 import { TermsProvider } from './src/context/TermsContext';
 import { loadSounds, cleanup } from './src/utils/SoundHelper';
-import { loadFonts } from './src/utils/fonts';
 import { initializeCoreServices } from './src/services/servicesService';
+import { loadFonts } from './src/utils/fonts';
 
-// شاشات البداية والأساسية
+// شاشاتك الأساسية
 import SplashScreen from './src/screens/SplashScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import CustomerAuthScreen from './src/screens/CustomerAuthScreen';
@@ -24,7 +24,7 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import MyOrdersScreen from './src/screens/MyOrdersScreen';
 import TermsScreen from './src/screens/TermsScreen';
 
-// شاشات الخدمات للعميل
+// استيرادات بقية الشاشات (اختصاراً)
 import ServiceScreen from './src/screens/ServiceScreen';
 import MerchantsListScreen from './src/screens/MerchantsListScreen';
 import MerchantProductsScreen from './src/screens/merchant/MerchantProductsScreen';
@@ -36,14 +36,10 @@ import ProductDetailsScreen from './src/screens/customer/ProductDetailsScreen';
 import DishDetailsScreen from './src/screens/customer/DishDetailsScreen';
 import ItemsServiceScreen from './src/screens/ItemsServiceScreen';
 import ProductsServiceScreen from './src/screens/ProductsServiceScreen';
-
-// شاشات المطاعم والأكل البيتي
 import RestaurantListScreen from './src/screens/restaurant/RestaurantListScreen';
 import RestaurantDishesScreen from './src/screens/restaurant/RestaurantDishesScreen';
 import HomeChefsScreen from './src/screens/homechef/HomeChefsScreen';
 import HomeChefDishesScreen from './src/screens/homechef/HomeChefDishesScreen';
-
-// شاشات التجار
 import MerchantDashboard from './src/screens/merchant/MerchantDashboard';
 import MerchantOrdersScreen from './src/screens/merchant/MerchantOrdersScreen';
 import OrderDetailsScreen from './src/screens/merchant/OrderDetailsScreen';
@@ -53,17 +49,11 @@ import MyDishesScreen from './src/screens/merchant/MyDishesScreen';
 import AddDishScreen from './src/screens/merchant/AddDishScreen';
 import EditDishScreen from './src/screens/merchant/EditDishScreen';
 import AddHomeChefDishScreen from './src/screens/merchant/AddHomeChefDishScreen';
-
-// شاشات المندوبين
 import DriverDashboard from './src/screens/driver/DriverDashboard';
 import DriverDeliveriesScreen from './src/screens/driver/DriverDeliveriesScreen';
-
-// شاشات الدخول
 import DriverLoginScreen from './src/screens/auth/DriverLoginScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import MerchantRegisterScreen from './src/screens/auth/MerchantRegisterScreen';
-
-// شاشات الأدمن
 import AdminHomeScreen from './src/screens/admin/AdminHomeScreen';
 import UserManagement from './src/screens/admin/UserManagement';
 import UserEditScreen from './src/screens/admin/UserEditScreen';
@@ -79,12 +69,10 @@ import ManageHomeChefsScreen from './src/screens/admin/ManageHomeChefsScreen';
 import VerificationRequestsScreen from './src/screens/admin/VerificationRequestsScreen';
 import ManageLaundryItemsScreen from './src/screens/admin/ManageLaundryItemsScreen';
 import ReviewProductsScreen from './src/screens/admin/ReviewProductsScreen';
-
-// شاشات إضافية
 import OffersScreen from './src/screens/OffersScreen';
 import EshopScreen from './src/screens/EshopScreen';
 
-// ✅ ErrorBoundary كلاسيكي
+// ✅ رادار الأعطال الذكي (ErrorBoundary)
 class GlobalErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -96,8 +84,7 @@ class GlobalErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.log('❌ Error caught:', error);
-    console.log('❌ Error info:', errorInfo);
+    console.log('❌ CRASH DETECTED:', error);
     this.setState({ errorInfo });
   }
 
@@ -105,32 +92,21 @@ class GlobalErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return (
         <View style={styles.errorContainer}>
-          <View style={styles.errorBox}>
-            <Text style={styles.errorTitle}>❌ خطأ في تطبيق Zid</Text>
+          <ScrollView contentContainerStyle={styles.errorBox}>
+            <Text style={styles.errorTitle}>⚠️ رادار أعطال Zid</Text>
+            <Text style={styles.errorLabel}>رسالة الخطأ:</Text>
+            <Text style={styles.errorMessage}>{this.state.error?.toString()}</Text>
             
-            <View style={styles.errorSection}>
-              <Text style={styles.errorLabel}>الخطأ:</Text>
-              <Text style={styles.errorMessage}>{this.state.error?.toString()}</Text>
-            </View>
-
-            <View style={styles.errorSection}>
-              <Text style={styles.errorLabel}>المكون:</Text>
-              <Text style={styles.errorFile}>
-                {this.state.errorInfo?.componentStack?.split('\n')[1]?.trim() || 'غير معروف'}
-              </Text>
-            </View>
-
-            <View style={styles.errorSection}>
-              <Text style={styles.errorLabel}>التفاصيل الكاملة:</Text>
-              <Text style={styles.errorStack} numberOfLines={10}>
-                {this.state.errorInfo?.componentStack}
-              </Text>
-            </View>
-
-            <Text style={styles.errorFooter}>
-              حدث هذا الخطأ في تطبيق Zid. الرجاء تصويره وإرساله للمطور.
-            </Text>
-          </View>
+            <Text style={styles.errorLabel}>مكان الانهيار (Stack Trace):</Text>
+            <Text style={styles.errorStack}>{this.state.errorInfo?.componentStack}</Text>
+            
+            <TouchableOpacity 
+              style={styles.retryButton} 
+              onPress={() => this.setState({ hasError: false })}
+            >
+              <Text style={{color: '#FFF', fontWeight: 'bold'}}>محاولة إعادة تشغيل</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       );
     }
@@ -138,29 +114,20 @@ class GlobalErrorBoundary extends React.Component {
   }
 }
 
-// شاشة AI مؤقتة
-const AiMainModal = ({ navigation }) => {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' }}>
-      <Ionicons name="flash" size={80} color="#8B5CF6" />
-      <Text style={{ fontSize: 20, fontWeight: 'bold', marginTop: 20 }}>خدمات الذكاء الاصطناعي</Text>
-      <Text style={{ fontSize: 14, color: '#6B7280', marginTop: 10, textAlign: 'center', paddingHorizontal: 20 }}>
-        هذه الخدمة قيد التطوير حالياً
-      </Text>
-      <TouchableOpacity 
-        style={{ marginTop: 30, backgroundColor: '#8B5CF6', paddingHorizontal: 30, paddingVertical: 12, borderRadius: 8 }}
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={{ color: '#FFF', fontSize: 16 }}>رجوع</Text>
-      </TouchableOpacity>
-    </View>
-  );
-};
-
+// ... بقية الـ Stacks والـ Tabs (كودك الأصلي) ...
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// Stack العملاء
+const AiMainModal = ({ navigation }) => (
+  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' }}>
+    <Ionicons name="flash" size={80} color="#8B5CF6" />
+    <Text style={{ fontSize: 20, fontWeight: 'bold', marginTop: 20 }}>خدمات الذكاء الاصطناعي</Text>
+    <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 30, backgroundColor: '#8B5CF6', padding: 12, borderRadius: 8 }}>
+      <Text style={{ color: '#FFF' }}>رجوع</Text>
+    </TouchableOpacity>
+  </View>
+);
+
 function CustomerStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -184,22 +151,18 @@ function CustomerStack() {
   );
 }
 
-// التبويبات الرئيسية
 function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
-          if (route.name === 'طلب') iconName = focused ? 'cart' : 'cart-outline';
-          else if (route.name === 'عروض') iconName = focused ? 'pricetag' : 'pricetag-outline';
-          else if (route.name === 'متجر') iconName = focused ? 'storefront' : 'storefront-outline';
+          let iconName = route.name === 'طلب' ? (focused ? 'cart' : 'cart-outline') : 
+                         route.name === 'عروض' ? (focused ? 'pricetag' : 'pricetag-outline') : 
+                         (focused ? 'storefront' : 'storefront-outline');
           return <Ionicons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: '#F59E0B',
         tabBarInactiveTintColor: '#9CA3AF',
-        tabBarStyle: { backgroundColor: '#FFF', borderTopColor: '#E5E7EB', paddingBottom: 5, height: 60 },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '500' },
         headerShown: false,
       })}
     >
@@ -210,34 +173,20 @@ function MainTabs() {
   );
 }
 
-// Root Stack الرئيسي
 function RootStack() {
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-        presentation: 'card',
-        animation: 'slide_from_right',
-      }}
-      initialRouteName="Splash"
-    >
+    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }} initialRouteName="Splash">
       <Stack.Screen name="Splash" component={SplashScreen} />
       <Stack.Screen name="MainTabs" component={MainTabs} />
-
-      {/* شاشات المصادقة */}
       <Stack.Screen name="CustomerAuth" component={CustomerAuthScreen} />
       <Stack.Screen name="ServiceProvider" component={ServiceProviderScreen} />
       <Stack.Screen name="DriverLogin" component={DriverLoginScreen} />
       <Stack.Screen name="LoginScreen" component={LoginScreen} />
       <Stack.Screen name="MerchantRegister" component={MerchantRegisterScreen} />
       <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
-
-      {/* شاشات الملف الشخصي والطلبات */}
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="MyOrders" component={MyOrdersScreen} />
       <Stack.Screen name="TermsScreen" component={TermsScreen} />
-
-      {/* شاشات التجار */}
       <Stack.Screen name="MerchantDashboard" component={MerchantDashboard} />
       <Stack.Screen name="MerchantOrdersScreen" component={MerchantOrdersScreen} />
       <Stack.Screen name="OrderDetailsScreen" component={OrderDetailsScreen} />
@@ -247,12 +196,8 @@ function RootStack() {
       <Stack.Screen name="AddDishScreen" component={AddDishScreen} />
       <Stack.Screen name="EditDishScreen" component={EditDishScreen} />
       <Stack.Screen name="AddHomeChefDishScreen" component={AddHomeChefDishScreen} />
-
-      {/* شاشات المندوبين */}
       <Stack.Screen name="DriverDashboard" component={DriverDashboard} />
       <Stack.Screen name="DriverDeliveries" component={DriverDeliveriesScreen} />
-
-      {/* شاشات الأدمن */}
       <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
       <Stack.Screen name="UserManagement" component={UserManagement} />
       <Stack.Screen name="UserEditScreen" component={UserEditScreen} />
@@ -268,14 +213,11 @@ function RootStack() {
       <Stack.Screen name="VerificationRequestsScreen" component={VerificationRequestsScreen} />
       <Stack.Screen name="ManageLaundryItemsScreen" component={ManageLaundryItemsScreen} />
       <Stack.Screen name="ReviewProductsScreen" component={ReviewProductsScreen} />
-
-      {/* شاشات إضافية */}
       <Stack.Screen name="AiMainModal" component={AiMainModal} />
     </Stack.Navigator>
   );
 }
 
-// ✅ محتوى التطبيق الرئيسي
 function AppContent() {
   const [appIsReady, setAppIsReady] = React.useState(false);
 
@@ -284,33 +226,22 @@ function AppContent() {
       try {
         await loadFonts();
         await loadSounds();
-        console.log('✅ تم تحميل الأصوات');
-
-        console.log('🚀 بدء تهيئة الخدمات الأساسية...');
         await initializeCoreServices();
-        console.log('✅ تم تهيئة الخدمات الأساسية');
-
       } catch (error) {
-        console.error('❌ خطأ في التحميل:', error);
+        console.error('❌ Error during init:', error);
       } finally {
         setAppIsReady(true);
       }
     }
-
     prepare();
-
-    return () => {
-      cleanup();
-    };
+    return () => cleanup();
   }, []);
 
   if (!appIsReady) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4F46E5" />
-        <Text style={styles.loadingText}>
-          جاري تحميل التطبيق...
-        </Text>
+        <ActivityIndicator size="large" color="#F59E0B" />
+        <Text style={styles.loadingText}>جاري تشغيل Zid...</Text>
       </View>
     );
   }
@@ -328,7 +259,6 @@ function AppContent() {
   );
 }
 
-// ✅ التطبيق الرئيسي مع ErrorBoundary
 export default function App() {
   return (
     <GlobalErrorBoundary>
@@ -338,72 +268,13 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  loadingText: {
-    marginTop: 12,
-    color: '#6B7280',
-    fontSize: 14,
-  },
-  errorContainer: {
-    flex: 1,
-    backgroundColor: '#000000',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorBox: {
-    backgroundColor: '#1F2937',
-    borderRadius: 12,
-    padding: 20,
-    width: '100%',
-    maxWidth: 400,
-  },
-  errorTitle: {
-    color: '#EF4444',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  errorSection: {
-    marginBottom: 12,
-  },
-  errorLabel: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  errorMessage: {
-    color: '#FEF2F2',
-    fontSize: 14,
-    backgroundColor: '#374151',
-    padding: 8,
-    borderRadius: 6,
-  },
-  errorFile: {
-    color: '#F59E0B',
-    fontSize: 13,
-    backgroundColor: '#374151',
-    padding: 8,
-    borderRadius: 6,
-  },
-  errorStack: {
-    color: '#D1D5DB',
-    fontSize: 11,
-    backgroundColor: '#374151',
-    padding: 8,
-    borderRadius: 6,
-    maxHeight: 200,
-  },
-  errorFooter: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginTop: 16,
-    textAlign: 'center',
-  },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' },
+  loadingText: { marginTop: 12, color: '#6B7280', fontSize: 14 },
+  errorContainer: { flex: 1, backgroundColor: '#111827', padding: 20, paddingTop: 50 },
+  errorBox: { paddingBottom: 40 },
+  errorTitle: { color: '#EF4444', fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
+  errorLabel: { color: '#9CA3AF', fontSize: 14, marginTop: 15, fontWeight: 'bold' },
+  errorMessage: { color: '#FEE2E2', backgroundColor: '#7F1D1D', padding: 10, borderRadius: 8, marginTop: 5 },
+  errorStack: { color: '#D1D5DB', backgroundColor: '#1F2937', padding: 10, borderRadius: 8, marginTop: 5, fontSize: 10 },
+  retryButton: { marginTop: 30, backgroundColor: '#F59E0B', padding: 15, borderRadius: 8, alignItems: 'center' }
 });
