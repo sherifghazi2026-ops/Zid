@@ -1,4 +1,4 @@
-name: Build Zid Debug APK
+name: Build Zid APK
 on:
   push:
     branches: [ main, master ]
@@ -29,14 +29,15 @@ jobs:
 
       - name: Fix Android Build Files
         run: |
-          # حل مشكلة الفريسكو
+          # 1. حل مشكلة الـ Null في السطر 57 (Fresco)
           sed -i 's/implementation("com.facebook.fresco:animated-gif:${expoLibs.versions.fresco.get()}")/implementation("com.facebook.fresco:animated-gif:3.2.0")/' android/app/build.gradle
+          
+          # 2. التأكد من وجود مجلد الـ assets
           mkdir -p android/app/src/main/assets
 
-      - name: Generate Dev Bundle
+      - name: Generate React Native Bundle
         run: |
-          # ملاحظة: وضعنا --dev true لكي يظهر الخطأ بوضوح عند الكراش
-          npx react-native bundle --platform android --dev true --entry-file App.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
+          npx react-native bundle --platform android --dev false --entry-file App.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -45,11 +46,10 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          # تنظيف وبناء
-          ./gradlew clean assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Debug APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Zid-Diagnostic-APK
+          name: Zid-App-Debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
