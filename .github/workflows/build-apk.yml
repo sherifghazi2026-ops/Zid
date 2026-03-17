@@ -48,13 +48,34 @@ jobs:
       run: |
         cd android
         chmod +x gradlew
-        ./gradlew assembleDebug --stacktrace --no-daemon
+        ./gradlew clean
+        ./gradlew assembleDebug --stacktrace
         
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: app-debug
         path: android/app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 7
+        
+    - name: Upload Build Logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs
+        path: |
+          android/build/reports/
+          android/app/build/reports/
+        retention-days: 7
+        
+    - name: Upload Logcat
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: logcat
+        path: |
+          android/build/outputs/logs/
+          android/app/build/outputs/logs/
         retention-days: 7
         
     - name: Create Release
