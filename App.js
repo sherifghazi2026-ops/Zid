@@ -281,6 +281,7 @@ function AppContent() {
   React.useEffect(() => {
     async function prepare() {
       try {
+        await loadFonts();
         await loadSounds();
         console.log('✅ تم تحميل الأصوات');
 
