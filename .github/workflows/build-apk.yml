@@ -33,6 +33,14 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
       
+    - name: Create debug keystore
+      run: |
+        mkdir -p android/app
+        keytool -genkey -v -keystore android/app/debug.keystore -alias androiddebugkey \
+          -keyalg RSA -keysize 2048 -validity 10000 \
+          -dname "CN=Android Debug, O=Android, C=US" \
+          -storepass android -keypass android
+          
     - name: Build Android APK
       run: |
         cd android
