@@ -1,0 +1,45 @@
+name: EAS Build
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Android APK
+        run: eas build -p android --profile preview --non-interactive --no-wait
+
+      - name: Download APK
+        run: |
+          # انتظر حتى يكتمل البناء (يمكن تحسينه)
+          sleep 300
+          eas build:list --platform android --status finished --limit 1 --json > build.json
+          ARTIFACT_URL=$(cat build.json | jq -r '.[0].artifacts.buildUrl')
+          curl -L $ARTIFACT_URL -o app.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app.apk
