@@ -1,5 +1,5 @@
 import 'react-native-gesture-handler';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -7,9 +7,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// ✅ Error Boundary
-import { ErrorBoundary } from 'react-error-boundary';
 
 import { CartProvider } from './src/context/CartContext';
 import { TermsProvider } from './src/context/TermsContext';
@@ -86,22 +83,58 @@ import ReviewProductsScreen from './src/screens/admin/ReviewProductsScreen';
 import OffersScreen from './src/screens/OffersScreen';
 import EshopScreen from './src/screens/EshopScreen';
 
-// ✅ شاشة Fallback للخطأ
-function ErrorFallback({ error, resetErrorBoundary }) {
-  return (
-    <View style={styles.errorContainer}>
-      <Ionicons name="alert-circle" size={80} color="#EF4444" />
-      <Text style={styles.errorTitle}>❌ حدث خطأ في التطبيق</Text>
-      <Text style={styles.errorMessage}>{error.message}</Text>
-      <Text style={styles.errorStack}>{error.stack}</Text>
-      <TouchableOpacity 
-        style={styles.resetButton}
-        onPress={resetErrorBoundary}
-      >
-        <Text style={styles.resetButtonText}>إعادة المحاولة</Text>
-      </TouchableOpacity>
-    </View>
-  );
+// ✅ ErrorBoundary كلاسيكي
+class GlobalErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.log('❌ Error caught:', error);
+    console.log('❌ Error info:', errorInfo);
+    this.setState({ errorInfo });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.errorContainer}>
+          <View style={styles.errorBox}>
+            <Text style={styles.errorTitle}>❌ خطأ في تطبيق Zid</Text>
+            
+            <View style={styles.errorSection}>
+              <Text style={styles.errorLabel}>الخطأ:</Text>
+              <Text style={styles.errorMessage}>{this.state.error?.toString()}</Text>
+            </View>
+
+            <View style={styles.errorSection}>
+              <Text style={styles.errorLabel}>المكون:</Text>
+              <Text style={styles.errorFile}>
+                {this.state.errorInfo?.componentStack?.split('\n')[1]?.trim() || 'غير معروف'}
+              </Text>
+            </View>
+
+            <View style={styles.errorSection}>
+              <Text style={styles.errorLabel}>التفاصيل الكاملة:</Text>
+              <Text style={styles.errorStack} numberOfLines={10}>
+                {this.state.errorInfo?.componentStack}
+              </Text>
+            </View>
+
+            <Text style={styles.errorFooter}>
+              حدث هذا الخطأ في تطبيق Zid. الرجاء تصويره وإرساله للمطور.
+            </Text>
+          </View>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 // شاشة AI مؤقتة
@@ -241,11 +274,11 @@ function RootStack() {
   );
 }
 
-// ✅ التطبيق الرئيسي مع ErrorBoundary
+// ✅ محتوى التطبيق الرئيسي
 function AppContent() {
-  const [appIsReady, setAppIsReady] = useState(false);
+  const [appIsReady, setAppIsReady] = React.useState(false);
 
-  useEffect(() => {
+  React.useEffect(() => {
     async function prepare() {
       try {
         await loadSounds();
@@ -293,16 +326,12 @@ function AppContent() {
   );
 }
 
+// ✅ التطبيق الرئيسي مع ErrorBoundary
 export default function App() {
   return (
-    <ErrorBoundary
-      FallbackComponent={ErrorFallback}
-      onError={(error, errorInfo) => {
-        console.log('❌ Error caught by boundary:', error, errorInfo);
-      }}
-    >
+    <GlobalErrorBoundary>
       <AppContent />
-    </ErrorBoundary>
+    </GlobalErrorBoundary>
   );
 }
 
@@ -320,39 +349,59 @@ const styles = StyleSheet.create({
   },
   errorContainer: {
     flex: 1,
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FEF2F2',
     padding: 20,
   },
+  errorBox: {
+    backgroundColor: '#1F2937',
+    borderRadius: 12,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+  },
   errorTitle: {
+    color: '#EF4444',
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#EF4444',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  errorMessage: {
-    fontSize: 16,
-    color: '#B91C1C',
+    marginBottom: 16,
     textAlign: 'center',
+  },
+  errorSection: {
     marginBottom: 12,
   },
-  errorStack: {
+  errorLabel: {
+    color: '#9CA3AF',
     fontSize: 12,
-    color: '#6B7280',
+    marginBottom: 4,
+  },
+  errorMessage: {
+    color: '#FEF2F2',
+    fontSize: 14,
+    backgroundColor: '#374151',
+    padding: 8,
+    borderRadius: 6,
+  },
+  errorFile: {
+    color: '#F59E0B',
+    fontSize: 13,
+    backgroundColor: '#374151',
+    padding: 8,
+    borderRadius: 6,
+  },
+  errorStack: {
+    color: '#D1D5DB',
+    fontSize: 11,
+    backgroundColor: '#374151',
+    padding: 8,
+    borderRadius: 6,
+    maxHeight: 200,
+  },
+  errorFooter: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginTop: 16,
     textAlign: 'center',
-    marginBottom: 20,
-  },
-  resetButton: {
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  resetButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
