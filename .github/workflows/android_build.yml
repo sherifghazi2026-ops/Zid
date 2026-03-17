@@ -1,4 +1,4 @@
-name: Build Zid Debug APK
+name: Build Zid Diagnostic APK
 on:
   push:
     branches: [ main, master ]
@@ -27,29 +27,27 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Fix Android Build Files
+      - name: Fix Android Config
         run: |
           # حل مشكلة الفريسكو
           sed -i 's/implementation("com.facebook.fresco:animated-gif:${expoLibs.versions.fresco.get()}")/implementation("com.facebook.fresco:animated-gif:3.2.0")/' android/app/build.gradle
+          # تفعيل خاصية الـ Debugging داخل الـ APK
+          sed -i 's/minifyEnabled false/minifyEnabled false\n            debuggable true/' android/app/build.gradle
           mkdir -p android/app/src/main/assets
 
       - name: Generate Dev Bundle
         run: |
-          # ملاحظة: وضعنا --dev true لكي يظهر الخطأ بوضوح عند الكراش
+          # توليد Bundle بوضعية التطوير الكاملة
           npx react-native bundle --platform android --dev true --entry-file App.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Build Debug APK
+      - name: Build APK
         run: |
           cd android
           chmod +x gradlew
-          # تنظيف وبناء
-          ./gradlew clean assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload Debug APK
+      - name: Upload Diagnostic APK
         uses: actions/upload-artifact@v4
         with:
-          name: Zid-Diagnostic-APK
+          name: Zid-Show-Errors-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk

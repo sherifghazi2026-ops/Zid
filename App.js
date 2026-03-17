@@ -8,6 +8,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// ✅ Error Boundary
+import { ErrorBoundary } from 'react-error-boundary';
+
 import { CartProvider } from './src/context/CartContext';
 import { TermsProvider } from './src/context/TermsContext';
 import { loadSounds, cleanup } from './src/utils/SoundHelper';
@@ -82,6 +85,24 @@ import ReviewProductsScreen from './src/screens/admin/ReviewProductsScreen';
 // شاشات إضافية
 import OffersScreen from './src/screens/OffersScreen';
 import EshopScreen from './src/screens/EshopScreen';
+
+// ✅ شاشة Fallback للخطأ
+function ErrorFallback({ error, resetErrorBoundary }) {
+  return (
+    <View style={styles.errorContainer}>
+      <Ionicons name="alert-circle" size={80} color="#EF4444" />
+      <Text style={styles.errorTitle}>❌ حدث خطأ في التطبيق</Text>
+      <Text style={styles.errorMessage}>{error.message}</Text>
+      <Text style={styles.errorStack}>{error.stack}</Text>
+      <TouchableOpacity 
+        style={styles.resetButton}
+        onPress={resetErrorBoundary}
+      >
+        <Text style={styles.resetButtonText}>إعادة المحاولة</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 // شاشة AI مؤقتة
 const AiMainModal = ({ navigation }) => {
@@ -220,8 +241,8 @@ function RootStack() {
   );
 }
 
-// التطبيق الرئيسي
-export default function App() {
+// ✅ التطبيق الرئيسي مع ErrorBoundary
+function AppContent() {
   const [appIsReady, setAppIsReady] = useState(false);
 
   useEffect(() => {
@@ -272,6 +293,19 @@ export default function App() {
   );
 }
 
+export default function App() {
+  return (
+    <ErrorBoundary
+      FallbackComponent={ErrorFallback}
+      onError={(error, errorInfo) => {
+        console.log('❌ Error caught by boundary:', error, errorInfo);
+      }}
+    >
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
+
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
@@ -283,5 +317,42 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: '#6B7280',
     fontSize: 14,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    padding: 20,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#EF4444',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: '#B91C1C',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  errorStack: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  resetButton: {
+    backgroundColor: '#4F46E5',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  resetButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
