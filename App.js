@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartProvider } from './src/context/CartContext';
 import { TermsProvider } from './src/context/TermsContext';
 import { loadSounds, cleanup } from './src/utils/SoundHelper';
+import { loadFonts } from './src/utils/fonts';
 import { initializeCoreServices } from './src/services/servicesService';
 
 // شاشات البداية والأساسية
