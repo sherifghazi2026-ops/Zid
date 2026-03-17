@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTerms } from '../context/TermsContext';
-import { fontFamily } from '../utils/fonts';
 
 export default function TermsScreen({ navigation }) {
   const { acceptTerms } = useTerms();
@@ -25,62 +24,62 @@ export default function TermsScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-forward" size={28} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { fontFamily: fontFamily.arabic }]}>الشروط والأحكام</Text>
+        <Text style={[styles.headerTitle]}>الشروط والأحكام</Text>
         <View style={{ width: 28 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* إخلاء المسؤولية الرئيسي */}
         <View style={styles.disclaimerBox}>
-          <Text style={[styles.disclaimerTitle, { fontFamily: fontFamily.arabic }]}>⚠️ إخلاء مسؤولية</Text>
-          <Text style={[styles.disclaimerText, { fontFamily: fontFamily.arabic }]}>
+          <Text style={[styles.disclaimerTitle]}>⚠️ إخلاء مسؤولية</Text>
+          <Text style={[styles.disclaimerText]}>
             هذا التطبيق في نسخته التجريبية (Beta Version). باستخدامك له، أنت توافق على البنود التالية.
           </Text>
         </View>
 
-        <Text style={[styles.title, { fontFamily: fontFamily.arabic }]}>مرحباً بك في النسخة التجريبية من تطبيق Zid</Text>
+        <Text style={[styles.title]}>مرحباً بك في النسخة التجريبية من تطبيق Zid</Text>
         
-        <Text style={[styles.paragraph, { fontFamily: fontFamily.arabic }]}>
+        <Text style={[styles.paragraph]}>
           باستخدامك لهذا التطبيق، أنت تقر وتوافق على النقاط التالية:
         </Text>
 
-        <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>▪︎ طبيعة المنصة</Text>
-        <Text style={[styles.paragraph, { fontFamily: fontFamily.arabic }]}>
+        <Text style={[styles.sectionTitle]}>▪︎ طبيعة المنصة</Text>
+        <Text style={[styles.paragraph]}>
           تطبيق Zid هو مشروع تقني قيد التجربة (Beta Version)، يعمل كـ "لوحة إعلانات ذكية" أو "وسيط تقني" فقط للربط بين سكان المنطقة ومقدمي الخدمات المحليين. نحن لا نملك الخدمات ولا نديرها.
         </Text>
 
-        <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>▪︎ إخلاء المسؤولية القانونية</Text>
-        <Text style={[styles.paragraph, { fontFamily: fontFamily.arabic }]}>
+        <Text style={[styles.sectionTitle]}>▪︎ إخلاء المسؤولية القانونية</Text>
+        <Text style={[styles.paragraph]}>
           منصة Zid والمطورين القائمين عليها غير مسؤولين بصفتهم الشخصية أو القانونية عن أي جودة خدمة، تأخير، أو تلفيات ناتجة عن التعامل بين العميل ومقدم الخدمة (مثل مشاكل المغاسل، المطاعم، أو فنيي الصيانة). العلاقة التعاقدية تتم مباشرة بينك وبين مقدم الخدمة.
         </Text>
 
-        <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>▪︎ التأمين والحوادث</Text>
-        <Text style={[styles.paragraph, { fontFamily: fontFamily.arabic }]}>
+        <Text style={[styles.sectionTitle]}>▪︎ التأمين والحوادث</Text>
+        <Text style={[styles.paragraph]}>
           في حالة وقوع أي خلاف (تلف أغراض، فقدان، أو خلاف على السعر)، يتم حل النزاع مباشرة مع مقدم الخدمة. دور التطبيق ينتهي عند توفير وسيلة التواصل وتقييم التجربة.
         </Text>
 
-        <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>▪︎ المعاملات المادية</Text>
-        <Text style={[styles.paragraph, { fontFamily: fontFamily.arabic }]}>
+        <Text style={[styles.sectionTitle]}>▪︎ المعاملات المادية</Text>
+        <Text style={[styles.paragraph]}>
           جميع المعاملات المالية حالياً تتم بنظام "الدفع نقداً" عند الاستلام. التطبيق لا يتقاضى أي عمولات حالياً، ولا يضمن استرداد الأموال، حيث أن الدفع يتم لمقدم الخدمة مباشرة.
         </Text>
 
-        <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>▪︎ جودة البيانات</Text>
-        <Text style={[styles.paragraph, { fontFamily: fontFamily.arabic }]}>
+        <Text style={[styles.sectionTitle]}>▪︎ جودة البيانات</Text>
+        <Text style={[styles.paragraph]}>
           نحن نبذل قصارى جهدنا للتحقق من هوية مقدمي الخدمة من خلال الأوراق الرسمية، لكننا لا نضمن دقة هذه البيانات بنسبة 100%، وتظل مسؤولية اختيار مقدم الخدمة على عاتق المستخدم بناءً على التقييمات المتاحة.
         </Text>
 
-        <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>▪︎ حق التعديل</Text>
-        <Text style={[styles.paragraph, { fontFamily: fontFamily.arabic }]}>
+        <Text style={[styles.sectionTitle]}>▪︎ حق التعديل</Text>
+        <Text style={[styles.paragraph]}>
           يحق لإدارة التطبيق تعديل هذه الشروط في أي وقت، واستمرارك في استخدام التطبيق يعتبر موافقة ضمنية على هذه البنود.
         </Text>
 
-        <Text style={[styles.noteText, { fontFamily: fontFamily.arabic }]}>
+        <Text style={[styles.noteText]}>
           📌 ملاحظة: نحن نسعى دائماً لتطوير المنصة وخدمة المجتمع المحلي. رأيك يهمنا، ولا تتردد في التواصل معنا للإبلاغ عن أي مشكلة أو اقتراح تحسين.
         </Text>
 
         {/* زر الموافقة - يظهر دائماً */}
         <TouchableOpacity style={styles.acceptButton} onPress={handleAccept}>
-          <Text style={[styles.acceptButtonText, { fontFamily: fontFamily.arabic }]}>أوافق على الشروط</Text>
+          <Text style={[styles.acceptButtonText]}>أوافق على الشروط</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

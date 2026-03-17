@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, TextInput, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createReview } from '../../services/reviewService';
-import { fontFamily } from '../../utils/fonts';
 
 export default function RateOrderScreen({ route, navigation }) {
   const { orderId, providerId, customerId, providerName } = route.params;
@@ -38,16 +37,16 @@ export default function RateOrderScreen({ route, navigation }) {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}><Ionicons name="arrow-forward" size={28} color="#1F2937" /></TouchableOpacity>
-        <Text style={[styles.headerTitle, { fontFamily: fontFamily.arabic }]}>تقييم الخدمة</Text>
+        <Text style={[styles.headerTitle]}>تقييم الخدمة</Text>
         <View style={{ width: 28 }} />
       </View>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.providerCard}><Text style={[styles.providerName, { fontFamily: fontFamily.arabic }]}>{providerName}</Text></View>
-        <Text style={[styles.label, { fontFamily: fontFamily.arabic }]}>تقييمك</Text>
+        <View style={styles.providerCard}><Text style={[styles.providerName]}>{providerName}</Text></View>
+        <Text style={[styles.label]}>تقييمك</Text>
         <View style={styles.starsContainer}>{renderStars()}</View>
-        <Text style={[styles.label, { fontFamily: fontFamily.arabic }]}>تعليق (اختياري)</Text>
+        <Text style={[styles.label]}>تعليق (اختياري)</Text>
         <TextInput
-          style={[styles.input, { fontFamily: fontFamily.arabic }]}
+          style={[styles.input]}
           placeholder="اكتب رأيك في الخدمة..."
           value={comment}
           onChangeText={setComment}
@@ -57,7 +56,7 @@ export default function RateOrderScreen({ route, navigation }) {
           textAlignVertical="top"
         />
         <TouchableOpacity style={[styles.submitButton, submitting && styles.disabled]} onPress={handleSubmit} disabled={submitting}>
-          {submitting ? <ActivityIndicator color="#FFF" /> : <Text style={[styles.submitButtonText, { fontFamily: fontFamily.arabic }]}>إرسال التقييم</Text>}
+          {submitting ? <ActivityIndicator color="#FFF" /> : <Text style={[styles.submitButtonText]}>إرسال التقييم</Text>}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

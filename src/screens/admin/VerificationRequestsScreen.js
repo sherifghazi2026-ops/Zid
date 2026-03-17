@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { databases, DATABASE_ID, USERS_COLLECTION_ID } from '../../appwrite/config';
 import { Query } from 'appwrite';
 import { verifyMerchant } from '../../appwrite/userService';
-import { fontFamily } from '../../utils/fonts';
 
 export default function VerificationRequestsScreen({ navigation }) {
   const [requests, setRequests] = useState([]);
@@ -42,29 +41,29 @@ export default function VerificationRequestsScreen({ navigation }) {
 
   const renderItem = ({ item }) => (
     <View style={styles.card}>
-      <View style={styles.header}><Text style={[styles.name, { fontFamily: fontFamily.arabic }]}>{item.name}</Text><Text style={[styles.phone, { fontFamily: fontFamily.arabic }]}>{item.phone}</Text></View>
-      <Text style={[styles.type, { fontFamily: fontFamily.arabic }]}>نوع النشاط: {item.merchantType || 'غير محدد'}</Text>
+      <View style={styles.header}><Text style={[styles.name]}>{item.name}</Text><Text style={[styles.phone]}>{item.phone}</Text></View>
+      <Text style={[styles.type]}>نوع النشاط: {item.merchantType || 'غير محدد'}</Text>
       {item.verificationImage && (
         <TouchableOpacity style={styles.imageRow} onPress={() => openImage(item.verificationImage)}>
           <Ionicons name="image-outline" size={20} color="#4F46E5" />
-          <Text style={[styles.imageText, { fontFamily: fontFamily.arabic }]}>عرض صورة البطاقة</Text>
+          <Text style={[styles.imageText]}>عرض صورة البطاقة</Text>
         </TouchableOpacity>
       )}
       {item.commercialRegister && (
         <TouchableOpacity style={styles.imageRow} onPress={() => openImage(item.commercialRegister)}>
           <Ionicons name="business-outline" size={20} color="#4F46E5" />
-          <Text style={[styles.imageText, { fontFamily: fontFamily.arabic }]}>عرض السجل التجاري</Text>
+          <Text style={[styles.imageText]}>عرض السجل التجاري</Text>
         </TouchableOpacity>
       )}
       {item.taxCard && (
         <TouchableOpacity style={styles.imageRow} onPress={() => openImage(item.taxCard)}>
           <Ionicons name="document-text-outline" size={20} color="#4F46E5" />
-          <Text style={[styles.imageText, { fontFamily: fontFamily.arabic }]}>عرض البطاقة الضريبية</Text>
+          <Text style={[styles.imageText]}>عرض البطاقة الضريبية</Text>
         </TouchableOpacity>
       )}
       <View style={styles.actions}>
         <TouchableOpacity style={styles.verifyButton} onPress={() => handleVerify(item.$id)}>
-          <Text style={[styles.verifyButtonText, { fontFamily: fontFamily.arabic }]}>توثيق</Text>
+          <Text style={[styles.verifyButtonText]}>توثيق</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -76,7 +75,7 @@ export default function VerificationRequestsScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <View style={styles.headerBar}>
         <TouchableOpacity onPress={() => navigation.goBack()}><Ionicons name="arrow-forward" size={28} color="#1F2937" /></TouchableOpacity>
-        <Text style={[styles.headerTitle, { fontFamily: fontFamily.arabic }]}>طلبات التوثيق</Text>
+        <Text style={[styles.headerTitle]}>طلبات التوثيق</Text>
         <TouchableOpacity onPress={loadRequests}><Ionicons name="refresh" size={24} color="#4F46E5" /></TouchableOpacity>
       </View>
       <FlatList
@@ -85,7 +84,7 @@ export default function VerificationRequestsScreen({ navigation }) {
         keyExtractor={item => item.$id}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadRequests} />}
-        ListEmptyComponent={<View style={styles.emptyContainer}><Ionicons name="checkmark-done-circle" size={80} color="#E5E7EB" /><Text style={[styles.emptyText, { fontFamily: fontFamily.arabic }]}>لا توجد طلبات توثيق حالياً</Text></View>}
+        ListEmptyComponent={<View style={styles.emptyContainer}><Ionicons name="checkmark-done-circle" size={80} color="#E5E7EB" /><Text style={[styles.emptyText]}>لا توجد طلبات توثيق حالياً</Text></View>}
       />
       <Modal visible={modalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>

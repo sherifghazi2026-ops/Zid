@@ -23,7 +23,6 @@ import {
   updateOrderStatus, startPickup, completePickup, ORDER_STATUS
 } from '../../services/orderService';
 import { getAvailableDrivers } from '../../services/driverService';
-import { fontFamily } from '../../utils/fonts';
 
 const { width, height } = Dimensions.get('window');
 
@@ -264,7 +263,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
                 style={[styles.actionButton, styles.pickupButton]}
                 onPress={handleStartPickup}
               >
-                <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>بدء الاستلام</Text>
+                <Text style={[styles.actionButtonText]}>بدء الاستلام</Text>
               </TouchableOpacity>
             </View>
           );
@@ -275,13 +274,13 @@ export default function OrderDetailsScreen({ route, navigation }) {
                 style={styles.actionButton}
                 onPress={() => updateOrderStatus(orderId, ORDER_STATUS.PREPARING).then(loadOrder)}
               >
-                <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>بدء التجهيز</Text>
+                <Text style={[styles.actionButtonText]}>بدء التجهيز</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionButton, styles.priceButton]}
                 onPress={() => setShowPriceModal(true)}
               >
-                <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>تحديد السعر</Text>
+                <Text style={[styles.actionButtonText]}>تحديد السعر</Text>
               </TouchableOpacity>
             </View>
           );
@@ -294,7 +293,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
               style={[styles.actionButton, styles.pickupButton]}
               onPress={handleCompletePickup}
             >
-              <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>تم الاستلام</Text>
+              <Text style={[styles.actionButtonText]}>تم الاستلام</Text>
             </TouchableOpacity>
           </View>
         );
@@ -306,7 +305,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
               style={[styles.actionButton, styles.priceButton]}
               onPress={() => setShowPriceModal(true)}
             >
-              <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>تحديد السعر</Text>
+              <Text style={[styles.actionButtonText]}>تحديد السعر</Text>
             </TouchableOpacity>
           </View>
         );
@@ -314,21 +313,21 @@ export default function OrderDetailsScreen({ route, navigation }) {
       case ORDER_STATUS.READY:
         return (
           <View>
-            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>اختيار طريقة التوصيل:</Text>
+            <Text style={[styles.sectionTitle]}>اختيار طريقة التوصيل:</Text>
             <View style={styles.deliveryOptions}>
               <TouchableOpacity
                 style={[styles.deliveryOption, styles.selfDelivery]}
                 onPress={handleStartDelivery}
               >
                 <Ionicons name="person-outline" size={30} color="#FFF" />
-                <Text style={[styles.deliveryOptionText, { fontFamily: fontFamily.arabic }]}>توصيل بنفسي</Text>
+                <Text style={[styles.deliveryOptionText]}>توصيل بنفسي</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.deliveryOption, styles.driverDelivery]}
                 onPress={() => setShowDriversModal(true)}
               >
                 <Ionicons name="bicycle-outline" size={30} color="#FFF" />
-                <Text style={[styles.deliveryOptionText, { fontFamily: fontFamily.arabic }]}>مندوب</Text>
+                <Text style={[styles.deliveryOptionText]}>مندوب</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -341,7 +340,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
               style={styles.actionButton}
               onPress={handleStartDelivery}
             >
-              <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>بدء التوصيل</Text>
+              <Text style={[styles.actionButtonText]}>بدء التوصيل</Text>
             </TouchableOpacity>
           </View>
         );
@@ -353,7 +352,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
               style={[styles.actionButton, styles.completeButton]}
               onPress={handleCompleteDelivery}
             >
-              <Text style={[styles.actionButtonText, { fontFamily: fontFamily.arabic }]}>تم التوصيل</Text>
+              <Text style={[styles.actionButtonText]}>تم التوصيل</Text>
             </TouchableOpacity>
           </View>
         );
@@ -377,7 +376,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-forward" size={28} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { fontFamily: fontFamily.arabic }]}>تفاصيل الطلب</Text>
+        <Text style={[styles.headerTitle]}>تفاصيل الطلب</Text>
         <View style={{ width: 28 }} />
       </View>
 
@@ -389,23 +388,23 @@ export default function OrderDetailsScreen({ route, navigation }) {
             <Text style={[styles.statusText, { fontFamily: fontFamily.arabic, color: getStatusColor(order.status) }]}>
               {getStatusText(order.status)}
             </Text>
-            <Text style={[styles.orderId, { fontFamily: fontFamily.arabic }]}>طلب #{order.$id.slice(-6)}</Text>
+            <Text style={[styles.orderId]}>طلب #{order.$id.slice(-6)}</Text>
           </View>
         </View>
 
         {/* معلومات العميل */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>معلومات العميل</Text>
+          <Text style={[styles.sectionTitle]}>معلومات العميل</Text>
           <View style={styles.infoCard}>
             <TouchableOpacity style={styles.infoRow} onPress={() => makePhoneCall(order.customerPhone)}>
               <Ionicons name="call-outline" size={20} color="#4F46E5" />
-              <Text style={[styles.infoLabel, { fontFamily: fontFamily.arabic }]}>رقم الهاتف:</Text>
-              <Text style={[styles.infoValue, styles.phoneLink, { fontFamily: fontFamily.arabic }]}>{order.customerPhone}</Text>
+              <Text style={[styles.infoLabel]}>رقم الهاتف:</Text>
+              <Text style={[styles.infoValue, styles.phoneLink]}>{order.customerPhone}</Text>
             </TouchableOpacity>
             <View style={styles.infoRow}>
               <Ionicons name="location-outline" size={20} color="#EF4444" />
-              <Text style={[styles.infoLabel, { fontFamily: fontFamily.arabic }]}>العنوان:</Text>
-              <Text style={[styles.infoValue, { fontFamily: fontFamily.arabic }]}>{order.customerAddress}</Text>
+              <Text style={[styles.infoLabel]}>العنوان:</Text>
+              <Text style={[styles.infoValue]}>{order.customerAddress}</Text>
             </View>
           </View>
         </View>
@@ -413,10 +412,10 @@ export default function OrderDetailsScreen({ route, navigation }) {
         {/* المنتجات */}
         {order.items && order.items.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>📋 تفاصيل الطلب</Text>
+            <Text style={[styles.sectionTitle]}>📋 تفاصيل الطلب</Text>
             <View style={styles.itemsCard}>
               {order.items.map((item, index) => (
-                <Text key={index} style={[styles.itemText, { fontFamily: fontFamily.arabic }]}>• {item}</Text>
+                <Text key={index} style={[styles.itemText]}>• {item}</Text>
               ))}
             </View>
           </View>
@@ -425,21 +424,21 @@ export default function OrderDetailsScreen({ route, navigation }) {
         {/* الفاتورة */}
         {order.totalPrice > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>💰 الفاتورة</Text>
+            <Text style={[styles.sectionTitle]}>💰 الفاتورة</Text>
             <View style={styles.invoiceCard}>
               <View style={styles.invoiceRow}>
-                <Text style={[styles.invoiceLabel, { fontFamily: fontFamily.arabic }]}>قيمة الطلب:</Text>
-                <Text style={[styles.invoiceValue, { fontFamily: fontFamily.arabic }]}>{order.totalPrice} ج</Text>
+                <Text style={[styles.invoiceLabel]}>قيمة الطلب:</Text>
+                <Text style={[styles.invoiceValue]}>{order.totalPrice} ج</Text>
               </View>
               {order.deliveryFee > 0 && (
                 <View style={styles.invoiceRow}>
-                  <Text style={[styles.invoiceLabel, { fontFamily: fontFamily.arabic }]}>تكلفة التوصيل:</Text>
-                  <Text style={[styles.invoiceValue, { fontFamily: fontFamily.arabic }]}>{order.deliveryFee} ج</Text>
+                  <Text style={[styles.invoiceLabel]}>تكلفة التوصيل:</Text>
+                  <Text style={[styles.invoiceValue]}>{order.deliveryFee} ج</Text>
                 </View>
               )}
               <View style={styles.invoiceTotal}>
-                <Text style={[styles.totalLabel, { fontFamily: fontFamily.arabic }]}>الإجمالي:</Text>
-                <Text style={[styles.totalValue, { fontFamily: fontFamily.arabic }]}>{order.finalTotal || order.totalPrice} ج</Text>
+                <Text style={[styles.totalLabel]}>الإجمالي:</Text>
+                <Text style={[styles.totalValue]}>{order.finalTotal || order.totalPrice} ج</Text>
               </View>
             </View>
           </View>
@@ -454,7 +453,7 @@ export default function OrderDetailsScreen({ route, navigation }) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { fontFamily: fontFamily.arabic }]}>اختر مندوب</Text>
+              <Text style={[styles.modalTitle]}>اختر مندوب</Text>
               <TouchableOpacity onPress={() => setShowDriversModal(false)}>
                 <Ionicons name="close" size={24} color="#EF4444" />
               </TouchableOpacity>
@@ -469,13 +468,13 @@ export default function OrderDetailsScreen({ route, navigation }) {
                 >
                   <Ionicons name="person-circle-outline" size={40} color="#4F46E5" />
                   <View style={styles.driverItemInfo}>
-                    <Text style={[styles.driverItemName, { fontFamily: fontFamily.arabic }]}>{item.name}</Text>
-                    <Text style={[styles.driverItemPhone, { fontFamily: fontFamily.arabic }]}>{item.phone}</Text>
+                    <Text style={[styles.driverItemName]}>{item.name}</Text>
+                    <Text style={[styles.driverItemPhone]}>{item.phone}</Text>
                   </View>
                 </TouchableOpacity>
               )}
               ListEmptyComponent={
-                <Text style={[styles.emptyText, { fontFamily: fontFamily.arabic }]}>لا يوجد مندوبين متاحين</Text>
+                <Text style={[styles.emptyText]}>لا يوجد مندوبين متاحين</Text>
               }
             />
           </View>
@@ -486,11 +485,11 @@ export default function OrderDetailsScreen({ route, navigation }) {
       <Modal visible={showPriceModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.priceModalContent}>
-            <Text style={[styles.modalTitle, { fontFamily: fontFamily.arabic }]}>تحديد السعر</Text>
+            <Text style={[styles.modalTitle]}>تحديد السعر</Text>
 
-            <Text style={[styles.inputLabel, { fontFamily: fontFamily.arabic }]}>قيمة الطلب *</Text>
+            <Text style={[styles.inputLabel]}>قيمة الطلب *</Text>
             <TextInput
-              style={[styles.priceInput, { fontFamily: fontFamily.arabic }]}
+              style={[styles.priceInput]}
               placeholder="مثال: 150"
               placeholderTextColor="#9CA3AF"
               value={price}
@@ -498,9 +497,9 @@ export default function OrderDetailsScreen({ route, navigation }) {
               keyboardType="numeric"
             />
 
-            <Text style={[styles.inputLabel, { fontFamily: fontFamily.arabic }]}>تكلفة التوصيل (اختياري)</Text>
+            <Text style={[styles.inputLabel]}>تكلفة التوصيل (اختياري)</Text>
             <TextInput
-              style={[styles.priceInput, { fontFamily: fontFamily.arabic }]}
+              style={[styles.priceInput]}
               placeholder="مثال: 20"
               placeholderTextColor="#9CA3AF"
               value={deliveryFee}
@@ -510,10 +509,10 @@ export default function OrderDetailsScreen({ route, navigation }) {
 
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => setShowPriceModal(false)}>
-                <Text style={[styles.cancelButtonText, { fontFamily: fontFamily.arabic }]}>إلغاء</Text>
+                <Text style={[styles.cancelButtonText]}>إلغاء</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.confirmButton} onPress={handleSetPrice}>
-                <Text style={[styles.confirmButtonText, { fontFamily: fontFamily.arabic }]}>تأكيد</Text>
+                <Text style={[styles.confirmButtonText]}>تأكيد</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -1,25 +1,7 @@
-// تم إلغاء تحميل الخطوط تماماً - استخدام الخطوط النظامية فقط
-import { Platform } from 'react-native';
+// ملف فارغ - لا يوجد خطوط
+export const fontFamily = {};
 
 export const loadFonts = async () => {
-  console.log('✅ استخدام الخطوط النظامية (بدون تحميل)');
-  return Promise.resolve(true);
-};
-
-export const fontFamily = {
-  regular: Platform.select({
-    android: 'System',
-    ios: 'System',
-    default: 'System',
-  }),
-  bold: Platform.select({
-    android: 'System',
-    ios: 'System',
-    default: 'System',
-  }),
-  arabic: Platform.select({
-    android: 'System',
-    ios: 'System',
-    default: 'System',
-  }),
+  console.log('✅ لا يوجد خطوط للتحميل');
+  return true;
 };

@@ -5,12 +5,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, ActivityIndicator, StyleSheet, Alert } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { CartProvider } from './src/context/CartContext';
 import { TermsProvider } from './src/context/TermsContext';
-import { loadFonts, fontFamily } from './src/utils/fonts';
 import { loadSounds, cleanup } from './src/utils/SoundHelper';
 import { initializeCoreServices } from './src/services/servicesService';
 
@@ -84,7 +83,7 @@ import ReviewProductsScreen from './src/screens/admin/ReviewProductsScreen';
 import OffersScreen from './src/screens/OffersScreen';
 import EshopScreen from './src/screens/EshopScreen';
 
-// شاشة AI مؤقتة (حتى يتم إنشاؤها)
+// شاشة AI مؤقتة
 const AiMainModal = ({ navigation }) => {
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' }}>
@@ -145,7 +144,7 @@ function MainTabs() {
         tabBarActiveTintColor: '#F59E0B',
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: { backgroundColor: '#FFF', borderTopColor: '#E5E7EB', paddingBottom: 5, height: 60 },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '500', fontFamily: fontFamily.arabic },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '500' },
         headerShown: false,
       })}
     >
@@ -228,9 +227,6 @@ export default function App() {
   useEffect(() => {
     async function prepare() {
       try {
-        await loadFonts();
-        console.log('✅ تم تحميل الخطوط');
-
         await loadSounds();
         console.log('✅ تم تحميل الأصوات');
 
@@ -256,7 +252,7 @@ export default function App() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4F46E5" />
-        <Text style={[styles.loadingText, { fontFamily: fontFamily.arabic }]}>
+        <Text style={styles.loadingText}>
           جاري تحميل التطبيق...
         </Text>
       </View>

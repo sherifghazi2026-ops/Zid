@@ -1,9 +1,15 @@
 import { File } from 'expo-file-system/next';
 import { Platform } from 'react-native';
 
-const IMAGEKIT_PRIVATE_KEY = 'private_EWamixKcyYNZI2xJmmO0iQBN53k=';
-const IMAGEKIT_PUBLIC_KEY = 'public_gRNWZVl/bFOQ7VfIDOm6J/Mwzrc=';
-const IMAGEKIT_URL_ENDPOINT = 'https://ik.imagekit.io/vzuah6tku/';
+// ✅ استخدام متغيرات البيئة
+const IMAGEKIT_PRIVATE_KEY = process.env.EXPO_PUBLIC_IMAGEKIT_PRIVATE_KEY;
+const IMAGEKIT_PUBLIC_KEY = process.env.EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY;
+const IMAGEKIT_URL_ENDPOINT = process.env.EXPO_PUBLIC_IMAGEKIT_ENDPOINT || 'https://ik.imagekit.io/vzuah6tku/';
+
+// التحقق من وجود المفاتيح
+if (!IMAGEKIT_PRIVATE_KEY || !IMAGEKIT_PUBLIC_KEY) {
+  console.error('❌ مفاتيح ImageKit غير موجودة في متغيرات البيئة');
+}
 
 const sanitizeFolderName = (name) => {
   if (!name) return 'unknown';

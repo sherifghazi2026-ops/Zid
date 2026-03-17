@@ -24,7 +24,6 @@ import { getVisibleServicesForHome } from '../services/servicesService';
 import { useFocusEffect } from '@react-navigation/native';
 import { databases, DATABASE_ID } from '../appwrite/config';
 import { Query } from 'appwrite';
-import { fontFamily } from '../utils/fonts';
 
 const { width } = Dimensions.get('window');
 const CARD_SIZE = (width - 48) / 2;
@@ -298,17 +297,17 @@ const HomeScreen = ({ navigation }) => {
       onPress={() => navigation.navigate('OrderTrackingScreen', { orderId: order.$id })}
     >
       <View style={styles.orderHeader}>
-        <Text style={[styles.orderId, { fontFamily: fontFamily.arabic }]}>#{order.$id.slice(-6)}</Text>
+        <Text style={styles.orderId}>#{order.$id.slice(-6)}</Text>
         <View style={[styles.orderStatusBadge, { backgroundColor: getStatusColor(order.status) + '20' }]}>
-          <Text style={[styles.orderStatusText, { color: getStatusColor(order.status), fontFamily: fontFamily.arabic }]}>{getStatusText(order.status)}</Text>
+          <Text style={[styles.orderStatusText, { color: getStatusColor(order.status) }]}>{getStatusText(order.status)}</Text>
         </View>
       </View>
-      <Text style={[styles.orderService, { fontFamily: fontFamily.arabic }]} numberOfLines={1}>{order.serviceName}</Text>
+      <Text style={styles.orderService} numberOfLines={1}>{order.serviceName}</Text>
       <View style={styles.orderFooter}>
         {order.finalTotal > 0 && (
-          <Text style={[styles.orderPrice, { fontFamily: fontFamily.arabic }]}>{order.finalTotal} ج</Text>
+          <Text style={styles.orderPrice}>{order.finalTotal} ج</Text>
         )}
-        <Text style={[styles.orderDate, { fontFamily: fontFamily.arabic }]}>{new Date(order.createdAt).toLocaleDateString('ar-EG')}</Text>
+        <Text style={styles.orderDate}>{new Date(order.createdAt).toLocaleDateString('ar-EG')}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -318,9 +317,9 @@ const HomeScreen = ({ navigation }) => {
       return (
         <View style={styles.emptyContainer}>
           <Ionicons name="restaurant-outline" size={80} color="#E5E7EB" />
-          <Text style={[styles.emptyText, { fontFamily: fontFamily.arabic }]}>لا توجد خدمات</Text>
+          <Text style={styles.emptyText}>لا توجد خدمات</Text>
           <TouchableOpacity style={styles.refreshButton} onPress={loadServices}>
-            <Text style={[styles.refreshButtonText, { fontFamily: fontFamily.arabic }]}>إعادة تحميل</Text>
+            <Text style={styles.refreshButtonText}>إعادة تحميل</Text>
           </TouchableOpacity>
         </View>
       );
@@ -345,7 +344,7 @@ const HomeScreen = ({ navigation }) => {
                 <View style={[styles.sectionIcon, { backgroundColor: categoryColor + '20' }]}>
                   <Ionicons name="apps-outline" size={24} color={categoryColor} />
                 </View>
-                <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic, color: categoryColor }]}>
+                <Text style={[styles.sectionTitle, { color: categoryColor }]}>
                   {categoryTitle}
                 </Text>
               </View>
@@ -372,7 +371,7 @@ const HomeScreen = ({ navigation }) => {
                         </View>
                       )}
                       <View style={[styles.overlay, !isActive && styles.disabledOverlay]}>
-                        <Text style={[styles.cardTitle, { fontFamily: fontFamily.arabic }, !isActive && styles.disabledCardTitle]}>{service.name}</Text>
+                        <Text style={[styles.cardTitle, !isActive && styles.disabledCardTitle]}>{service.name}</Text>
                         {service.type === 'ai' && (
                           <View style={styles.aiBadge}>
                             <Ionicons name="flash" size={16} color="#FFF" />
@@ -381,7 +380,7 @@ const HomeScreen = ({ navigation }) => {
                         )}
                         {!isActive && (
                           <View style={styles.maintenanceBadge}>
-                            <Text style={[styles.maintenanceText, { fontFamily: fontFamily.arabic }]}>
+                            <Text style={styles.maintenanceText}>
                               {service.maintenanceText || 'غير متاح'}
                             </Text>
                           </View>
@@ -412,12 +411,12 @@ const HomeScreen = ({ navigation }) => {
           {!isLoggedIn ? (
             <TouchableOpacity onPress={handleLoginPress} style={styles.registerButton}>
               <Ionicons name="log-in-outline" size={20} color="#4F46E5" />
-              <Text style={[styles.registerText, { fontFamily: fontFamily.arabic }]}>دخول</Text>
+              <Text style={styles.registerText}>دخول</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity onPress={() => setDrawerVisible(true)} style={styles.profileButton}>
               <View style={styles.avatarSmall}>
-                <Text style={[styles.avatarText, { fontFamily: fontFamily.arabic }]}>{userData?.name?.charAt(0) || 'م'}</Text>
+                <Text style={styles.avatarText}>{userData?.name?.charAt(0) || 'م'}</Text>
               </View>
             </TouchableOpacity>
           )}
@@ -426,14 +425,14 @@ const HomeScreen = ({ navigation }) => {
 
       {isLoggedIn && (
         <View style={styles.welcomeSection}>
-          <Text style={[styles.welcomeText, { fontFamily: fontFamily.arabic }]}>مرحباً، {userData?.name || 'عميلنا العزيز'}</Text>
+          <Text style={styles.welcomeText}>مرحباً، {userData?.name || 'عميلنا العزيز'}</Text>
         </View>
       )}
 
       {isLoggedIn && currentOrders.length > 0 && (
         <View style={styles.ordersSection}>
           <View style={styles.ordersHeader}>
-            <Text style={[styles.ordersTitle, { fontFamily: fontFamily.arabic }]}>طلباتك الحالية ({currentOrders.length})</Text>
+            <Text style={styles.ordersTitle}>طلباتك الحالية ({currentOrders.length})</Text>
             <TouchableOpacity onPress={() => setShowCurrentOrders(!showCurrentOrders)}>
               <Ionicons name={showCurrentOrders ? "chevron-up" : "chevron-down"} size={20} color="#6B7280" />
             </TouchableOpacity>
@@ -448,7 +447,7 @@ const HomeScreen = ({ navigation }) => {
 
       {isLoggedIn && currentOrders.length === 0 && (
         <View style={styles.noOrdersContainer}>
-          <Text style={[styles.noOrdersText, { fontFamily: fontFamily.arabic }]}>لا توجد طلبات حالية</Text>
+          <Text style={styles.noOrdersText}>لا توجد طلبات حالية</Text>
         </View>
       )}
 
@@ -478,8 +477,8 @@ const HomeScreen = ({ navigation }) => {
       <Modal visible={adminModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={[styles.modalTitle, { fontFamily: fontFamily.arabic }]}>دخول الأدمن</Text>
-            <Text style={[styles.modalSubtitle, { fontFamily: fontFamily.arabic }]}>أدخل كلمة المرور الخاصة</Text>
+            <Text style={styles.modalTitle}>دخول الأدمن</Text>
+            <Text style={styles.modalSubtitle}>أدخل كلمة المرور الخاصة</Text>
             <TextInput
               style={styles.modalInput}
               placeholder="كلمة المرور"
@@ -491,17 +490,17 @@ const HomeScreen = ({ navigation }) => {
             />
             <View style={styles.modalButtons}>
               <TouchableOpacity style={[styles.modalButton, styles.modalCancel]} onPress={() => { setAdminModalVisible(false); setAdminPassword(''); }}>
-                <Text style={[styles.modalCancelText, { fontFamily: fontFamily.arabic }]}>إلغاء</Text>
+                <Text style={styles.modalCancelText}>إلغاء</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.modalButton, styles.modalConfirm]} onPress={handleAdminAccess}>
-                <Text style={[styles.modalConfirmText, { fontFamily: fontFamily.arabic }]}>دخول</Text>
+                <Text style={styles.modalConfirmText}>دخول</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* ✅ تم إزالة DynamicMongez من هنا */}
+      {/* تم إزالة DynamicMongez من هنا */}
     </SafeAreaView>
   );
 };
@@ -585,7 +584,7 @@ const styles = StyleSheet.create({
   maintenanceBadge: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#EF4444', paddingVertical: 6, alignItems: 'center' },
   maintenanceText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
   emptyContainer: { alignItems: 'center', paddingVertical: 60 },
-  emptyText: { marginTop: 12, fontSize: 16, color: '#6B7280' },
+  emptyText: { fontSize: 16, color: '#6B7280' },
   refreshButton: { marginTop: 16, backgroundColor: '#4F46E5', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
   refreshButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
   drawerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },

@@ -15,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { databases, DATABASE_ID } from '../../appwrite/config';
 import { ORDER_STATUS } from '../../services/orderService';
-import { fontFamily } from '../../utils/fonts';
 
 export default function OrderTrackingScreen({ route, navigation }) {
   const { orderId } = route.params;
@@ -173,7 +172,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-forward" size={28} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { fontFamily: fontFamily.arabic }]}>تتبع الطلب</Text>
+        <Text style={[styles.headerTitle]}>تتبع الطلب</Text>
         <View style={{ width: 28 }} />
       </View>
 
@@ -185,7 +184,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
             <Text style={[styles.statusText, { fontFamily: fontFamily.arabic, color: getStatusColor(order.status) }]}>
               {getStatusText(order.status)}
             </Text>
-            <Text style={[styles.orderId, { fontFamily: fontFamily.arabic }]}>طلب #{order.$id.slice(-6)}</Text>
+            <Text style={[styles.orderId]}>طلب #{order.$id.slice(-6)}</Text>
           </View>
         </View>
 
@@ -293,17 +292,17 @@ export default function OrderTrackingScreen({ route, navigation }) {
 
         {/* معلومات العميل */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>معلومات التوصيل</Text>
+          <Text style={[styles.sectionTitle]}>معلومات التوصيل</Text>
           <View style={styles.infoCard}>
             <TouchableOpacity style={styles.infoRow} onPress={() => makePhoneCall(order.customerPhone)}>
               <Ionicons name="call-outline" size={20} color="#4F46E5" />
-              <Text style={[styles.infoLabel, { fontFamily: fontFamily.arabic }]}>رقم الهاتف:</Text>
-              <Text style={[styles.infoValue, styles.phoneLink, { fontFamily: fontFamily.arabic }]}>{order.customerPhone}</Text>
+              <Text style={[styles.infoLabel]}>رقم الهاتف:</Text>
+              <Text style={[styles.infoValue, styles.phoneLink]}>{order.customerPhone}</Text>
             </TouchableOpacity>
             <View style={styles.infoRow}>
               <Ionicons name="location-outline" size={20} color="#EF4444" />
-              <Text style={[styles.infoLabel, { fontFamily: fontFamily.arabic }]}>العنوان:</Text>
-              <Text style={[styles.infoValue, { fontFamily: fontFamily.arabic }]}>{order.customerAddress}</Text>
+              <Text style={[styles.infoLabel]}>العنوان:</Text>
+              <Text style={[styles.infoValue]}>{order.customerAddress}</Text>
             </View>
           </View>
         </View>
@@ -311,10 +310,10 @@ export default function OrderTrackingScreen({ route, navigation }) {
         {/* المنتجات */}
         {order.items && order.items.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>المنتجات</Text>
+            <Text style={[styles.sectionTitle]}>المنتجات</Text>
             <View style={styles.itemsCard}>
               {order.items.map((item, index) => (
-                <Text key={index} style={[styles.itemText, { fontFamily: fontFamily.arabic }]}>• {item}</Text>
+                <Text key={index} style={[styles.itemText]}>• {item}</Text>
               ))}
             </View>
           </View>
@@ -323,7 +322,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
         {/* الصور المرفقة */}
         {order.imageUrls && order.imageUrls.length > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>🖼️ الصور المرفقة</Text>
+            <Text style={[styles.sectionTitle]}>🖼️ الصور المرفقة</Text>
             <ScrollView horizontal style={styles.imagesContainer}>
               {order.imageUrls.map((url, index) => (
                 <Image key={index} source={{ uri: url }} style={styles.thumbnail} />
@@ -335,7 +334,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
         {/* التسجيل الصوتي */}
         {order.voiceUrl && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>🎤 التسجيل الصوتي</Text>
+            <Text style={[styles.sectionTitle]}>🎤 التسجيل الصوتي</Text>
             <TouchableOpacity
               style={styles.voiceButton}
               onPress={() => playVoice(order.voiceUrl)}
@@ -345,7 +344,7 @@ export default function OrderTrackingScreen({ route, navigation }) {
                 size={24}
                 color="#FFF"
               />
-              <Text style={[styles.voiceButtonText, { fontFamily: fontFamily.arabic }]}>
+              <Text style={[styles.voiceButtonText]}>
                 {playingVoice === order.voiceUrl ? 'جاري التشغيل' : 'استمع للتسجيل'}
               </Text>
             </TouchableOpacity>
@@ -355,18 +354,18 @@ export default function OrderTrackingScreen({ route, navigation }) {
         {/* معلومات التاجر */}
         {order.merchantName && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>التاجر</Text>
+            <Text style={[styles.sectionTitle]}>التاجر</Text>
             <View style={styles.contactCard}>
               <View style={styles.contactRow}>
                 <Ionicons name="business-outline" size={20} color="#F59E0B" />
-                <Text style={[styles.contactName, { fontFamily: fontFamily.arabic }]}>{order.merchantName}</Text>
+                <Text style={[styles.contactName]}>{order.merchantName}</Text>
               </View>
               <TouchableOpacity 
                 style={styles.contactButton}
                 onPress={() => makePhoneCall(order.merchantPhone)}
               >
                 <Ionicons name="call" size={18} color="#FFF" />
-                <Text style={[styles.contactButtonText, { fontFamily: fontFamily.arabic }]}>اتصل بالتاجر</Text>
+                <Text style={[styles.contactButtonText]}>اتصل بالتاجر</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -375,18 +374,18 @@ export default function OrderTrackingScreen({ route, navigation }) {
         {/* معلومات المندوب */}
         {order.driverName && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>المندوب</Text>
+            <Text style={[styles.sectionTitle]}>المندوب</Text>
             <View style={[styles.contactCard, { borderColor: '#3B82F6' }]}>
               <View style={styles.contactRow}>
                 <Ionicons name="bicycle-outline" size={20} color="#3B82F6" />
-                <Text style={[styles.contactName, { fontFamily: fontFamily.arabic }]}>{order.driverName}</Text>
+                <Text style={[styles.contactName]}>{order.driverName}</Text>
               </View>
               <TouchableOpacity 
                 style={[styles.contactButton, { backgroundColor: '#3B82F6' }]}
                 onPress={() => makePhoneCall(order.driverPhone)}
               >
                 <Ionicons name="call" size={18} color="#FFF" />
-                <Text style={[styles.contactButtonText, { fontFamily: fontFamily.arabic }]}>اتصل بالمندوب</Text>
+                <Text style={[styles.contactButtonText]}>اتصل بالمندوب</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -395,25 +394,25 @@ export default function OrderTrackingScreen({ route, navigation }) {
         {/* الفاتورة */}
         {order.totalPrice > 0 && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontFamily: fontFamily.arabic }]}>💰 الفاتورة</Text>
+            <Text style={[styles.sectionTitle]}>💰 الفاتورة</Text>
             <View style={styles.invoiceCard}>
               <View style={styles.invoiceRow}>
-                <Text style={[styles.invoiceLabel, { fontFamily: fontFamily.arabic }]}>قيمة الطلب:</Text>
-                <Text style={[styles.invoiceValue, { fontFamily: fontFamily.arabic }]}>{order.totalPrice} ج</Text>
+                <Text style={[styles.invoiceLabel]}>قيمة الطلب:</Text>
+                <Text style={[styles.invoiceValue]}>{order.totalPrice} ج</Text>
               </View>
               {order.deliveryFee > 0 && (
                 <View style={styles.invoiceRow}>
-                  <Text style={[styles.invoiceLabel, { fontFamily: fontFamily.arabic }]}>توصيل:</Text>
-                  <Text style={[styles.invoiceValue, { fontFamily: fontFamily.arabic }]}>{order.deliveryFee} ج</Text>
+                  <Text style={[styles.invoiceLabel]}>توصيل:</Text>
+                  <Text style={[styles.invoiceValue]}>{order.deliveryFee} ج</Text>
                 </View>
               )}
               <View style={styles.invoiceTotal}>
-                <Text style={[styles.totalLabel, { fontFamily: fontFamily.arabic }]}>الإجمالي:</Text>
-                <Text style={[styles.totalValue, { fontFamily: fontFamily.arabic }]}>{order.finalTotal || order.totalPrice} ج</Text>
+                <Text style={[styles.totalLabel]}>الإجمالي:</Text>
+                <Text style={[styles.totalValue]}>{order.finalTotal || order.totalPrice} ج</Text>
               </View>
               <View style={styles.paymentMethod}>
-                <Text style={[styles.paymentLabel, { fontFamily: fontFamily.arabic }]}>طريقة الدفع:</Text>
-                <Text style={[styles.paymentValue, { fontFamily: fontFamily.arabic }]}>الدفع عند الاستلام</Text>
+                <Text style={[styles.paymentLabel]}>طريقة الدفع:</Text>
+                <Text style={[styles.paymentValue]}>الدفع عند الاستلام</Text>
               </View>
             </View>
           </View>
@@ -421,11 +420,11 @@ export default function OrderTrackingScreen({ route, navigation }) {
 
         {/* تاريخ الطلب */}
         <View style={styles.section}>
-          <Text style={[styles.dateText, { fontFamily: fontFamily.arabic }]}>
+          <Text style={[styles.dateText]}>
             تاريخ الطلب: {new Date(order.createdAt).toLocaleString('ar-EG')}
           </Text>
           {order.deliveredAt && (
-            <Text style={[styles.dateText, { fontFamily: fontFamily.arabic }]}>
+            <Text style={[styles.dateText]}>
               تم الاستلام: {new Date(order.deliveredAt).toLocaleString('ar-EG')}
             </Text>
           )}
