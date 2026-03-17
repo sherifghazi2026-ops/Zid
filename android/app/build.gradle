@@ -1,20 +1,19 @@
 apply plugin: "com.android.application"
 apply plugin: "com.facebook.react"
 
-def jscFlavor = 'org.webkit:android-jsc:+'
-
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.zid.app"
+    namespace "com.sherif.zid"
     defaultConfig {
-        applicationId "com.zid.app"
+        applicationId "com.sherif.zid"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0.0"
+        multiDexEnabled true
     }
 
     signingConfigs {
@@ -39,15 +38,21 @@ android {
 
 dependencies {
     implementation("com.facebook.react:react-android")
+    
+    // حل مشكلة الصور والـ GIF بشكل نهائي ومباشر
     implementation("com.facebook.fresco:animated-gif:3.2.0")
+    implementation("com.facebook.fresco:fresco:3.2.0")
+    implementation("com.facebook.fresco:webpsupport:3.2.0")
+    
+    implementation "androidx.multidex:multidex:2.0.1"
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {
-        implementation jscFlavor
+        implementation "io.github.react-native-community:jsc-android:2026004.+"
     }
 }
 
-// الطريقة المختصرة والأضمن لـ Expo
-apply from: new File(["node", "--print", "require.resolve('expo/package.json')"].execute(null, rootProject.projectDir).text.trim(), "../scripts/autolinking.gradle")
+// ربط مكتبات Expo
+apply from: "../../node_modules/expo/scripts/autolinking.gradle"
 useExpoModules()
