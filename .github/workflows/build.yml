@@ -5,6 +5,14 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # تمرير المتغيرات الأساسية للـ Build
+  EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+  EXPO_PUBLIC_GEMINI_API_KEY: ${{ secrets.EXPO_PUBLIC_GEMINI_API_KEY }}
+  EXPO_PUBLIC_GROQ_API_KEY: ${{ secrets.EXPO_PUBLIC_GROQ_API_KEY }}
+  EXPO_PUBLIC_IMAGEKIT_ENDPOINT: ${{ secrets.EXPO_PUBLIC_IMAGEKIT_ENDPOINT }}
+  EXPO_PUBLIC_TELEGRAM_BOT_TOKEN: ${{ secrets.EXPO_PUBLIC_TELEGRAM_BOT_TOKEN }}
+  EXPO_PUBLIC_TELEGRAM_CHAT_ID: ${{ secrets.EXPO_PUBLIC_TELEGRAM_CHAT_ID }}
 
 jobs:
   build:
@@ -26,6 +34,7 @@ jobs:
         uses: expo/expo-github-action@v8
         with:
           expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
 
       - name: ⚙️ Setup Java
         uses: actions/setup-java@v4
