@@ -23,7 +23,7 @@ jobs:
       - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
           cache: 'npm'
 
       - name: 📦 Install dependencies
@@ -42,18 +42,17 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 🛠 Prebuild & Build APK (Debug Mode)
+      - name: 🛠 Prebuild & Local Build APK
         run: |
-          npx expo prebuild
-          # توليد الـ Keystore عشان الـ Build ما يرفضش
-          cd android/app
-          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          cd ..
+          npx expo prebuild --platform android
+          cd android
+          # توليد مفتاح الـ debug يدوياً عشان الـ Build ما يوقفش
+          keytool -genkey -v -keystore app/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           chmod +x gradlew
           ./gradlew assembleDebug
 
       - name: 📤 Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Zid-Debug-APK
+          name: Zid-App-Debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
