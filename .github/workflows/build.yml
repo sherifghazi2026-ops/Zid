@@ -1,39 +1,46 @@
-name: Build Zid Production
+name: Build Android APK
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [ main ]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: 🏗 Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🏗 Setup Node
+      - name: ⚙️ Setup Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 24
           cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm install
 
       - name: 🏗 Setup Expo
         uses: expo/expo-github-action@v8
         with:
           expo-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+          eas-cache: true
 
-      - name: 🔑 Create .env file
+      - name: 🛠 Fix Cache Permissions
+        run: git config --global --add safe.directory /home/runner/work/Zid/Zid
+
+      - name: 🚀 Build Android APK
         run: |
-          echo "EXPO_PUBLIC_SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
-          echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
-          echo "EXPO_PUBLIC_GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
-          echo "EXPO_PUBLIC_TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
-          echo "EXPO_PUBLIC_TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env
+          npx expo prebuild
+          # ملاحظة: إذا كنت تستخدم EAS Build، استخدم الأمر التالي:
+          # eas build --platform android --profile preview --local
+        env:
+          NODE_ENV: production
 
-      - name: 📦 Install dependencies
-        run: npm install
-
-      - name: 🚀 Build Android
-        run: EAS_SKIP_AUTO_FINGERPRINT=1 npx eas-cli build --platform android --profile production --non-interactive
+      - name: 📤 Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zid-app-apk
+          path: android/app/build/outputs/apk/release/*.apk
