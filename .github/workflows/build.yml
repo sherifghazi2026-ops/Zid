@@ -8,7 +8,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: 🏗 Checkout repository
         uses: actions/checkout@v4
@@ -26,18 +26,19 @@ jobs:
         uses: expo/expo-github-action@v8
         with:
           expo-version: latest
-          eas-cache: true
 
-      - name: 🛠 Fix Cache Permissions
-        run: git config --global --add safe.directory /home/runner/work/Zid/Zid
+      - name: ⚙️ Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-      - name: 🚀 Build Android APK
+      - name: 🛠 Prebuild & Build APK
         run: |
           npx expo prebuild
-          # ملاحظة: إذا كنت تستخدم EAS Build، استخدم الأمر التالي:
-          # eas build --platform android --profile preview --local
-        env:
-          NODE_ENV: production
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
       - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
