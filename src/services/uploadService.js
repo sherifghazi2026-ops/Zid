@@ -1,15 +1,9 @@
 import { File } from 'expo-file-system/next';
 import { Platform } from 'react-native';
 
-// ✅ استخدام متغيرات البيئة
-const IMAGEKIT_PRIVATE_KEY = process.env.EXPO_PUBLIC_IMAGEKIT_PRIVATE_KEY;
-const IMAGEKIT_PUBLIC_KEY = process.env.EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY;
-const IMAGEKIT_URL_ENDPOINT = process.env.EXPO_PUBLIC_IMAGEKIT_ENDPOINT || 'https://ik.imagekit.io/vzuah6tku/';
-
-// التحقق من وجود المفاتيح
-if (!IMAGEKIT_PRIVATE_KEY || !IMAGEKIT_PUBLIC_KEY) {
-  console.error('❌ مفاتيح ImageKit غير موجودة في متغيرات البيئة');
-}
+const IMAGEKIT_PRIVATE_KEY = 'private_EWamixKcyYNZI2xJmmO0iQBN53k=';
+const IMAGEKIT_PUBLIC_KEY = 'public_gRNWZVl/bFOQ7VfIDOm6J/Mwzrc=';
+const IMAGEKIT_URL_ENDPOINT = 'https://ik.imagekit.io/vzuah6tku/';
 
 const sanitizeFolderName = (name) => {
   if (!name) return 'unknown';
@@ -24,7 +18,6 @@ const sanitizeFolderName = (name) => {
   return clean;
 };
 
-// دالة للتحقق من صحة الملف
 const validateFile = async (uri) => {
   try {
     if (!uri) {
@@ -58,7 +51,6 @@ export const uploadToImageKit = async (uri, fileName, folderType = 'general', us
 
     console.log(`📤 بدء رفع إلى ImageKit:`, { fileName, folderType, userName });
 
-    // التحقق من صحة الملف
     const validation = await validateFile(uri);
     if (!validation.valid) {
       throw new Error(`الملف غير صالح: ${validation.error}`);
@@ -66,7 +58,6 @@ export const uploadToImageKit = async (uri, fileName, folderType = 'general', us
 
     console.log('✅ الملف صالح، الحجم:', validation.fileInfo.size);
 
-    // التحقق من وجود اتصال بالإنترنت
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -117,7 +108,6 @@ export const uploadToImageKit = async (uri, fileName, folderType = 'general', us
 
     console.log('📁 الرفع إلى مجلد:', baseFolder);
 
-    // قراءة الملف كـ base64
     let base64;
     try {
       const file = new File(uri);
@@ -198,25 +188,21 @@ export const uploadToImageKit = async (uri, fileName, folderType = 'general', us
   }
 };
 
-// دالة رفع صورة الخدمة
 export const uploadServiceImage = async (imageUri) => {
   const fileName = `service_${Date.now()}.jpg`;
   return uploadToImageKit(imageUri, fileName, 'service', 'services');
 };
 
-// دالة رفع صورة المطعم
 export const uploadRestaurantImage = async (imageUri, restaurantName, type = 'profile') => {
   const fileName = `${type}_${Date.now()}.jpg`;
   return uploadToImageKit(imageUri, fileName, type, restaurantName);
 };
 
-// دالة رفع PDF للمطعم
 export const uploadRestaurantPDF = async (pdfUri, restaurantName) => {
   const fileName = `menu_${Date.now()}.pdf`;
   return uploadToImageKit(pdfUri, fileName, 'general', restaurantName);
 };
 
-// دوال الأطباق
 export const uploadDishImage = (imageUri, userName) => {
   const fileName = `dish_${Date.now()}.jpg`;
   return uploadToImageKit(imageUri, fileName, 'dish', userName);
@@ -227,19 +213,16 @@ export const uploadDishVideo = (videoUri, userName) => {
   return uploadToImageKit(videoUri, fileName, 'video', userName);
 };
 
-// دالة رفع الصور الشخصية
 export const uploadProfileImage = (imageUri, userName) => {
   const fileName = `profile_${Date.now()}.jpg`;
   return uploadToImageKit(imageUri, fileName, 'profile', userName);
 };
 
-// دالة رفع الصوت
 export const uploadVoiceFile = (audioUri) => {
   const fileName = `voice_${Date.now()}.m4a`;
   return uploadToImageKit(audioUri, fileName, 'voice');
 };
 
-// دالة الحذف من ImageKit
 export const deleteFromImageKit = async (fileUrl) => {
   try {
     const fileId = fileUrl.split('/').pop()?.split('?')[0];

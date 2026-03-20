@@ -1,60 +1,86 @@
-import { databases, DATABASE_ID, ASSISTANTS_COLLECTION_ID, SERVICES_COLLECTION_ID } from '../appwrite/config';
-import { ID, Query } from 'appwrite';
+import { supabase } from '../lib/supabaseClient';
+import { TABLES } from '../lib/tables';
 
-// جلب المساعدين لشاشة محددة
-export const getAssistantsForScreen = async (screenName, serviceIdentifier = null) => {
+export const ASSISTANT_SCREENS = {
+  HOME: 'home',
+  RESTAURANT: 'restaurant',
+  HOME_CHEF: 'home_chef',
+  OFFERS: 'offers',
+  CART: 'cart',
+  PROFILE: 'profile',
+  ORDERS: 'orders',
+  ADMIN: 'admin',
+  SERVICE: 'service'
+};
+
+export const ASSISTANT_POSITIONS = {
+  BOTTOM_RIGHT: 'bottom-right',
+  BOTTOM_LEFT: 'bottom-left',
+  BOTTOM_CENTER: 'bottom-center'
+};
+
+export const AVAILABLE_MODELS = [
+  { label: 'Llama 3.3 70B (ممتاز)', value: 'llama-3.3-70b-versatile' },
+  { label: 'Llama 3.1 8B (سريع)', value: 'llama-3.1-8b-instant' },
+  { label: 'Gemma 2 9B (خفيف)', value: 'gemma2-9b-it' },
+  { label: 'Llama 3 70B (قوي)', value: 'llama3-70b-8192' }
+];
+
+export const getAllServices = async () => {
   try {
-    console.log(`🔍 جلب المساعدين للشاشة: ${screenName}, المعرف: ${serviceIdentifier || 'عام'}`);
+    const { data, error } = await supabase
+      .from(TABLES.SERVICES)
+      .select('*')
+      .order('order', { ascending: true });
 
-    // ✅ جلب كل المساعدين النشطين
-    const allAssistants = await databases.listDocuments(
-      DATABASE_ID,
-      ASSISTANTS_COLLECTION_ID,
-      [Query.equal('isActive', true)]
-    );
-    
-    console.log(`📦 إجمالي المساعدين النشطين: ${allAssistants.documents.length}`);
+    if (error) throw error;
 
-    // ✅ فلترة حسب الشاشة أولاً
-    let filtered = allAssistants.documents.filter(a => a.screen === screenName);
-    console.log(`📌 بعد فلترة الشاشة (${screenName}): ${filtered.length} مساعد`);
+    const formattedData = (data || []).map(item => ({
+      $id: item.id,
+      ...item,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+    }));
 
-    // ✅ إذا كانت شاشة خدمة وفيها serviceIdentifier
-    if (screenName === 'service' && serviceIdentifier) {
-      // جلب الاسم العربي للخدمة (للمقارنة مع serviceName)
-      let arabicServiceName = serviceIdentifier;
-      
-      try {
-        const serviceResponse = await databases.listDocuments(
-          DATABASE_ID,
-          SERVICES_COLLECTION_ID,
-          [Query.equal('id', serviceIdentifier), Query.limit(1)]
-        );
-        
-        if (serviceResponse.documents.length > 0) {
-          arabicServiceName = serviceResponse.documents[0].name;
-          console.log(`✅ الاسم العربي للخدمة: ${arabicServiceName}`);
-        }
-      } catch (e) {
-        console.log('⚠️ لم نتمكن من جلب الاسم العربي');
-      }
+    return { success: true, data: formattedData };
+  } catch (error) {
+    console.error('❌ خطأ في جلب الخدمات:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
 
-      // فلترة دقيقة: المساعد الخاص بهذه الخدمة فقط
-      filtered = filtered.filter(a => {
-        // إذا كان المساعد عام (serviceId = null) نستبعده
-        if (!a.serviceId || a.serviceId === '') {
-          return false; // ❌ لا نريد المساعدين العامين
-        }
-        
-        // المساعد الخاص بهذه الخدمة (serviceId = serviceIdentifier)
-        // أو المساعد الخاص بالاسم العربي (serviceName = arabicServiceName)
-        return a.serviceId === serviceIdentifier || a.serviceName === arabicServiceName;
-      });
-      
-      console.log(`📌 بعد فلترة الخدمة (${serviceIdentifier}): ${filtered.length} مساعد خاص`);
+export const getAssistantsForScreen = async (screenName, serviceId = null) => {
+  try {
+    console.log(`🔍 جلب المساعدين للشاشة: ${screenName}, الخدمة ID: ${serviceId || 'عام'}`);
+
+    let query = supabase
+      .from(TABLES.ASSISTANTS)
+      .select('*')
+      .eq('is_active', true)
+      .order('order', { ascending: true })
+      .limit(20);
+
+    if (screenName === 'service' && serviceId) {
+      console.log(`📌 تصفية حسب service_id: ${serviceId}`);
+      query = query.eq('service_id', serviceId);
+    } else {
+      console.log(`📌 تصفية حسب الشاشة: ${screenName}`);
+      query = query.eq('screen', screenName);
     }
 
-    return { success: true, data: filtered };
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    const formattedData = (data || []).map(item => ({
+      $id: item.id,
+      ...item,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+    }));
+
+    console.log(`✅ تم جلب ${formattedData.length} مساعد للشاشة ${screenName}`);
+    return { success: true, data: formattedData };
 
   } catch (error) {
     console.log('⚠️ المساعدين مش متاحين حالياً:', error.message);
@@ -62,15 +88,24 @@ export const getAssistantsForScreen = async (screenName, serviceIdentifier = nul
   }
 };
 
-// باقي الدوال كما هي...
 export const getAllAssistants = async () => {
   try {
-    const response = await databases.listDocuments(
-      DATABASE_ID,
-      ASSISTANTS_COLLECTION_ID,
-      [Query.orderAsc('screen'), Query.orderAsc('order')]
-    );
-    return { success: true, data: response.documents };
+    const { data, error } = await supabase
+      .from(TABLES.ASSISTANTS)
+      .select('*')
+      .order('screen', { ascending: true })
+      .order('order', { ascending: true });
+
+    if (error) throw error;
+
+    const formattedData = (data || []).map(item => ({
+      $id: item.id,
+      ...item,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+    }));
+
+    return { success: true, data: formattedData };
   } catch (error) {
     console.error('❌ خطأ في جلب جميع المساعدين:', error);
     return { success: false, error: error.message, data: [] };
@@ -84,26 +119,35 @@ export const createAssistant = async (assistantData) => {
       screen: assistantData.screen,
       icon: assistantData.icon || 'chatbubble',
       color: assistantData.color || '#4F46E5',
-      systemPrompt: assistantData.systemPrompt || 'أنت مساعد ذكي اسمك "مُنجز". رد بالعامية المصرية.',
-      welcomeMessage: assistantData.welcomeMessage || 'أهلاً! أنا مُنجز. كيف أقدر أساعدك؟',
+      system_prompt: assistantData.systemPrompt || 'أنت مساعد ذكي اسمك "مُنجز". رد بالعامية المصرية.',
+      welcome_message: assistantData.welcomeMessage || 'أهلاً! أنا مُنجز. كيف أقدر أساعدك؟',
       position: assistantData.position || 'bottom-right',
-      isActive: assistantData.isActive !== undefined ? assistantData.isActive : true,
+      is_active: assistantData.is_active !== undefined ? assistantData.is_active : true,
       order: assistantData.order || 0,
-      serviceId: assistantData.serviceId || null,
-      serviceName: assistantData.serviceName || null,
+      service_id: assistantData.serviceId || null,
+      service_name: assistantData.serviceName || null,
       model: assistantData.model || 'llama-3.3-70b-versatile',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
 
-    const response = await databases.createDocument(
-      DATABASE_ID,
-      ASSISTANTS_COLLECTION_ID,
-      ID.unique(),
-      newAssistant
-    );
+    const { data, error } = await supabase
+      .from(TABLES.ASSISTANTS)
+      .insert([newAssistant])
+      .select()
+      .single();
 
-    return { success: true, data: response };
+    if (error) throw error;
+
+    return {
+      success: true,
+      data: {
+        $id: data.id,
+        ...data,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+      }
+    };
   } catch (error) {
     console.error('❌ خطأ في إنشاء مساعد:', error);
     return { success: false, error: error.message };
@@ -114,20 +158,30 @@ export const updateAssistant = async (assistantId, assistantData) => {
   try {
     const updateData = {
       ...assistantData,
-      serviceId: assistantData.serviceId || null,
-      serviceName: assistantData.serviceName || null,
+      service_id: assistantData.serviceId || null,
+      service_name: assistantData.serviceName || null,
       model: assistantData.model || 'llama-3.3-70b-versatile',
-      updatedAt: new Date().toISOString()
+      updated_at: new Date().toISOString()
     };
 
-    const response = await databases.updateDocument(
-      DATABASE_ID,
-      ASSISTANTS_COLLECTION_ID,
-      assistantId,
-      updateData
-    );
+    const { data, error } = await supabase
+      .from(TABLES.ASSISTANTS)
+      .update(updateData)
+      .eq('id', assistantId)
+      .select()
+      .single();
 
-    return { success: true, data: response };
+    if (error) throw error;
+
+    return {
+      success: true,
+      data: {
+        $id: data.id,
+        ...data,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+      }
+    };
   } catch (error) {
     console.error('❌ خطأ في تحديث مساعد:', error);
     return { success: false, error: error.message };
@@ -136,11 +190,13 @@ export const updateAssistant = async (assistantId, assistantData) => {
 
 export const deleteAssistant = async (assistantId) => {
   try {
-    await databases.deleteDocument(
-      DATABASE_ID,
-      ASSISTANTS_COLLECTION_ID,
-      assistantId
-    );
+    const { error } = await supabase
+      .from(TABLES.ASSISTANTS)
+      .delete()
+      .eq('id', assistantId);
+
+    if (error) throw error;
+
     return { success: true };
   } catch (error) {
     console.error('❌ خطأ في حذف مساعد:', error);
@@ -148,15 +204,29 @@ export const deleteAssistant = async (assistantId) => {
   }
 };
 
-export const toggleAssistantStatus = async (assistantId, isActive) => {
+export const toggleAssistantStatus = async (assistantId, is_active) => {
   try {
-    const response = await databases.updateDocument(
-      DATABASE_ID,
-      ASSISTANTS_COLLECTION_ID,
-      assistantId,
-      { isActive, updatedAt: new Date().toISOString() }
-    );
-    return { success: true, data: response };
+    const { data, error } = await supabase
+      .from(TABLES.ASSISTANTS)
+      .update({
+        is_active,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', assistantId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      success: true,
+      data: {
+        $id: data.id,
+        ...data,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+      }
+    };
   } catch (error) {
     console.error('❌ خطأ في تغيير حالة المساعد:', error);
     return { success: false, error: error.message };

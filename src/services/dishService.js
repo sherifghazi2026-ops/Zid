@@ -1,138 +1,184 @@
-import { databases, DATABASE_ID, storage, BUCKET_ID } from '../appwrite/config';
-import { ID, Query } from 'appwrite';
+import { supabase } from '../lib/supabaseClient';
+import { TABLES } from '../lib/tables';
 
-export const DISHES_COLLECTION_ID = 'dishes';
+export const DISHES_COLLECTION_ID = TABLES.DISHES;
 
-// جلب أطباق التاجر
 export const getMyDishes = async (providerId, providerType) => {
   try {
-    const response = await databases.listDocuments(
-      DATABASE_ID,
-      DISHES_COLLECTION_ID,
-      [
-        Query.equal('providerId', providerId),
-        Query.equal('providerType', providerType),
-        Query.orderDesc('createdAt')
-      ]
-    );
-    return { success: true, data: response.documents };
+    const { data, error } = await supabase
+      .from(DISHES_COLLECTION_ID)
+      .select('*')
+      .eq('provider_id', providerId)
+      .eq('provider_type', providerType)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const formattedData = (data || []).map(item => ({
+      $id: item.id,
+      ...item,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+    }));
+
+    return { success: true, data: formattedData };
   } catch (error) {
     console.error('خطأ في جلب الأطباق:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message, data: [] };
   }
 };
 
-// جلب أطباق المطعم (للعرض)
 export const getRestaurantDishes = async (restaurantId) => {
   try {
-    const response = await databases.listDocuments(
-      DATABASE_ID,
-      DISHES_COLLECTION_ID,
-      [
-        Query.equal('providerId', restaurantId),
-        Query.equal('providerType', 'restaurant'),
-        Query.equal('status', 'approved'),
-        Query.equal('isAvailable', true)
-      ]
-    );
-    return { success: true, data: response.documents };
+    const { data, error } = await supabase
+      .from(DISHES_COLLECTION_ID)
+      .select('*')
+      .eq('provider_id', restaurantId)
+      .eq('provider_type', 'restaurant')
+      .eq('status', 'approved')
+      .eq('is_available', true);
+
+    if (error) throw error;
+
+    const formattedData = (data || []).map(item => ({
+      $id: item.id,
+      ...item,
+      created_at: item.created_at,
+    }));
+
+    return { success: true, data: formattedData };
   } catch (error) {
     console.error('خطأ في جلب أطباق المطعم:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message, data: [] };
   }
 };
 
-// جلب أطباق الشيف (للعرض)
 export const getChefDishes = async (chefId) => {
   try {
-    const response = await databases.listDocuments(
-      DATABASE_ID,
-      DISHES_COLLECTION_ID,
-      [
-        Query.equal('providerId', chefId),
-        Query.equal('providerType', 'home_chef'),
-        Query.equal('status', 'approved'),
-        Query.equal('isAvailable', true)
-      ]
-    );
-    return { success: true, data: response.documents };
+    const { data, error } = await supabase
+      .from(DISHES_COLLECTION_ID)
+      .select('*')
+      .eq('provider_id', chefId)
+      .eq('provider_type', 'home_chef')
+      .eq('status', 'approved')
+      .eq('is_available', true);
+
+    if (error) throw error;
+
+    const formattedData = (data || []).map(item => ({
+      $id: item.id,
+      ...item,
+      created_at: item.created_at,
+    }));
+
+    return { success: true, data: formattedData };
   } catch (error) {
     console.error('خطأ في جلب أطباق الشيف:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message, data: [] };
   }
 };
 
-// جلب الأطباق قيد المراجعة (للأدمن)
 export const getPendingDishes = async () => {
   try {
-    const response = await databases.listDocuments(
-      DATABASE_ID,
-      DISHES_COLLECTION_ID,
-      [
-        Query.equal('status', 'pending'),
-        Query.orderDesc('createdAt')
-      ]
-    );
-    return { success: true, data: response.documents };
+    const { data, error } = await supabase
+      .from(DISHES_COLLECTION_ID)
+      .select('*')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const formattedData = (data || []).map(item => ({
+      $id: item.id,
+      ...item,
+      created_at: item.created_at,
+    }));
+
+    return { success: true, data: formattedData };
   } catch (error) {
     console.error('خطأ في جلب الأطباق قيد المراجعة:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message, data: [] };
   }
 };
 
-// إنشاء طبق جديد (مع updatedAt)
 export const createDish = async (dishData) => {
   try {
     const now = new Date().toISOString();
     const newDish = {
-      ...dishData,
+      name: dishData.name,
+      description: dishData.description || null,
+      price: parseFloat(dishData.price),
+      category: dishData.category || null,
+      ingredients: dishData.ingredients || null,
+      images: dishData.images || [],
+      video_url: dishData.videoUrl || null,
+      provider_id: dishData.providerId,
+      provider_type: dishData.providerType,
+      is_available: dishData.isAvailable !== false,
       status: 'pending',
-      createdAt: now,
-      updatedAt: now, // ✅ إضافة updatedAt
+      created_at: now,
+      updated_at: now,
     };
 
-    console.log('📦 إرسال إلى Appwrite:', newDish);
-    
-    const response = await databases.createDocument(
-      DATABASE_ID,
-      DISHES_COLLECTION_ID,
-      ID.unique(),
-      newDish
-    );
+    console.log('📦 إرسال إلى Supabase:', newDish);
 
-    return { success: true, data: response };
+    const { data, error } = await supabase
+      .from(DISHES_COLLECTION_ID)
+      .insert([newDish])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      success: true,
+      data: {
+        $id: data.id,
+        ...data,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+      }
+    };
   } catch (error) {
     console.error('❌ خطأ في إنشاء الطبق:', error);
     return { success: false, error: error.message };
   }
 };
 
-// تحديث طبق
 export const updateDish = async (dishId, updateData) => {
   try {
-    const response = await databases.updateDocument(
-      DATABASE_ID,
-      DISHES_COLLECTION_ID,
-      dishId,
-      {
+    const { data, error } = await supabase
+      .from(DISHES_COLLECTION_ID)
+      .update({
         ...updateData,
-        updatedAt: new Date().toISOString(), // ✅ تحديث updatedAt
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', dishId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      success: true,
+      data: {
+        $id: data.id,
+        ...data,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
       }
-    );
-    return { success: true, data: response };
+    };
   } catch (error) {
     console.error('خطأ في تحديث الطبق:', error);
     return { success: false, error: error.message };
   }
 };
 
-// حذف طبق
-export const deleteDish = async (dishId, imageUrls = []) => {
+export const deleteDish = async (dishId, image_urls = []) => {
   try {
-    // حذف الصور من ImageKit إذا وجدت
-    if (imageUrls && imageUrls.length > 0) {
+    if (image_urls && image_urls.length > 0) {
       const { deleteFromImageKit } = await import('./uploadService');
-      for (const url of imageUrls) {
+      for (const url of image_urls) {
         try {
           await deleteFromImageKit(url);
         } catch (e) {
@@ -141,11 +187,13 @@ export const deleteDish = async (dishId, imageUrls = []) => {
       }
     }
 
-    await databases.deleteDocument(
-      DATABASE_ID,
-      DISHES_COLLECTION_ID,
-      dishId
-    );
+    const { error } = await supabase
+      .from(DISHES_COLLECTION_ID)
+      .delete()
+      .eq('id', dishId);
+
+    if (error) throw error;
+
     return { success: true };
   } catch (error) {
     console.error('خطأ في حذف الطبق:', error);
@@ -153,58 +201,88 @@ export const deleteDish = async (dishId, imageUrls = []) => {
   }
 };
 
-// الموافقة على طبق
 export const approveDish = async (dishId) => {
   try {
-    const response = await databases.updateDocument(
-      DATABASE_ID,
-      DISHES_COLLECTION_ID,
-      dishId,
-      {
+    const { data, error } = await supabase
+      .from(DISHES_COLLECTION_ID)
+      .update({
         status: 'approved',
-        updatedAt: new Date().toISOString(), // ✅ تحديث updatedAt
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', dishId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      success: true,
+      data: {
+        $id: data.id,
+        ...data,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
       }
-    );
-    return { success: true, data: response };
+    };
   } catch (error) {
     console.error('خطأ في الموافقة على الطبق:', error);
     return { success: false, error: error.message };
   }
 };
 
-// رفض طبق مع سبب
 export const rejectDish = async (dishId, reason) => {
   try {
-    const response = await databases.updateDocument(
-      DATABASE_ID,
-      DISHES_COLLECTION_ID,
-      dishId,
-      {
+    const { data, error } = await supabase
+      .from(DISHES_COLLECTION_ID)
+      .update({
         status: 'rejected',
-        rejectionReason: reason,
-        updatedAt: new Date().toISOString(), // ✅ تحديث updatedAt
+        rejection_reason: reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', dishId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      success: true,
+      data: {
+        $id: data.id,
+        ...data,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
       }
-    );
-    return { success: true, data: response };
+    };
   } catch (error) {
     console.error('خطأ في رفض الطبق:', error);
     return { success: false, error: error.message };
   }
 };
 
-// تغيير حالة التوفر
 export const toggleDishAvailability = async (dishId, isAvailable) => {
   try {
-    const response = await databases.updateDocument(
-      DATABASE_ID,
-      DISHES_COLLECTION_ID,
-      dishId,
-      {
-        isAvailable,
-        updatedAt: new Date().toISOString(), // ✅ تحديث updatedAt
+    const { data, error } = await supabase
+      .from(DISHES_COLLECTION_ID)
+      .update({
+        is_available: isAvailable,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', dishId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      success: true,
+      data: {
+        $id: data.id,
+        ...data,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
       }
-    );
-    return { success: true, data: response };
+    };
   } catch (error) {
     console.error('خطأ في تغيير حالة التوفر:', error);
     return { success: false, error: error.message };
