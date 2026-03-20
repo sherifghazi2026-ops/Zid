@@ -17,14 +17,7 @@ export const TermsProvider = ({ children }) => {
   };
 
   return (
-    <TermsContext.Provider 
-      value={{ 
-        termsAccepted, 
-        termsAcceptedAt,
-        acceptTerms,
-        resetTerms
-      }}
-    >
+    <TermsContext.Provider value={{ termsAccepted, termsAcceptedAt, acceptTerms, resetTerms }}>
       {children}
     </TermsContext.Provider>
   );
@@ -32,8 +25,6 @@ export const TermsProvider = ({ children }) => {
 
 export const useTerms = () => {
   const context = useContext(TermsContext);
-  if (!context) {
-    throw new Error('useTerms must be used within a TermsProvider');
-  }
+  if (!context) throw new Error('useTerms must be used within a TermsProvider');
   return context;
 };

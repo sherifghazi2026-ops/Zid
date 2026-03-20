@@ -99,7 +99,6 @@ export default function MyDishesScreen({ navigation, route }) {
   const handleDishPress = (dish) => {
     if (dish.status === 'approved') {
       // للمقبول: تعديل
-      navigation.navigate('EditDishScreen', { dishId: dish.$id });
     } else if (dish.status === 'pending') {
       // لقيد المراجعة: عرض التفاصيل
       setSelectedDish(dish);
@@ -306,7 +305,6 @@ export default function MyDishesScreen({ navigation, route }) {
                     style={[styles.modalButton, styles.editButton]}
                     onPress={() => {
                       setModalVisible(false);
-                      navigation.navigate('EditDishScreen', { dishId: selectedDish.$id });
                     }}
                   >
                     <Ionicons name="create-outline" size={20} color="#FFF" />

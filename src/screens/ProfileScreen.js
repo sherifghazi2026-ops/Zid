@@ -3,60 +3,113 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
-  TouchableOpacity,
   ScrollView,
+  TouchableOpacity,
+  SafeAreaView,
   Alert,
   ActivityIndicator,
   TextInput,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { updateUserLocation, updateAvailability } from '../appwrite/userService';
+import { supabase } from '../lib/supabaseClient';
+import { TABLES } from '../lib/tables';
+import { uploadProfileImage } from '../services/uploadService';
+import { updateUserLocation, updateAvailability } from '../services/userService';
 
 export default function ProfileScreen({ navigation }) {
   const [userData, setUserData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [gettingLocation, setGettingLocation] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [avatar, setAvatar] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [isAvailable, setIsAvailable] = useState(true);
+  const [gettingLocation, setGettingLocation] = useState(false);
 
   useEffect(() => {
     loadUserData();
   }, []);
 
   const loadUserData = async () => {
-    const data = await AsyncStorage.getItem('userData');
-    if (data) {
-      const parsed = JSON.parse(data);
-      setUserData(parsed);
-      setIsAvailable(parsed.isAvailable !== false);
+    try {
+      const data = await AsyncStorage.getItem('userData');
+      if (data) {
+        const user = JSON.parse(data);
+        setUserData(user);
+        setName(user.full_name || user.name || '');
+        setPhone(user.phone || '');
+        setAddress(user.address || user.customer_address || '');
+        setAvatar(user.avatar_url || null);
+        setIsAvailable(user.is_available !== false);
+      }
+    } catch (error) {
+      console.error('خطأ في تحميل البيانات:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const updateLocation = async () => {
+  const pickAvatar = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('خطأ', 'يجب السماح بالوصول للمعرض');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+        allowsEditing: true,
+      });
+      if (!result.canceled && result.assets) {
+        setUploading(true);
+        const uploadResult = await uploadProfileImage(result.assets[0].uri, name || 'user');
+        setUploading(false);
+        if (uploadResult.success) {
+          setAvatar(uploadResult.fileUrl);
+        } else {
+          Alert.alert('خطأ', 'فشل رفع الصورة');
+        }
+      }
+    } catch (error) {
+      Alert.alert('خطأ', 'فشل اختيار الصورة');
+    }
+  };
+
+  const getCurrentLocation = async () => {
     setGettingLocation(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('خطأ', 'يجب السماح للتطبيق بالوصول للموقع');
+        Alert.alert('خطأ', 'يجب السماح بالوصول للموقع');
         return;
       }
-
       const loc = await Location.getCurrentPositionAsync({});
-      const result = await updateUserLocation(userData.$id, {
+      const result = await updateUserLocation(userData.$id || userData.id, {
         latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
+        longitude: loc.coords.longitude
       });
-
       if (result.success) {
-        const updatedUser = { ...userData, locationLat: loc.coords.latitude, locationLng: loc.coords.longitude };
-        await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
-        setUserData(updatedUser);
-        Alert.alert('تم', 'تم تحديث موقعك بنجاح');
+        Alert.alert('✅ تم', 'تم تحديث موقعك بنجاح');
+        const [addressResult] = await Location.reverseGeocodeAsync({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude
+        });
+        if (addressResult) {
+          setAddress(`${addressResult.region || ''} - ${addressResult.city || ''} - ${addressResult.street || ''}`);
+        }
+      } else {
+        Alert.alert('خطأ', result.error);
       }
     } catch (error) {
-      Alert.alert('خطأ', 'فشل في تحديث الموقع');
+      Alert.alert('خطأ', 'فشل في الحصول على الموقع');
     } finally {
       setGettingLocation(false);
     }
@@ -64,22 +117,85 @@ export default function ProfileScreen({ navigation }) {
 
   const toggleAvailability = async () => {
     const newStatus = !isAvailable;
-    const result = await updateAvailability(userData.$id, newStatus);
+    const result = await updateAvailability(userData.$id || userData.id, newStatus);
     if (result.success) {
       setIsAvailable(newStatus);
-      const updatedUser = { ...userData, isAvailable: newStatus };
+      Alert.alert('✅ تم', `تم ${newStatus ? 'تفعيل' : 'تعطيل'} حالة التوفر`);
+      const updatedUser = { ...userData, is_available: newStatus };
       await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
       setUserData(updatedUser);
+    } else {
+      Alert.alert('خطأ', result.error);
     }
   };
 
-  if (!userData) {
+  const handleUpdate = async () => {
+    if (!name.trim()) {
+      Alert.alert('تنبيه', 'الاسم مطلوب');
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const updateData = {
+        full_name: name.trim(),
+        phone: phone.trim(),
+        address: address.trim(),
+        avatar_url: avatar,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from(TABLES.PROFILES)
+        .update(updateData)
+        .eq('id', userData.$id || userData.id);
+
+      if (error) throw error;
+
+      const updatedUser = { ...userData, ...updateData };
+      await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
+      setUserData(updatedUser);
+      setEditMode(false);
+      Alert.alert('✅ تم', 'تم تحديث الملف الشخصي');
+    } catch (error) {
+      Alert.alert('خطأ', error.message);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'تسجيل الخروج',
+      'هل أنت متأكد؟',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'خروج',
+          onPress: async () => {
+            await supabase.auth.signOut();
+            await AsyncStorage.removeItem('userData');
+            await AsyncStorage.removeItem('userRole');
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'MainTabs' }],
+            });
+          }
+        }
+      ]
+    );
+  };
+
+  if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={styles.center}>
         <ActivityIndicator size="large" color="#4F46E5" />
       </View>
     );
   }
+
+  const isMerchant = userData?.role === 'merchant';
+  const isDriver = userData?.role === 'driver';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -87,101 +203,197 @@ export default function ProfileScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-forward" size={28} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>ملفي الشخصي</Text>
-        <View style={{ width: 28 }} />
+        <Text style={styles.headerTitle}>الملف الشخصي</Text>
+        <TouchableOpacity onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={24} color="#EF4444" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* صورة المستخدم */}
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {userData.name?.charAt(0) || 'م'}
-            </Text>
-          </View>
-          <Text style={styles.userName}>{userData.name}</Text>
-          <Text style={styles.userRole}>
-            {userData.role === 'merchant' ? 'تاجر' : 
-             userData.role === 'driver' ? 'مندوب' : 'مدير النظام'}
-          </Text>
-        </View>
-
-        {/* بطاقة المعلومات */}
-        <View style={styles.card}>
-          <View style={styles.infoRow}>
-            <Ionicons name="call-outline" size={20} color="#4F46E5" />
-            <Text style={styles.infoLabel}>رقم الهاتف:</Text>
-            <Text style={styles.infoValue}>{userData.phone || 'غير محدد'}</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Ionicons name="location-outline" size={20} color="#4F46E5" />
-            <Text style={styles.infoLabel}>العنوان:</Text>
-            <Text style={styles.infoValue}>{userData.address || 'غير محدد'}</Text>
-          </View>
-
-          {userData.role === 'merchant' && (
-            <View style={styles.infoRow}>
-              <Ionicons name="business-outline" size={20} color="#4F46E5" />
-              <Text style={styles.infoLabel}>النشاط التجاري:</Text>
-              <Text style={styles.infoValue}>{userData.merchantType || 'غير محدد'}</Text>
+        {/* الصورة الشخصية */}
+        <View style={styles.avatarSection}>
+          {avatar ? (
+            <Image source={{ uri: avatar }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Ionicons name="person" size={50} color="#9CA3AF" />
             </View>
           )}
+          {editMode && (
+            <TouchableOpacity style={styles.changeAvatarButton} onPress={pickAvatar} disabled={uploading}>
+              <Ionicons name="camera" size={20} color="#FFF" />
+              <Text style={styles.changeAvatarText}>تغيير الصورة</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
-          {userData.role === 'driver' && (
+        {/* حالة التوفر (للتجار والمناديب) */}
+        {(isMerchant || isDriver) && (
+          <View style={styles.availabilityCard}>
+            <View style={styles.availabilityRow}>
+              <Ionicons name="radio-button-on" size={20} color={isAvailable ? '#10B981' : '#EF4444'} />
+              <Text style={styles.availabilityText}>
+                {isAvailable ? 'متاح حالياً' : 'غير متاح حالياً'}
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.toggleButton} onPress={toggleAvailability}>
+              <Text style={styles.toggleButtonText}>
+                {isAvailable ? 'تعطيل التوفر' : 'تفعيل التوفر'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* معلومات المستخدم */}
+        <View style={styles.infoCard}>
+          {editMode ? (
+            <>
+              <Text style={styles.label}>الاسم</Text>
+              <TextInput
+                style={styles.input}
+                value={name}
+                onChangeText={setName}
+                placeholder="الاسم الكامل"
+              />
+              <Text style={styles.label}>رقم الهاتف</Text>
+              <TextInput
+                style={styles.input}
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="رقم الهاتف"
+                keyboardType="phone-pad"
+              />
+              <Text style={styles.label}>العنوان</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={address}
+                onChangeText={setAddress}
+                placeholder="العنوان"
+                multiline
+              />
+              <TouchableOpacity style={styles.locationButton} onPress={getCurrentLocation} disabled={gettingLocation}>
+                {gettingLocation ? (
+                  <ActivityIndicator size="small" color="#4F46E5" />
+                ) : (
+                  <>
+                    <Ionicons name="location" size={18} color="#4F46E5" />
+                    <Text style={styles.locationButtonText}>تحديد موقعي الحالي</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </>
+          ) : (
             <>
               <View style={styles.infoRow}>
-                <Ionicons name="map-outline" size={20} color="#4F46E5" />
-                <Text style={styles.infoLabel}>منطقة الخدمة:</Text>
-                <Text style={styles.infoValue}>{userData.serviceArea || 'غير محدد'}</Text>
+                <Text style={styles.infoLabel}>الاسم</Text>
+                <Text style={styles.infoValue}>{name || 'غير محدد'}</Text>
               </View>
-
               <View style={styles.infoRow}>
-                <Ionicons name="speedometer-outline" size={20} color="#4F46E5" />
-                <Text style={styles.infoLabel}>أقصى مسافة:</Text>
-                <Text style={styles.infoValue}>{userData.maxDeliveryRadius || 10} كم</Text>
+                <Text style={styles.infoLabel}>رقم الهاتف</Text>
+                <Text style={styles.infoValue}>{phone || 'غير محدد'}</Text>
               </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>العنوان</Text>
+                <Text style={styles.infoValue}>{address || 'غير محدد'}</Text>
+              </View>
+              {userData?.role && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>الدور</Text>
+                  <Text style={styles.infoValue}>
+                    {userData.role === 'merchant' ? 'تاجر' : userData.role === 'driver' ? 'مندوب' : userData.role === 'admin' ? 'مدير' : 'عميل'}
+                  </Text>
+                </View>
+              )}
+              {isMerchant && userData?.merchant_type && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>نوع النشاط</Text>
+                  <Text style={styles.infoValue}>{userData.merchant_type}</Text>
+                </View>
+              )}
             </>
           )}
         </View>
 
-        {/* أزرار الإجراءات */}
-        <View style={styles.actionsContainer}>
-          {userData.role === 'driver' && (
-            <TouchableOpacity 
-              style={[styles.actionButton, isAvailable ? styles.availableButton : styles.unavailableButton]}
-              onPress={toggleAvailability}
+        {/* أزرار التحكم */}
+        <View style={styles.buttonsContainer}>
+          {editMode ? (
+            <>
+              <TouchableOpacity
+                style={[styles.button, styles.saveButton]}
+                onPress={handleUpdate}
+                disabled={updating}
+              >
+                {updating ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.buttonText}>حفظ التغييرات</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, styles.cancelButton]}
+                onPress={() => {
+                  setEditMode(false);
+                  setName(userData?.full_name || userData?.name || '');
+                  setPhone(userData?.phone || '');
+                  setAddress(userData?.address || '');
+                  setAvatar(userData?.avatar_url || null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>إلغاء</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity
+              style={[styles.button, styles.editButton]}
+              onPress={() => setEditMode(true)}
             >
-              <Ionicons 
-                name={isAvailable ? "checkmark-circle" : "close-circle"} 
-                size={24} 
-                color="#FFF" 
-              />
-              <Text style={styles.actionButtonText}>
-                {isAvailable ? 'متاح' : 'غير متاح'}
-              </Text>
+              <Ionicons name="create-outline" size={18} color="#FFF" />
+              <Text style={styles.buttonText}>تعديل الملف الشخصي</Text>
             </TouchableOpacity>
           )}
-
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.locationButton]}
-            onPress={updateLocation}
-            disabled={gettingLocation}
-          >
-            {gettingLocation ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <>
-                <Ionicons name="locate" size={24} color="#FFF" />
-                <Text style={styles.actionButtonText}>تحديث موقعي</Text>
-              </>
-            )}
-          </TouchableOpacity>
         </View>
 
-        <Text style={styles.note}>
-          آخر تحديث: {new Date().toLocaleDateString('ar-EG')}
-        </Text>
+        {/* معلومات إضافية للتاجر */}
+        {isMerchant && userData?.place_name && (
+          <View style={styles.extraCard}>
+            <Text style={styles.extraTitle}>🏪 معلومات التاجر</Text>
+            <View style={styles.extraRow}>
+              <Text style={styles.extraLabel}>المكان:</Text>
+              <Text style={styles.extraValue}>{userData.place_name}</Text>
+            </View>
+            {userData.delivery_fee !== undefined && (
+              <View style={styles.extraRow}>
+                <Text style={styles.extraLabel}>رسوم التوصيل:</Text>
+                <Text style={styles.extraValue}>{userData.delivery_fee} ج</Text>
+              </View>
+            )}
+            {userData.delivery_time !== undefined && (
+              <View style={styles.extraRow}>
+                <Text style={styles.extraLabel}>وقت التوصيل:</Text>
+                <Text style={styles.extraValue}>{userData.delivery_time} دقيقة</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* معلومات إضافية للمندوب */}
+        {isDriver && (
+          <View style={styles.extraCard}>
+            <Text style={styles.extraTitle}>🚚 معلومات المندوب</Text>
+            {userData.service_area && (
+              <View style={styles.extraRow}>
+                <Text style={styles.extraLabel}>منطقة الخدمة:</Text>
+                <Text style={styles.extraValue}>{userData.service_area}</Text>
+              </View>
+            )}
+            {userData.max_delivery_radius && (
+              <View style={styles.extraRow}>
+                <Text style={styles.extraLabel}>أقصى مسافة:</Text>
+                <Text style={styles.extraValue}>{userData.max_delivery_radius} كم</Text>
+              </View>
+            )}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -189,72 +401,96 @@ export default function ProfileScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 20,
+    padding: 16,
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
   content: { padding: 20 },
-  avatarContainer: { alignItems: 'center', marginBottom: 20 },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#4F46E5',
-    justifyContent: 'center',
+  avatarSection: { alignItems: 'center', marginBottom: 20 },
+  avatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#F3F4F6' },
+  avatarPlaceholder: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
+  changeAvatarButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    backgroundColor: '#4F46E5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 8,
+    gap: 4,
   },
-  avatarText: { fontSize: 40, color: '#FFF', fontWeight: 'bold' },
-  userName: { fontSize: 22, fontWeight: 'bold', color: '#1F2937' },
-  userRole: { fontSize: 14, color: '#6B7280', marginTop: 4 },
-  card: {
+  changeAvatarText: { color: '#FFF', fontSize: 12, fontWeight: '600' },
+  availabilityCard: {
     backgroundColor: '#FFF',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+  availabilityRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  availabilityText: { fontSize: 14, fontWeight: '500', color: '#1F2937' },
+  toggleButton: { backgroundColor: '#F3F4F6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  toggleButtonText: { fontSize: 12, color: '#4F46E5', fontWeight: '500' },
+  infoCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  infoLabel: {
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  infoLabel: { fontSize: 14, color: '#6B7280' },
+  infoValue: { fontSize: 14, fontWeight: '500', color: '#1F2937' },
+  label: { fontSize: 14, fontWeight: '600', color: '#4B5563', marginBottom: 4, marginTop: 8 },
+  input: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
     fontSize: 14,
-    color: '#4B5563',
-    marginLeft: 10,
-    width: 100,
   },
-  infoValue: {
-    flex: 1,
-    fontSize: 14,
-    color: '#1F2937',
-    fontWeight: '500',
-  },
-  actionsContainer: {
-    gap: 10,
-  },
-  actionButton: {
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  locationButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    gap: 8,
+    backgroundColor: '#EEF2FF',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 4,
+    gap: 6,
   },
-  availableButton: { backgroundColor: '#10B981' },
-  unavailableButton: { backgroundColor: '#EF4444' },
-  locationButton: { backgroundColor: '#4F46E5' },
-  actionButtonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
-  note: { textAlign: 'center', color: '#9CA3AF', fontSize: 12, marginTop: 20 },
+  locationButtonText: { fontSize: 12, color: '#4F46E5', fontWeight: '500' },
+  buttonsContainer: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  button: { flex: 1, padding: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  editButton: { backgroundColor: '#4F46E5', flexDirection: 'row', gap: 6 },
+  saveButton: { backgroundColor: '#10B981' },
+  cancelButton: { backgroundColor: '#F3F4F6' },
+  buttonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
+  cancelButtonText: { color: '#1F2937', fontSize: 14, fontWeight: '600' },
+  extraCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  extraTitle: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginBottom: 12 },
+  extraRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  extraLabel: { fontSize: 13, color: '#6B7280' },
+  extraValue: { fontSize: 13, fontWeight: '500', color: '#1F2937' },
 });

@@ -37,19 +37,16 @@ export default function MerchantOrdersScreen({ navigation }) {
 
   useEffect(() => {
     if (userData) {
-      console.log('👤 بيانات التاجر:', userData);
-      console.log('📌 merchantType:', userData.merchantType);
       loadOrders();
       playSoundForPendingOrders();
     }
   }, [userData]);
 
-  // التحقق من الطلبات الجديدة كل 3 ثواني
   useInterval(() => {
     if (userData) {
       checkForNewOrders();
     }
-  }, 3000);
+  }, 5000);
 
   const loadUserData = async () => {
     const data = await AsyncStorage.getItem('userData');
@@ -59,15 +56,13 @@ export default function MerchantOrdersScreen({ navigation }) {
     }
   };
 
-  // ✅ تشغيل الصوت للطلبات المعلقة عند فتح الشاشة
   const playSoundForPendingOrders = async () => {
     try {
       const result = await getOrders({ status: ORDER_STATUS.PENDING });
       if (result.success) {
-        const pendingForMerchant = result.data.filter(order => 
-          order.serviceType === userData?.merchantType
+        const pendingForMerchant = result.data.filter(order =>
+          order.service_type === userData?.merchant_type
         );
-        
         if (pendingForMerchant.length > 0) {
           console.log('🔔 طلبات معلقة، تشغيل التنبيه');
           playLoopingSound();
@@ -78,28 +73,22 @@ export default function MerchantOrdersScreen({ navigation }) {
     }
   };
 
-  // ✅ تشغيل الصوت في حلقة لمدة 20 ثانية
   const playLoopingSound = async () => {
     try {
-      // إيقاف أي صوت سابق
       if (sound) {
         await sound.stopAsync();
         await sound.unloadAsync();
       }
 
-      console.log('🔊 تشغيل صوت التنبيه في حلقة لمدة 20 ثانية');
-      
       const { sound: newSound } = await Audio.Sound.createAsync(
         require('../../../assets/sounds/notification.wav'),
         { shouldPlay: true, isLooping: true }
       );
-      
+
       setSound(newSound);
 
-      // إيقاف الصوت بعد 20 ثانية
       if (soundTimeout.current) clearTimeout(soundTimeout.current);
       soundTimeout.current = setTimeout(async () => {
-        console.log('⏹️ إيقاف صوت التنبيه بعد 20 ثانية');
         if (newSound) {
           await newSound.stopAsync();
           await newSound.unloadAsync();
@@ -112,10 +101,8 @@ export default function MerchantOrdersScreen({ navigation }) {
     }
   };
 
-  // ✅ إيقاف الصوت
   const stopLoopingSound = async () => {
     if (sound) {
-      console.log('⏹️ إيقاف صوت التنبيه');
       await sound.stopAsync();
       await sound.unloadAsync();
       setSound(null);
@@ -129,24 +116,17 @@ export default function MerchantOrdersScreen({ navigation }) {
   const checkForNewOrders = async () => {
     try {
       const result = await getOrders({ status: ORDER_STATUS.PENDING });
-      console.log('📦 جميع الطلبات المعلقة:', result.data.length);
-
       if (result.success) {
         const merchantOrders = result.data.filter(order => {
-          const match = order.serviceType === userData?.merchantType ||
-                        order.serviceType === userData?.serviceType;
-          console.log(`🔍 طلب ${order.$id}: serviceType=${order.serviceType}, match=${match}`);
+          const match = order.service_type === userData?.merchant_type ||
+                        order.service_type === userData?.service_type;
           return match;
         });
 
-        console.log('✅ طلبات التاجر:', merchantOrders.length);
-
-        // التحقق من وجود طلبات جديدة
-        const newOrderIds = new Set(merchantOrders.map(o => o.$id));
+        const newOrderIds = new Set(merchantOrders.map(o => o.id || o.$id).filter(id => id));
         const hasNewOrder = [...newOrderIds].some(id => !lastOrderIds.current.has(id));
 
         if (hasNewOrder && merchantOrders.length > 0) {
-          console.log('🔔 تم اكتشاف طلب جديد، تشغيل notification.wav');
           playLoopingSound();
         }
 
@@ -178,24 +158,17 @@ export default function MerchantOrdersScreen({ navigation }) {
           statusFilter = ORDER_STATUS.PENDING;
       }
 
-      console.log(`📥 جلب الطلبات للحالة: ${statusFilter}`);
       const result = await getOrders({ status: statusFilter });
 
       if (result.success) {
-        console.log(`📦 إجمالي الطلبات من Appwrite: ${result.data.length}`);
-
         const merchantOrders = result.data.filter(order => {
-          const match = order.serviceType === userData?.merchantType ||
-                        order.serviceType === userData?.serviceType;
-          console.log(`🔍 طلب ${order.$id}: serviceType=${order.serviceType}, match=${match}`);
+          const match = order.service_type === userData?.merchant_type ||
+                        order.service_type === userData?.service_type;
           return match;
         });
 
-        console.log(`✅ طلبات التاجر بعد الفلترة: ${merchantOrders.length}`);
-
         if (activeTab === 'pending') {
-          // تحديث lastOrderIds للطلبات المعلقة
-          lastOrderIds.current = new Set(merchantOrders.map(o => o.$id));
+          lastOrderIds.current = new Set(merchantOrders.map(o => o.id || o.$id).filter(id => id));
         }
 
         setOrders(merchantOrders);
@@ -218,13 +191,12 @@ export default function MerchantOrdersScreen({ navigation }) {
           text: 'قبول',
           onPress: async () => {
             const result = await acceptOrder(
-              order.$id,
-              userData.$id,
-              userData.name,
+              order.id || order.$id,
+              userData.$id || userData.id,
+              userData.name || userData.full_name,
               userData.phone
             );
             if (result.success) {
-              // ✅ إيقاف الصوت فوراً عند قبول الطلب
               stopLoopingSound();
               loadOrders();
               Alert.alert('✅ تم', 'تم قبول الطلب بنجاح');
@@ -270,57 +242,67 @@ export default function MerchantOrdersScreen({ navigation }) {
     loadOrders();
   };
 
-  const renderOrder = ({ item }) => (
-    <TouchableOpacity
-      style={styles.orderCard}
-      onPress={() => navigation.navigate('OrderDetailsScreen', { orderId: item.$id })}
-    >
-      <View style={styles.orderHeader}>
-        <View>
-          <Text style={styles.orderId}>طلب #{item.$id.slice(-6)}</Text>
-          <Text style={styles.orderTime}>{new Date(item.createdAt).toLocaleTimeString('ar-EG')}</Text>
-        </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-          <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-            {getStatusText(item.status)}
-          </Text>
-        </View>
-      </View>
+  const renderOrder = ({ item }) => {
+    const orderId = item.id || item.$id;
+    const displayId = orderId && typeof orderId === 'string'
+      ? orderId ? String(orderId).slice(-6) : "000000"
+      : (orderId ? String(orderId).slice(-6) : '000000');
 
-      <View style={styles.customerInfo}>
-        <View style={styles.infoRow}>
-          <Ionicons name="call-outline" size={16} color="#4F46E5" />
-          <Text style={styles.infoText}>{item.customerPhone}</Text>
+    return (
+      <TouchableOpacity
+        style={styles.orderCard}
+        onPress={() => navigation.navigate('OrderDetailsScreen', { orderId })}
+      >
+        <View style={styles.orderHeader}>
+          <View>
+            <Text style={styles.orderId}>طلب #{displayId}</Text>
+            <Text style={styles.orderTime}>{new Date(item.created_at).toLocaleTimeString('ar-EG')}</Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
+            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+              {getStatusText(item.status)}
+            </Text>
+          </View>
         </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="location-outline" size={16} color="#EF4444" />
-          <Text style={styles.infoText} numberOfLines={1}>{item.customerAddress}</Text>
+
+        <View style={styles.customerInfo}>
+          <View style={styles.infoRow}>
+            <Ionicons name="call-outline" size={16} color="#4F46E5" />
+            <Text style={styles.infoText}>{item.customer_phone}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="location-outline" size={16} color="#EF4444" />
+            <Text style={styles.infoText} numberOfLines={1}>{item.customer_address}</Text>
+          </View>
         </View>
-      </View>
 
-      {item.items && item.items.length > 0 && (
-        <View style={styles.itemsContainer}>
-          <Text style={styles.itemsTitle}>المنتجات:</Text>
-          {item.items.map((itm, idx) => (
-            <Text key={idx} style={styles.itemText}>• {itm}</Text>
-          ))}
-        </View>
-      )}
+        {item.items && item.items.length > 0 && (
+          <View style={styles.itemsContainer}>
+            <Text style={styles.itemsTitle}>المنتجات:</Text>
+            {item.items.slice(0, 2).map((itm, idx) => (
+              <Text key={idx} style={styles.itemText}>• {itm}</Text>
+            ))}
+            {item.items.length > 2 && (
+              <Text style={styles.itemText}>• +{item.items.length - 2} منتجات أخرى</Text>
+            )}
+          </View>
+        )}
 
-      {item.totalPrice > 0 && (
-        <Text style={styles.totalPrice}>الإجمالي: {item.totalPrice} ج</Text>
-      )}
+        {item.total_price > 0 && (
+          <Text style={styles.totalPrice}>الإجمالي: {item.total_price} ج</Text>
+        )}
 
-      {item.status === ORDER_STATUS.PENDING && (
-        <TouchableOpacity
-          style={styles.acceptButton}
-          onPress={() => handleAcceptOrder(item)}
-        >
-          <Text style={styles.acceptButtonText}>قبول الطلب</Text>
-        </TouchableOpacity>
-      )}
-    </TouchableOpacity>
-  );
+        {item.status === ORDER_STATUS.PENDING && (
+          <TouchableOpacity
+            style={styles.acceptButton}
+            onPress={() => handleAcceptOrder(item)}
+          >
+            <Text style={styles.acceptButtonText}>قبول الطلب</Text>
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -342,7 +324,6 @@ export default function MerchantOrdersScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* التبويبات */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'pending' && styles.activeTab]}
@@ -373,7 +354,7 @@ export default function MerchantOrdersScreen({ navigation }) {
       <FlatList
         data={orders}
         renderItem={renderOrder}
-        keyExtractor={item => item.$id}
+        keyExtractor={item => item.id || item.$id || Math.random().toString()}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
@@ -401,7 +382,6 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  // التبويبات
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: '#FFF',

@@ -14,14 +14,13 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { databases, DATABASE_ID } from '../../appwrite/config';
-import { Query } from 'appwrite';
+import { supabase } from '../../lib/supabaseClient';
+import { TABLES } from '../../lib/tables';
 import { approveProduct, rejectProduct } from '../../services/productService';
 
-const PRODUCTS_COLLECTION = 'products';
+const PRODUCTS_COLLECTION = TABLES.PRODUCTS;
 
 export default function AdminMerchantProductsScreen({ navigation, route }) {
-  // التأكد من وجود params
   const { merchantId, merchantName, serviceId } = route.params || {};
 
   const [products, setProducts] = useState([]);
@@ -42,16 +41,21 @@ export default function AdminMerchantProductsScreen({ navigation, route }) {
 
   const loadProducts = async () => {
     try {
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        PRODUCTS_COLLECTION,
-        [
-          Query.equal('merchantId', merchantId),
-          Query.equal('serviceId', serviceId),
-          Query.orderDesc('createdAt')
-        ]
-      );
-      setProducts(response.documents || []);
+      const { data, error } = await supabase
+        .from(PRODUCTS_COLLECTION)
+        .select('*')
+        .eq('merchant_id', merchantId)
+        .eq('service_id', serviceId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedData = (data || []).map(item => ({
+        $id: item.id,
+        ...item,
+      }));
+
+      setProducts(formattedData);
     } catch (error) {
       console.error('خطأ في جلب المنتجات:', error);
       Alert.alert('خطأ', 'فشل تحميل المنتجات');
@@ -126,8 +130,8 @@ export default function AdminMerchantProductsScreen({ navigation, route }) {
     const badge = getStatusBadge(item.status);
     return (
       <View style={styles.productCard}>
-        {item.imageUrl ? (
-          <Image source={{ uri: item.imageUrl }} style={styles.productImage} />
+        {item.image_url ? (
+          <Image source={{ uri: item.image_url }} style={styles.productImage} />
         ) : (
           <View style={[styles.productImage, styles.placeholderImage]}>
             <Ionicons name="image-outline" size={24} color="#9CA3AF" />
@@ -183,7 +187,7 @@ export default function AdminMerchantProductsScreen({ navigation, route }) {
       <FlatList
         data={products}
         renderItem={renderProduct}
-        keyExtractor={item => item.$id}
+        keyExtractor={item => item.$id || item.id}
         contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={loadProducts} />

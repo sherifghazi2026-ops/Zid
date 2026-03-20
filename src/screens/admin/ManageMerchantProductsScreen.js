@@ -17,14 +17,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { databases, DATABASE_ID } from '../../appwrite/config';
-import { ID, Query } from 'appwrite';
+import { supabase } from '../../lib/supabaseClient';
+import { TABLES } from '../../lib/tables';
 import { uploadServiceImage } from '../../services/uploadService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ManageMerchantProductsScreen({ navigation, route }) {
   const { collectionName, serviceName } = route.params;
-  
+
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -68,18 +68,23 @@ export default function ManageMerchantProductsScreen({ navigation, route }) {
 
   const loadProducts = async () => {
     if (!currentMerchant) return;
-    
+
     setLoading(true);
     try {
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        collectionName,
-        [
-          Query.equal('merchantId', currentMerchant.$id),
-          Query.orderAsc('name')
-        ]
-      );
-      setProducts(response.documents);
+      const { data, error } = await supabase
+        .from(collectionName)
+        .select('*')
+        .eq('merchant_id', currentMerchant.id)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      const formattedData = (data || []).map(item => ({
+        $id: item.id,
+        ...item,
+      }));
+
+      setProducts(formattedData);
     } catch (error) {
       console.error('خطأ في تحميل المنتجات:', error);
       Alert.alert('خطأ', 'فشل تحميل المنتجات');
@@ -134,8 +139,8 @@ export default function ManageMerchantProductsScreen({ navigation, route }) {
     setName(product.name || '');
     setPrice(product.price?.toString() || '');
     setDescription(product.description || '');
-    setImage(product.imageUrl || null);
-    setIsAvailable(product.isAvailable !== false);
+    setImage(product.image_url || null);
+    setIsAvailable(product.is_available !== false);
     setModalVisible(true);
   };
 
@@ -159,26 +164,29 @@ export default function ManageMerchantProductsScreen({ navigation, route }) {
         name: productName.trim(),
         price: parseFloat(productPrice),
         description: productDescription.trim(),
-        imageUrl: productImage || null,
-        isAvailable,
-        merchantId: currentMerchant.$id,
+        image_url: productImage || null,
+        is_available: isAvailable,
+        merchant_id: currentMerchant.id,
+        updated_at: new Date().toISOString(),
       };
 
       if (editingProduct) {
-        await databases.updateDocument(
-          DATABASE_ID,
-          collectionName,
-          editingProduct.$id,
-          productData
-        );
+        const { error } = await supabase
+          .from(collectionName)
+          .update(productData)
+          .eq('id', editingProduct.$id);
+
+        if (error) throw error;
         Alert.alert('✅ تم', 'تم تحديث المنتج');
       } else {
-        await databases.createDocument(
-          DATABASE_ID,
-          collectionName,
-          ID.unique(),
-          productData
-        );
+        const { error } = await supabase
+          .from(collectionName)
+          .insert([{
+            ...productData,
+            created_at: new Date().toISOString(),
+          }]);
+
+        if (error) throw error;
         Alert.alert('✅ تم', 'تم إضافة المنتج');
       }
 
@@ -203,11 +211,12 @@ export default function ManageMerchantProductsScreen({ navigation, route }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await databases.deleteDocument(
-                DATABASE_ID,
-                collectionName,
-                product.$id
-              );
+              const { error } = await supabase
+                .from(collectionName)
+                .delete()
+                .eq('id', product.$id);
+
+              if (error) throw error;
               loadProducts();
             } catch (error) {
               Alert.alert('خطأ', error.message);
@@ -220,12 +229,15 @@ export default function ManageMerchantProductsScreen({ navigation, route }) {
 
   const toggleAvailability = async (product) => {
     try {
-      await databases.updateDocument(
-        DATABASE_ID,
-        collectionName,
-        product.$id,
-        { isAvailable: !product.isAvailable }
-      );
+      const { error } = await supabase
+        .from(collectionName)
+        .update({
+          is_available: !product.is_available,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', product.$id);
+
+      if (error) throw error;
       loadProducts();
     } catch (error) {
       Alert.alert('خطأ', error.message);
@@ -238,14 +250,14 @@ export default function ManageMerchantProductsScreen({ navigation, route }) {
   };
 
   const renderProduct = ({ item }) => (
-    <View style={[styles.productCard, !item.isAvailable && styles.productCardDisabled]}>
+    <View style={[styles.productCard, !item.is_available && styles.productCardDisabled]}>
       <TouchableOpacity
         style={styles.productContent}
         onPress={() => openEditModal(item)}
         activeOpacity={0.7}
       >
-        {item.imageUrl ? (
-          <Image source={{ uri: item.imageUrl }} style={styles.productImage} />
+        {item.image_url ? (
+          <Image source={{ uri: item.image_url }} style={styles.productImage} />
         ) : (
           <View style={[styles.productImage, styles.placeholderImage]}>
             <Ionicons name="image-outline" size={24} color="#9CA3AF" />
@@ -263,11 +275,11 @@ export default function ManageMerchantProductsScreen({ navigation, route }) {
 
       <View style={styles.actionButtons}>
         <TouchableOpacity
-          style={[styles.actionButton, item.isAvailable ? styles.disableButton : styles.enableButton]}
+          style={[styles.actionButton, item.is_available ? styles.disableButton : styles.enableButton]}
           onPress={() => toggleAvailability(item)}
         >
           <Ionicons
-            name={item.isAvailable ? 'close-outline' : 'checkmark-outline'}
+            name={item.is_available ? 'close-outline' : 'checkmark-outline'}
             size={16}
             color="#FFF"
           />
@@ -306,7 +318,7 @@ export default function ManageMerchantProductsScreen({ navigation, route }) {
       <FlatList
         data={products}
         renderItem={renderProduct}
-        keyExtractor={item => item.$id}
+        keyExtractor={item => item.$id || item.id}
         contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -320,7 +332,6 @@ export default function ManageMerchantProductsScreen({ navigation, route }) {
         }
       />
 
-      {/* Modal إضافة/تعديل منتج */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <ScrollView contentContainerStyle={styles.modalScrollContent}>

@@ -1,24 +1,12 @@
-import * as Font from 'expo-font';
-import { Ionicons } from '@expo/vector-icons';
-
-// تعريف الخطوط الافتراضية لتجنب الـ undefined في الـ Styles
-export const fontFamily = {
-  arabic: 'System', // ✅ خط النظام للعربية
-  regular: 'System',
-  bold: 'System',
-  medium: 'System',
-};
+import { Platform } from 'react-native';
 
 export const loadFonts = async () => {
-  try {
-    // تحميل خطوط الأيقونات لأنها ضرورية جداً في واجهة Zid
-    await Font.loadAsync({
-      ...Ionicons.font,
-    });
-    console.log('✅ تم تحميل خطوط الأيقونات بنجاح');
-    return true;
-  } catch (e) {
-    console.warn('⚠️ فشل تحميل خطوط الأيقونات، سيتم استخدام الخطوط الافتراضية:', e);
-    return true; // نرجع true لضمان عدم توقف التطبيق
-  }
+  console.log('✅ استخدام الخطوط النظامية');
+  return Promise.resolve(true);
+};
+
+export const fontFamily = {
+  regular: Platform.select({ android: 'System', ios: 'System', default: 'System' }),
+  bold: Platform.select({ android: 'System', ios: 'System', default: 'System' }),
+  arabic: Platform.select({ android: 'System', ios: 'System', default: 'System' }),
 };

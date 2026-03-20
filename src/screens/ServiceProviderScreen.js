@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,11 +13,11 @@ import {
   ScrollView,
   Image,
   Modal,
-  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loginUser } from '../appwrite/userService';
+import { supabase } from '../lib/supabaseClient';
+import { TABLES } from '../lib/tables';
 import CustomDrawer from '../components/CustomDrawer';
 
 const appIcon = require('../../assets/icons/Zidicon.png');
@@ -31,6 +31,15 @@ export default function ServiceProviderScreen({ navigation }) {
   const [userData, setUserData] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  useEffect(() => {
+    loadSavedData();
+  }, []);
+
+  const loadSavedData = async () => {
+    const savedPhone = await AsyncStorage.getItem('providerPhone');
+    if (savedPhone) setPhone(savedPhone);
+  };
+
   const handleLogin = async () => {
     if (!phone || !password) {
       Alert.alert('تنبيه', 'أدخل رقم الهاتف وكلمة المرور');
@@ -39,46 +48,50 @@ export default function ServiceProviderScreen({ navigation }) {
 
     setLoading(true);
     try {
-      const result = await loginUser(phone, password);
+      const email = `${phone}@provider.zid.app`;
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
 
-      if (result.success) {
-        const user = result.data;
+      const { data: profile } = await supabase
+        .from(TABLES.PROFILES)
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
 
-        if (!user.active) {
-          Alert.alert('خطأ', 'هذا الحساب غير نشط. تواصل مع الإدارة');
-          setLoading(false);
-          return;
-        }
-
-        await AsyncStorage.setItem('userData', JSON.stringify(user));
-        await AsyncStorage.setItem('userRole', user.role);
-        await AsyncStorage.setItem('userPhone', phone);
-        if (user.name) await AsyncStorage.setItem('userName', user.name);
-
-        if (user.role === 'admin') {
-          navigation.replace('AdminHome');
-        } else if (user.role === 'merchant') {
-          navigation.replace('MerchantDashboard');
-        } else if (user.role === 'driver') {
-          navigation.replace('DriverDashboard');
-        } else {
-          Alert.alert('خطأ', 'غير مصرح بالدخول');
-        }
-      } else {
-        Alert.alert('خطأ', result.error);
+      if (!profile.active) {
+        Alert.alert('خطأ', 'هذا الحساب غير نشط. تواصل مع الإدارة');
+        setLoading(false);
+        return;
       }
+
+      if (profile.role !== 'merchant') {
+        Alert.alert('خطأ', 'هذا الحساب ليس لمقدم خدمة');
+        setLoading(false);
+        return;
+      }
+
+      await AsyncStorage.setItem('userData', JSON.stringify(profile));
+      await AsyncStorage.setItem('userRole', profile.role);
+      await AsyncStorage.setItem('userPhone', phone);
+      await AsyncStorage.setItem('providerPhone', phone);
+
+      Alert.alert('مرحباً', `تم تسجيل الدخول بنجاح`);
+      navigation.replace('MerchantDashboard');
     } catch (error) {
-      Alert.alert('خطأ', 'حدث خطأ في الاتصال');
+      console.error('Login error:', error);
+      Alert.alert('خطأ', error.message || 'حدث خطأ في الاتصال');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleVisitor = () => {
+    AsyncStorage.setItem('userRole', 'visitor');
+    navigation.replace('MainTabs');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
-      
-      {/* ✅ زر الـ Drawer في أعلى اليسار - مسافة أكبر */}
       <TouchableOpacity
         onPress={() => setDrawerVisible(true)}
         style={styles.menuButton}
@@ -89,19 +102,12 @@ export default function ServiceProviderScreen({ navigation }) {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.content}>
-          
-          {/* ✅ شعار مرفوع لأعلى مع مسافة أقل من زر القائمة */}
           <View style={styles.logoContainer}>
             <Image source={appIcon} style={styles.logo} />
           </View>
 
-          <Text style={styles.title}>
-            مقدمو الخدمة
-          </Text>
-
-          <Text style={styles.subtitle}>
-            للتجار والمناديب
-          </Text>
+          <Text style={styles.title}>دخول مقدمي الخدمة</Text>
+          <Text style={styles.subtitle}>أدخل بياناتك للدخول</Text>
 
           <View style={styles.form}>
             <View style={styles.inputContainer}>
@@ -149,16 +155,13 @@ export default function ServiceProviderScreen({ navigation }) {
               )}
             </TouchableOpacity>
 
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>
-                يتم إنشاء الحسابات بواسطة الإدارة فقط. للاستفسار تواصل مع مدير النظام.
-              </Text>
-            </View>
+            <TouchableOpacity onPress={handleVisitor} style={styles.visitorButton}>
+              <Text style={styles.visitorText}>دخول كزائر</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ✅ Drawer Modal */}
       <Modal visible={drawerVisible} transparent animationType="slide">
         <View style={styles.drawerOverlay}>
           <View style={styles.drawerContent}>
@@ -167,7 +170,6 @@ export default function ServiceProviderScreen({ navigation }) {
               userData={userData}
               onClose={() => setDrawerVisible(false)}
               navigation={navigation}
-              onOpenAdminModal={() => {}}
             />
           </View>
         </View>
@@ -181,13 +183,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  // ✅ زر القائمة في أعلى اليسار - مسافة أكبر للسهولة
   menuButton: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 80 : 40, // ✅ زيادة المسافة العلوية
+    top: Platform.OS === 'ios' ? 80 : 40,
     left: 16,
     zIndex: 1000,
-    padding: 10, // ✅ زيادة حجم الزر
+    padding: 10,
     borderRadius: 8,
     backgroundColor: '#F0F0F0',
     width: 48,
@@ -197,13 +198,13 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 24,
-    paddingTop: 20, // ✅ زيادة المسافة العلوية للمحتوى
+    paddingTop: 20,
+    paddingBottom: 40,
   },
-  // ✅ شعار مرفوع لأعلى
   logoContainer: {
     alignItems: 'center',
-    marginTop: 0, // ✅ الشعار قريب من زر القائمة
-    marginBottom: -60, // ✅ تعديل المسافة السالبة لسحب الشعار لأعلى
+    marginTop: 0,
+    marginBottom: -60,
   },
   logo: {
     width: 600,
@@ -250,21 +251,22 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   primaryButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },
-  footer: {
-    marginTop: 10,
+  visitorButton: {
+    alignItems: 'center',
+    marginVertical: 10,
+    marginBottom: 20,
   },
-  footerText: {
-    fontSize: 12,
+  visitorText: {
     color: '#9CA3AF',
-    textAlign: 'center',
-    lineHeight: 20,
+    fontSize: 14,
+    fontWeight: '500',
   },
   drawerOverlay: {
     flex: 1,

@@ -4,37 +4,20 @@ import { signIn } from './authService';
 
 export const loginUser = async (phone, password) => {
   try {
-    console.log('🔍 تسجيل الدخول برقم:', phone);
-    
-    if (!phone || phone.length < 10) {
-      return { success: false, error: 'رقم الهاتف غير صحيح' };
-    }
-
+    if (!phone || phone.length < 10) return { success: false, error: 'رقم الهاتف غير صحيح' };
     const email = `${phone}@phone.auth`;
-    
     const result = await signIn(email, password);
-    
-    if (!result.success) {
-      return result;
-    }
-
-    if (result.data && result.data.active === false) {
-      return { success: false, error: 'هذا الحساب غير نشط. تواصل مع الإدارة' };
-    }
-
+    if (!result.success) return result;
+    if (result.data && result.data.active === false) return { success: false, error: 'هذا الحساب غير نشط' };
     return result;
   } catch (error) {
-    console.error('❌ خطأ في تسجيل الدخول:', error);
     return { success: false, error: error.message };
   }
 };
 
 export const getAllUsers = async () => {
   try {
-    const { data, error } = await supabase
-      .from(TABLES.PROFILES)
-      .select('*')
-      .limit(100);
+    const { data, error } = await supabase.from(TABLES.PROFILES).select('*').limit(100);
     if (error) throw error;
     return { success: true, data: data || [] };
   } catch (error) {
@@ -44,11 +27,7 @@ export const getAllUsers = async () => {
 
 export const getUsersByRole = async (role) => {
   try {
-    const { data, error } = await supabase
-      .from(TABLES.PROFILES)
-      .select('*')
-      .eq('role', role)
-      .limit(100);
+    const { data, error } = await supabase.from(TABLES.PROFILES).select('*').eq('role', role);
     if (error) throw error;
     return { success: true, data: data || [] };
   } catch (error) {

@@ -9,11 +9,12 @@ import {
   ActivityIndicator,
   SafeAreaView,
   RefreshControl,
-  Modal,
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getAllUsers, toggleUserStatus, deleteUser } from '../../appwrite/userService';
+import { supabase } from '../../lib/supabaseClient';
+import { TABLES } from '../../lib/tables';
+import { toggleUserStatus, deleteUser } from '../../services/userService';
 
 export default function UserManagement({ navigation }) {
   const [users, setUsers] = useState([]);
@@ -31,13 +32,23 @@ export default function UserManagement({ navigation }) {
   }, [searchQuery, users]);
 
   const loadUsers = async () => {
-    const result = await getAllUsers();
-    if (result.success) {
-      setUsers(result.data);
-      setFilteredUsers(result.data);
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.PROFILES)
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setUsers(data || []);
+      setFilteredUsers(data || []);
+    } catch (error) {
+      console.error('خطأ في تحميل المستخدمين:', error);
+      Alert.alert('خطأ', 'فشل تحميل المستخدمين');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-    setLoading(false);
-    setRefreshing(false);
   };
 
   const filterUsers = () => {
@@ -48,7 +59,7 @@ export default function UserManagement({ navigation }) {
     const query = searchQuery.toLowerCase();
     const filtered = users.filter(
       user =>
-        user.name?.toLowerCase().includes(query) ||
+        (user.full_name || user.name)?.toLowerCase().includes(query) ||
         user.phone?.includes(query) ||
         user.role?.includes(query)
     );
@@ -58,13 +69,13 @@ export default function UserManagement({ navigation }) {
   const handleToggleStatus = (user) => {
     Alert.alert(
       'تغيير حالة المستخدم',
-      `هل أنت متأكد من ${user.active ? 'تعطيل' : 'تفعيل'} حساب ${user.name}؟`,
+      `هل أنت متأكد من ${user.active ? 'تعطيل' : 'تفعيل'} حساب ${user.full_name || user.name}؟`,
       [
         { text: 'إلغاء', style: 'cancel' },
         {
           text: user.active ? 'تعطيل' : 'تفعيل',
           onPress: async () => {
-            const result = await toggleUserStatus(user.$id, !user.active);
+            const result = await toggleUserStatus(user.id, !user.active);
             if (result.success) {
               loadUsers();
               Alert.alert('تم', `تم ${!user.active ? 'تفعيل' : 'تعطيل'} الحساب`);
@@ -78,21 +89,20 @@ export default function UserManagement({ navigation }) {
   };
 
   const handleEdit = (user) => {
-    // التنقل إلى شاشة تعديل المستخدم مع معرف المستخدم
-    navigation.navigate('UserEditScreen', { userId: user.$id });
+    navigation.navigate('UserEditScreen', { userId: user.id });
   };
 
   const handleDelete = (user) => {
     Alert.alert(
       'حذف المستخدم',
-      `هل أنت متأكد من حذف ${user.name}؟`,
+      `هل أنت متأكد من حذف ${user.full_name || user.name}؟`,
       [
         { text: 'إلغاء', style: 'cancel' },
         {
           text: 'حذف',
           style: 'destructive',
           onPress: async () => {
-            const result = await deleteUser(user.$id);
+            const result = await deleteUser(user.id);
             if (result.success) {
               loadUsers();
               Alert.alert('تم', 'تم حذف المستخدم');
@@ -116,10 +126,14 @@ export default function UserManagement({ navigation }) {
 
   const getMerchantTypeText = (type) => {
     const types = {
-      'restaurants': 'مطاعم',
+      'restaurant': 'مطعم',
+      'home_chef': 'شيف منزلي',
       'supermarket': 'سوبر ماركت',
       'pharmacy': 'صيدلية',
       'laundry': 'مغسلة',
+      'bakery': 'مخبز',
+      'drinks': 'مشروبات',
+      'milk': 'منتجات ألبان',
       'electrician': 'كهربائي',
       'plumber': 'سباك',
       'carpenter': 'نجار',
@@ -131,7 +145,7 @@ export default function UserManagement({ navigation }) {
     <View style={[styles.userCard, !item.active && styles.userCardDisabled]}>
       <View style={styles.userHeader}>
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{item.name}</Text>
+          <Text style={styles.userName}>{item.full_name || item.name}</Text>
           <Text style={styles.userPhone}>{item.phone}</Text>
         </View>
         <View style={[styles.roleBadge, { backgroundColor: item.active ? '#4F46E5' : '#9CA3AF' }]}>
@@ -139,52 +153,43 @@ export default function UserManagement({ navigation }) {
         </View>
       </View>
 
-      {item.role === 'merchant' && item.merchantType && (
+      {item.role === 'merchant' && item.merchant_type && (
         <View style={styles.merchantInfo}>
           <Ionicons name="business-outline" size={14} color="#6B7280" />
-          <Text style={styles.merchantType}>{getMerchantTypeText(item.merchantType)}</Text>
+          <Text style={styles.merchantType}>{getMerchantTypeText(item.merchant_type)}</Text>
         </View>
       )}
 
-      {item.role === 'merchant' && item.placeName && (
+      {item.role === 'merchant' && item.place_name && (
         <View style={styles.placeInfo}>
           <Ionicons name="location-outline" size={14} color="#10B981" />
-          <Text style={styles.placeName}>مرتبط بـ: {item.placeName}</Text>
+          <Text style={styles.placeName}>مرتبط بـ: {item.place_name}</Text>
         </View>
       )}
 
       {item.role === 'driver' && (
         <View style={styles.driverInfo}>
-          <Text style={styles.driverArea}>منطقة: {item.serviceArea || 'غير محدد'}</Text>
-          <View style={[styles.availabilityBadge, { backgroundColor: item.isAvailable ? '#10B98120' : '#EF444420' }]}>
-            <Text style={[styles.availabilityText, { color: item.isAvailable ? '#10B981' : '#EF4444' }]}>
-              {item.isAvailable ? 'متاح' : 'غير متاح'}
+          <Text style={styles.driverArea}>منطقة: {item.service_area || 'غير محدد'}</Text>
+          <View style={[styles.availabilityBadge, { backgroundColor: item.is_available ? '#10B98120' : '#EF444420' }]}>
+            <Text style={[styles.availabilityText, { color: item.is_available ? '#10B981' : '#EF4444' }]}>
+              {item.is_available ? 'متاح' : 'غير متاح'}
             </Text>
           </View>
         </View>
       )}
 
       <View style={styles.actionButtons}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.editButton]}
-          onPress={() => handleEdit(item)}
-        >
+        <TouchableOpacity style={[styles.actionButton, styles.editButton]} onPress={() => handleEdit(item)}>
           <Ionicons name="create-outline" size={18} color="#FFF" />
           <Text style={styles.actionButtonText}>تعديل</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionButton, item.active ? styles.disableButton : styles.enableButton]}
-          onPress={() => handleToggleStatus(item)}
-        >
+        <TouchableOpacity style={[styles.actionButton, item.active ? styles.disableButton : styles.enableButton]} onPress={() => handleToggleStatus(item)}>
           <Ionicons name={item.active ? "close-circle-outline" : "checkmark-circle-outline"} size={18} color="#FFF" />
           <Text style={styles.actionButtonText}>{item.active ? 'تعطيل' : 'تفعيل'}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={() => handleDelete(item)}
-        >
+        <TouchableOpacity style={[styles.actionButton, styles.deleteButton]} onPress={() => handleDelete(item)}>
           <Ionicons name="trash-outline" size={18} color="#FFF" />
           <Text style={styles.actionButtonText}>حذف</Text>
         </TouchableOpacity>
@@ -230,7 +235,7 @@ export default function UserManagement({ navigation }) {
       <FlatList
         data={filteredUsers}
         renderItem={renderUserCard}
-        keyExtractor={item => item.$id}
+        keyExtractor={item => item.id}
         contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={loadUsers} />
@@ -299,26 +304,11 @@ const styles = StyleSheet.create({
   userPhone: { fontSize: 12, color: '#6B7280', marginTop: 2 },
   roleBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   roleText: { color: '#FFF', fontSize: 10, fontWeight: '600' },
-  merchantInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-    gap: 4,
-  },
+  merchantInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 4 },
   merchantType: { fontSize: 12, color: '#6B7280' },
-  placeInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    gap: 4,
-  },
+  placeInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 4 },
   placeName: { fontSize: 12, color: '#10B981', fontWeight: '500' },
-  driverInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
+  driverInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   driverArea: { fontSize: 12, color: '#6B7280' },
   availabilityBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
   availabilityText: { fontSize: 10, fontWeight: '600' },

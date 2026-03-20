@@ -22,19 +22,12 @@ import {
   deleteService,
   createService,
   updateService,
-  CORE_SERVICES,
-  updateCoreService
 } from '../../services/servicesService';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadServiceImage } from '../../services/uploadService';
 
-// خيارات النص المقترحة
-const MAINTENANCE_OPTIONS = [
-  'جاري التحديث',
-  'قريباً',
-  'تحت الصيانة',
-  'غير متاح حالياً',
-  'قيد التطوير',
+const COLORS = [
+  '#F59E0B', '#3B82F6', '#10B981', '#EF4444', '#8B5CF6', '#EC4899', '#6B7280', '#4F46E5', '#14B8A6', '#F97316'
 ];
 
 const CATEGORIES = [
@@ -44,59 +37,40 @@ const CATEGORIES = [
   { label: 'AI', value: 'ai' },
 ];
 
-const COLORS = [
-  '#F59E0B', '#3B82F6', '#10B981', '#EF4444', '#8B5CF6', '#EC4899', '#6B7280', '#4F46E5', '#14B8A6', '#F97316'
-];
-
-// أنواع الخدمات
 const SERVICE_TYPES = [
   { label: 'خدمة عادية (بدون منتجات)', value: 'regular' },
   { label: 'خدمة بأصناف (مثل مكوجي)', value: 'items_service' },
-  { label: 'خدمة بمنتجات (مطاعم - أكل بيتي)', value: 'items' },
+  { label: 'خدمة بمنتجات (مطاعم - سوبر ماركت)', value: 'items' },
   { label: 'خدمة AI (ذكاء اصطناعي)', value: 'ai' },
-];
-
-// أنواع التجار للخدمات بمنتجات
-const MERCHANT_TYPES = [
-  { label: 'تاجر عادي', value: 'merchant' },
-  { label: 'مطعم', value: 'restaurant' },
-  { label: 'شيف منزلي', value: 'home_chef' },
-  { label: 'مخبز', value: 'bakery' },
-  { label: 'مشروبات', value: 'drinks' },
 ];
 
 export default function ServicesManagementScreen({ navigation }) {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [updating, setUpdating] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
-  const [maintenanceText, setMaintenanceText] = useState('');
-  const [showMaintenanceInput, setShowMaintenanceInput] = useState(false);
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [uploadingTracking, setUploadingTracking] = useState(false);
 
-  // Modal إضافة/تعديل خدمة
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-
-  // حقول الخدمة الأساسية
-  const [serviceId, setServiceId] = useState('');
-  const [serviceName, setServiceName] = useState('');
+  // حقول الخدمة
+  const [service_id, setServiceId] = useState('');
+  const [service_name, setServiceName] = useState('');
   const [serviceColor, setServiceColor] = useState('#6B7280');
   const [serviceCategory, setServiceCategory] = useState('other');
   const [serviceOrder, setServiceOrder] = useState('0');
   const [serviceImage, setServiceImage] = useState(null);
-  const [serviceMaintenanceText, setServiceMaintenanceText] = useState('جاري التحديث');
-  const [serviceType, setServiceType] = useState('regular');
-  const [merchantType, setMerchantType] = useState('merchant');
-  const [itemsCollection, setItemsCollection] = useState('');
-  const [hasPickup, setHasPickup] = useState(false);
-  const [uploading, setUploading] = useState(false);
-
-  // خدمات فرعية (للخدمات من نوع items_service)
-  const [subServices, setSubServices] = useState([]);
+  const [trackingImage, setTrackingImage] = useState(null); // ✅ صورة التتبع
+  const [service_type, setServiceType] = useState('regular');
+  const [merchant_type, setMerchantType] = useState('merchant');
+  const [items_collection, setItemsCollection] = useState('');
+  const [has_pickup, setHasPickup] = useState(false);
+  const [sub_services, setSubServices] = useState([]);
   const [currentSubService, setCurrentSubService] = useState('');
   const [editingSubIndex, setEditingSubIndex] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     loadServices();
@@ -111,7 +85,7 @@ export default function ServicesManagementScreen({ navigation }) {
     setRefreshing(false);
   };
 
-  const pickImage = async () => {
+  const pickImage = async (type = 'service') => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
@@ -126,14 +100,24 @@ export default function ServicesManagementScreen({ navigation }) {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setUploading(true);
-        const uploadResult = await uploadServiceImage(result.assets[0].uri);
-        setUploading(false);
-
-        if (uploadResult.success) {
-          setServiceImage(uploadResult.fileUrl);
+        if (type === 'tracking') {
+          setUploadingTracking(true);
+          const uploadResult = await uploadServiceImage(result.assets[0].uri);
+          setUploadingTracking(false);
+          if (uploadResult.success) {
+            setTrackingImage(uploadResult.fileUrl);
+          } else {
+            Alert.alert('خطأ', 'فشل رفع صورة التتبع');
+          }
         } else {
-          Alert.alert('خطأ', 'فشل في رفع الصورة');
+          setUploading(true);
+          const uploadResult = await uploadServiceImage(result.assets[0].uri);
+          setUploading(false);
+          if (uploadResult.success) {
+            setServiceImage(uploadResult.fileUrl);
+          } else {
+            Alert.alert('خطأ', 'فشل رفع الصورة');
+          }
         }
       }
     } catch (error) {
@@ -149,7 +133,7 @@ export default function ServicesManagementScreen({ navigation }) {
     setServiceCategory('other');
     setServiceOrder('0');
     setServiceImage(null);
-    setServiceMaintenanceText('جاري التحديث');
+    setTrackingImage(null);
     setServiceType('regular');
     setMerchantType('merchant');
     setItemsCollection('');
@@ -161,40 +145,38 @@ export default function ServicesManagementScreen({ navigation }) {
     setSelectedService(null);
   };
 
-  // دوال إدارة الخدمات الفرعية
   const addSubService = () => {
     if (!currentSubService.trim()) {
       Alert.alert('تنبيه', 'الرجاء إدخال اسم الخدمة الفرعية');
       return;
     }
-
     if (editingSubIndex !== null) {
-      const updated = [...subServices];
+      const updated = [...sub_services];
       updated[editingSubIndex] = currentSubService.trim();
       setSubServices(updated);
       setEditingSubIndex(null);
     } else {
-      setSubServices([...subServices, currentSubService.trim()]);
+      setSubServices([...sub_services, currentSubService.trim()]);
     }
     setCurrentSubService('');
   };
 
   const editSubService = (index) => {
-    setCurrentSubService(subServices[index]);
+    setCurrentSubService(sub_services[index]);
     setEditingSubIndex(index);
   };
 
   const removeSubService = (index) => {
     Alert.alert(
       'حذف الخدمة الفرعية',
-      `هل أنت متأكد من حذف "${subServices[index]}"؟`,
+      `هل أنت متأكد من حذف "${sub_services[index]}"؟`,
       [
         { text: 'إلغاء', style: 'cancel' },
         {
           text: 'حذف',
           style: 'destructive',
           onPress: () => {
-            const filtered = subServices.filter((_, i) => i !== index);
+            const filtered = sub_services.filter((_, i) => i !== index);
             setSubServices(filtered);
             if (editingSubIndex === index) {
               setCurrentSubService('');
@@ -207,74 +189,55 @@ export default function ServicesManagementScreen({ navigation }) {
   };
 
   const handleAddService = async () => {
-    if (!serviceId.trim()) {
+    if (!service_id.trim()) {
       Alert.alert('تنبيه', 'معرف الخدمة مطلوب');
       return;
     }
-    if (!serviceName.trim()) {
+    if (!service_name.trim()) {
       Alert.alert('تنبيه', 'اسم الخدمة مطلوب');
       return;
     }
 
-    if (serviceType === 'items_service' && subServices.length === 0) {
+    if (service_type === 'items_service' && sub_services.length === 0) {
       Alert.alert('تنبيه', 'يجب إضافة خدمة فرعية واحدة على الأقل');
       return;
     }
 
-    setUploading(true);
+    setSubmitting(true);
 
     try {
-      let screen = 'ServiceScreen';
-      if (serviceType === 'items_service') {
-        screen = 'ItemsServiceScreen';
-      } else if (serviceType === 'items') {
-        screen = 'ServiceItemsScreen';
-      } else if (serviceType === 'ai') {
-        screen = 'AiMainModal';
-      }
-
-      let itemsColl = null;
-      if (serviceType === 'items_service') {
-        itemsColl = `${serviceId}_items`;
-        Alert.alert(
-          'تنبيه',
-          `✅ تم إنشاء اسم الكولكشن تلقائياً: ${itemsColl}\n\nالرجاء إنشاء هذا الكولكشن في Appwrite يدوياً`
-        );
-      } else if (serviceType === 'items') {
-        itemsColl = `service_${serviceId}_items`;
-        Alert.alert(
-          'تنبيه',
-          `✅ تم إنشاء اسم الكولكشن تلقائياً: ${itemsColl}\n\nالرجاء إنشاء هذا الكولكشن في Appwrite يدوياً`
-        );
+      let itemsColl = items_collection;
+      if (service_type === 'items_service' && !itemsColl) {
+        itemsColl = `${service_id}_items`;
+      } else if (service_type === 'items' && !itemsColl) {
+        itemsColl = `service_${service_id}_items`;
       }
 
       const serviceData = {
-        id: serviceId.trim().toLowerCase(),
-        name: serviceName.trim(),
-        type: serviceType,
-        screen: screen,
+        id: service_id.trim().toLowerCase(),
+        name: service_name.trim(),
+        type: service_type,
         icon: 'apps-outline',
         color: serviceColor,
         category: serviceCategory,
-        isActive: true,
-        isVisible: true,
-        hasItems: serviceType === 'items' || serviceType === 'items_service',
-        hasPickup: hasPickup,
-        itemsCollection: itemsColl,
-        merchantRole: 'merchant',
-        merchantType: merchantType,
-        imageUrl: serviceImage,
-        maintenanceText: serviceMaintenanceText,
+        is_active: true,
+        is_visible: true,
+        has_items: service_type === 'items' || service_type === 'items_service',
+        has_pickup: has_pickup,
+        items_collection: itemsColl,
+        merchant_role: 'merchant',
+        merchant_type: merchant_type,
+        image_url: serviceImage,
+        tracking_image: trackingImage, // ✅ إضافة صورة التتبع
         order: parseInt(serviceOrder) || 0,
-        subServices: serviceType === 'items_service' ? subServices : [],
-        isCore: false, // ✅ أي خدمة جديدة مش أساسية
+        sub_services: service_type === 'items_service' ? sub_services : [],
       };
 
       const result = await createService(serviceData);
 
       if (result.success) {
         Alert.alert('✅ تم', 'تم إضافة الخدمة بنجاح');
-        setEditModalVisible(false);
+        setModalVisible(false);
         resetForm();
         loadServices();
       } else {
@@ -283,36 +246,34 @@ export default function ServicesManagementScreen({ navigation }) {
     } catch (error) {
       Alert.alert('خطأ', error.message);
     } finally {
-      setUploading(false);
+      setSubmitting(false);
     }
   };
 
   const handleUpdateService = async () => {
     if (!selectedService) return;
 
-    setUploading(true);
+    setSubmitting(true);
 
     try {
       const updateData = {
-        name: serviceName,
+        name: service_name,
         color: serviceColor,
-        icon: 'apps-outline',
-        imageUrl: serviceImage,
-        maintenanceText: serviceMaintenanceText,
+        image_url: serviceImage,
+        tracking_image: trackingImage, // ✅ إضافة صورة التتبع
         category: serviceCategory,
-        hasItems: serviceType === 'items' || serviceType === 'items_service',
-        hasPickup: hasPickup,
+        has_pickup: has_pickup,
         order: parseInt(serviceOrder) || 0,
-        type: serviceType,
-        merchantType: merchantType,
-        subServices: serviceType === 'items_service' ? subServices : [],
+        type: service_type,
+        merchant_type: merchant_type,
+        sub_services: service_type === 'items_service' ? sub_services : [],
       };
 
       const result = await updateService(selectedService.$id, updateData);
 
       if (result.success) {
         Alert.alert('✅ تم', 'تم تحديث الخدمة بنجاح');
-        setEditModalVisible(false);
+        setModalVisible(false);
         resetForm();
         loadServices();
       } else {
@@ -321,79 +282,51 @@ export default function ServicesManagementScreen({ navigation }) {
     } catch (error) {
       Alert.alert('خطأ', error.message);
     } finally {
-      setUploading(false);
+      setSubmitting(false);
     }
   };
 
-  const handleToggleService = async (service) => {
-    setUpdating(service.$id);
-    const newStatus = !service.isActive;
+  const handleToggleStatus = async (service) => {
+    const newStatus = !service.is_active;
     const result = await toggleServiceStatus(service.$id, newStatus);
-
     if (result.success) {
       setServices(services.map(s =>
-        s.$id === service.$id ? { ...s, isActive: newStatus } : s
+        s.$id === service.$id ? { ...s, is_active: newStatus } : s
       ));
-      Alert.alert('تم', `تم ${newStatus ? 'تفعيل' : 'تعطيل'} خدمة ${service.name}`);
     } else {
       Alert.alert('خطأ', result.error);
     }
-    setUpdating(null);
   };
 
   const handleToggleVisibility = async (service) => {
-    setUpdating(service.$id);
-    const newVisibility = !service.isVisible;
+    const newVisibility = !service.is_visible;
     const result = await toggleServiceVisibility(service.$id, newVisibility);
-
     if (result.success) {
       setServices(services.map(s =>
-        s.$id === service.$id ? { ...s, isVisible: newVisibility } : s
+        s.$id === service.$id ? { ...s, is_visible: newVisibility } : s
       ));
-      Alert.alert('تم', `تم ${newVisibility ? 'إظهار' : 'إخفاء'} خدمة ${service.name}`);
     } else {
       Alert.alert('خطأ', result.error);
     }
-    setUpdating(null);
   };
 
-  const handleUpdateMaintenanceText = async () => {
-    if (!selectedService || !maintenanceText.trim()) return;
-
-    setUpdating(selectedService.$id);
-    const result = await updateService(selectedService.$id, { maintenanceText });
-    if (result.success) {
-      setServices(services.map(s =>
-        s.$id === selectedService.$id ? { ...s, maintenanceText } : s
-      ));
-      Alert.alert('تم', 'تم تحديث نص الصيانة');
-    }
-    setUpdating(null);
-
-    setShowMaintenanceInput(false);
-    setMaintenanceText('');
-  };
-
-  // ✅ دالة حذف الخدمة - متاحة للكل الآن
   const handleDeleteService = (service) => {
     Alert.alert(
       'حذف الخدمة',
-      `هل أنت متأكد من حذف خدمة "${service.name}"؟\n\n⚠️ هذا الإجراء لا يمكن التراجع عنه.`,
+      `هل أنت متأكد من حذف "${service.name}"؟`,
       [
         { text: 'إلغاء', style: 'cancel' },
         {
           text: 'حذف',
           style: 'destructive',
           onPress: async () => {
-            setUpdating(service.$id);
             const result = await deleteService(service.$id);
             if (result.success) {
-              Alert.alert('✅ تم', 'تم حذف الخدمة بنجاح');
               loadServices();
+              Alert.alert('✅ تم', 'تم حذف الخدمة');
             } else {
               Alert.alert('خطأ', result.error);
             }
-            setUpdating(null);
           }
         }
       ]
@@ -401,76 +334,44 @@ export default function ServicesManagementScreen({ navigation }) {
   };
 
   const openEditModal = (service) => {
+    setSelectedService(service);
     setServiceId(service.id);
     setServiceName(service.name);
     setServiceColor(service.color || '#6B7280');
     setServiceCategory(service.category || 'other');
     setServiceOrder(String(service.order || '0'));
-    setServiceImage(service.imageUrl || null);
-    setServiceMaintenanceText(service.maintenanceText || 'جاري التحديث');
+    setServiceImage(service.image_url || null);
+    setTrackingImage(service.tracking_image || null); // ✅ جلب صورة التتبع
     setServiceType(service.type || 'regular');
-    setMerchantType(service.merchantType || 'merchant');
-    setItemsCollection(service.itemsCollection || '');
-    setHasPickup(service.hasPickup || false);
-    setSubServices(service.subServices || []);
+    setMerchantType(service.merchant_type || 'merchant');
+    setItemsCollection(service.items_collection || '');
+    setHasPickup(service.has_pickup || false);
+    setSubServices(service.sub_services || []);
     setIsEditing(true);
-    setSelectedService(service);
-    setEditModalVisible(true);
+    setModalVisible(true);
+    setShowOptionsModal(false);
   };
 
   const openAddModal = () => {
     resetForm();
-    setEditModalVisible(true);
-  };
-
-  const openOptionsModal = (service) => {
-    setSelectedService(service);
     setModalVisible(true);
   };
 
-  const getServiceIcon = (iconName) => {
-    const icons = {
-      'restaurant-outline': 'restaurant-outline',
-      'home-outline': 'home-outline',
-      'basket-outline': 'basket-outline',
-      'medical-outline': 'medical-outline',
-      'shirt-outline': 'shirt-outline',
-      'water-outline': 'water-outline',
-      'hammer-outline': 'hammer-outline',
-      'apps-outline': 'apps-outline',
-      'car-outline': 'car-outline',
-      'flash-outline': 'flash-outline',
-      'cube-outline': 'cube-outline',
-    };
-    return icons[iconName] || 'construct-outline';
-  };
-
-  const getServiceColor = (serviceId) => {
+  const getServiceColor = (service_id) => {
     const colors = {
-      restaurant: '#F59E0B',
-      home_chef: '#EF4444',
-      supermarket: '#F59E0B',
-      pharmacy: '#10B981',
-      ironing: '#3B82F6',
-      plumbing: '#3B82F6',
-      kitchen: '#8B5CF6',
-      carpentry: '#8B5CF6',
-      marble: '#EC4899',
-      winch: '#EC4899',
-      electrician: '#F59E0B',
-      moving: '#F59E0B'
+      'مطاعم': '#EF4444',
+      'شيف منزلي': '#F59E0B',
+      'سوبر ماركت': '#10B981',
+      'مكوجي': '#3B82F6',
+      'صيدلية': '#8B5CF6',
+      'مخبز': '#F59E0B',
     };
-    return colors[serviceId] || '#6B7280';
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadServices();
+    return colors[service_id] || '#6B7280';
   };
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={styles.center}>
         <ActivityIndicator size="large" color="#4F46E5" />
       </View>
     );
@@ -483,52 +384,28 @@ export default function ServicesManagementScreen({ navigation }) {
           <Ionicons name="arrow-forward" size={28} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>إدارة الخدمات</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity onPress={loadServices} style={styles.headerButton}>
-            <Ionicons name="refresh-outline" size={24} color="#4F46E5" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('AdminAssistants')}
-            style={styles.headerButton}
-          >
-            <Ionicons name="chatbubbles" size={24} color="#8B5CF6" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={openAddModal}
-            style={styles.headerButton}
-          >
-            <Ionicons name="add-circle" size={24} color="#4F46E5" />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={openAddModal}>
+          <Ionicons name="add-circle" size={28} color="#4F46E5" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadServices} />}
         contentContainerStyle={styles.content}
       >
-        <View style={styles.infoCard}>
-          <Ionicons name="information-circle-outline" size={24} color="#4F46E5" />
-          <Text style={styles.infoText}>
-            • التفعيل: الخدمة تعمل بشكل طبيعي
-            {'\n'}• التعطيل: الخدمة تظهر معتمة وعليها النص الذي تحدده
-            {'\n'}• الإخفاء: الخدمة لا تظهر نهائياً للعملاء
-            {'\n'}• الحذف: يمكنك حذف أي خدمة (سيتم حذفها نهائياً)
-          </Text>
-        </View>
-
         {services.map((service) => (
-          <View key={service.$id || service.id} style={styles.serviceCard}>
+          <View key={service.$id} style={styles.serviceCard}>
             <View style={styles.serviceInfo}>
-              {service.imageUrl ? (
-                <Image source={{ uri: service.imageUrl }} style={styles.serviceImage} />
+              {service.image_url ? (
+                <Image source={{ uri: service.image_url }} style={styles.serviceImage} />
               ) : (
-                <View style={[styles.iconContainer, { backgroundColor: getServiceColor(service.id) + '20' }]}>
-                  <Ionicons name={getServiceIcon(service.icon)} size={24} color={getServiceColor(service.id)} />
+                <View style={[styles.iconContainer, { backgroundColor: getServiceColor(service.name) + '20' }]}>
+                  <Ionicons name={service.icon || 'apps-outline'} size={24} color={getServiceColor(service.name)} />
                 </View>
               )}
               <View style={styles.serviceDetails}>
                 <View style={styles.serviceNameRow}>
-                  <Text style={styles.serviceName}>{service.name}</Text>
+                  <Text style={styles.service_name}>{service.name}</Text>
                   {service.type === 'items_service' && (
                     <View style={[styles.typeBadge, { backgroundColor: '#3B82F620' }]}>
                       <Text style={[styles.typeBadgeText, { color: '#3B82F6' }]}>أصناف</Text>
@@ -539,18 +416,13 @@ export default function ServicesManagementScreen({ navigation }) {
                       <Text style={[styles.typeBadgeText, { color: '#10B981' }]}>منتجات</Text>
                     </View>
                   )}
-                  {service.hasPickup && (
-                    <View style={[styles.typeBadge, { backgroundColor: '#F59E0B20' }]}>
-                      <Text style={[styles.typeBadgeText, { color: '#F59E0B' }]}>Pickup</Text>
-                    </View>
-                  )}
                 </View>
-                <Text style={styles.serviceId}>ID: {service.id}</Text>
-                {service.subServices && service.subServices.length > 0 && (
+                <Text style={styles.service_id}>ID: {service.id}</Text>
+                {service.sub_services && service.sub_services.length > 0 && (
                   <View style={styles.subServicesContainer}>
                     <Text style={styles.subServicesLabel}>الخدمات الفرعية:</Text>
                     <View style={styles.subServicesList}>
-                      {service.subServices.map((sub, index) => (
+                      {service.sub_services.map((sub, index) => (
                         <View key={index} style={styles.subServiceChip}>
                           <Text style={styles.subServiceText}>{sub}</Text>
                         </View>
@@ -558,48 +430,32 @@ export default function ServicesManagementScreen({ navigation }) {
                     </View>
                   </View>
                 )}
-                {/* عرض اسم الكولكشن للخدمات ذات الأصناف */}
-                {service.type === 'items_service' && service.itemsCollection && (
-                  <View style={styles.collectionBadge}>
-                    <Ionicons name="folder-outline" size={12} color="#4F46E5" />
-                    <Text style={styles.collectionText}>Collection: {service.itemsCollection}</Text>
-                  </View>
-                )}
                 <View style={styles.badgesContainer}>
-                  <View style={[styles.statusBadge, { backgroundColor: service.isActive ? '#10B98120' : '#EF444420' }]}>
-                    <Text style={[styles.statusText, { color: service.isActive ? '#10B981' : '#EF4444' }]}>
-                      {service.isActive ? 'نشط' : 'معطل'}
+                  <View style={[styles.statusBadge, { backgroundColor: service.is_active ? '#10B98120' : '#EF444420' }]}>
+                    <Text style={[styles.statusText, { color: service.is_active ? '#10B981' : '#EF4444' }]}>
+                      {service.is_active ? 'نشط' : 'معطل'}
                     </Text>
                   </View>
-                  {service.isVisible === false && (
+                  {service.is_visible === false && (
                     <View style={[styles.statusBadge, { backgroundColor: '#6B728020' }]}>
                       <Text style={[styles.statusText, { color: '#6B7280' }]}>مخفي</Text>
                     </View>
                   )}
                 </View>
-                {!service.isActive && service.maintenanceText && (
-                  <View style={styles.maintenanceBadge}>
-                    <Text style={styles.maintenanceBadgeText}>نص: {service.maintenanceText}</Text>
-                  </View>
-                )}
               </View>
             </View>
 
             <View style={styles.serviceActions}>
-              {service.type === 'items_service' && service.hasItems && (
+              {service.type === 'items_service' && service.has_items && (
                 <TouchableOpacity
                   style={[styles.itemActionButton, { backgroundColor: '#10B981' }]}
                   onPress={() => {
-                    if (!service.itemsCollection) {
-                      Alert.alert('خطأ', 'هذه الخدمة ليس لها Collection مخصص للأصناف');
-                      return;
-                    }
                     navigation.navigate('ItemsServiceScreen', {
-                      serviceId: service.id,
-                      collectionName: service.itemsCollection,
-                      serviceName: service.name,
+                      service_id: service.id,
+                      collectionName: service.items_collection,
+                      service_name: service.name,
                       serviceColor: service.color,
-                      subServices: service.subServices || [],
+                      sub_services: service.sub_services || [],
                       isAdmin: true
                     });
                   }}
@@ -610,14 +466,12 @@ export default function ServicesManagementScreen({ navigation }) {
               )}
               <TouchableOpacity
                 style={styles.moreButton}
-                onPress={() => openOptionsModal(service)}
-                disabled={updating === service.$id}
+                onPress={() => {
+                  setSelectedService(service);
+                  setShowOptionsModal(true);
+                }}
               >
-                {updating === service.$id ? (
-                  <ActivityIndicator size="small" color="#4F46E5" />
-                ) : (
-                  <Ionicons name="ellipsis-vertical" size={20} color="#6B7280" />
-                )}
+                <Ionicons name="ellipsis-vertical" size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
           </View>
@@ -625,105 +479,69 @@ export default function ServicesManagementScreen({ navigation }) {
       </ScrollView>
 
       {/* Modal خيارات الخدمة */}
-      <Modal visible={modalVisible} transparent animationType="fade">
+      <Modal visible={showOptionsModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{selectedService?.name}</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <TouchableOpacity onPress={() => setShowOptionsModal(false)}>
                 <Ionicons name="close" size={24} color="#EF4444" />
               </TouchableOpacity>
             </View>
 
-            {/* زر تعديل النص */}
             <TouchableOpacity
               style={styles.modalOption}
-              onPress={() => {
-                setModalVisible(false);
-                setSelectedService(selectedService);
-                setShowMaintenanceInput(true);
-                setMaintenanceText(selectedService?.maintenanceText || 'جاري التحديث');
-              }}
-            >
-              <Ionicons name="chatbubble-outline" size={24} color="#4F46E5" />
-              <View style={styles.modalOptionTextContainer}>
-                <Text style={styles.modalOptionText}>تغيير نص الصيانة</Text>
-                <Text style={styles.modalOptionDesc}>
-                  الحالي: {selectedService?.maintenanceText || 'جاري التحديث'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* زر التعديل */}
-            <TouchableOpacity
-              style={styles.modalOption}
-              onPress={() => {
-                setModalVisible(false);
-                openEditModal(selectedService);
-              }}
+              onPress={() => openEditModal(selectedService)}
             >
               <Ionicons name="create-outline" size={24} color="#4F46E5" />
               <View style={styles.modalOptionTextContainer}>
                 <Text style={styles.modalOptionText}>تعديل الخدمة</Text>
-                <Text style={styles.modalOptionDesc}>تغيير بيانات الخدمة وإعداداتها</Text>
+                <Text style={styles.modalOptionDesc}>تغيير بيانات الخدمة</Text>
               </View>
             </TouchableOpacity>
 
-            {/* زر التفعيل/التعطيل */}
             <TouchableOpacity
               style={styles.modalOption}
               onPress={() => {
-                setModalVisible(false);
-                handleToggleService(selectedService);
+                setShowOptionsModal(false);
+                handleToggleStatus(selectedService);
               }}
             >
               <Ionicons
-                name={selectedService?.isActive ? "close-circle-outline" : "checkmark-circle-outline"}
+                name={selectedService?.is_active ? 'close-circle-outline' : 'checkmark-circle-outline'}
                 size={24}
-                color={selectedService?.isActive ? "#EF4444" : "#10B981"}
+                color={selectedService?.is_active ? '#EF4444' : '#10B981'}
               />
               <View style={styles.modalOptionTextContainer}>
                 <Text style={styles.modalOptionText}>
-                  {selectedService?.isActive ? 'تعطيل الخدمة' : 'تفعيل الخدمة'}
-                </Text>
-                <Text style={styles.modalOptionDesc}>
-                  {selectedService?.isActive
-                    ? 'الخدمة ستظهر معتمة مع نص الصيانة'
-                    : 'الخدمة ستعمل بشكل طبيعي'}
+                  {selectedService?.is_active ? 'تعطيل الخدمة' : 'تفعيل الخدمة'}
                 </Text>
               </View>
             </TouchableOpacity>
 
-            {/* زر الإظهار/الإخفاء */}
             <TouchableOpacity
               style={styles.modalOption}
               onPress={() => {
-                setModalVisible(false);
+                setShowOptionsModal(false);
                 handleToggleVisibility(selectedService);
               }}
             >
               <Ionicons
-                name={selectedService?.isVisible === false ? "eye-outline" : "eye-off-outline"}
+                name={selectedService?.is_visible === false ? 'eye-outline' : 'eye-off-outline'}
                 size={24}
-                color={selectedService?.isVisible === false ? "#10B981" : "#6B7280"}
+                color={selectedService?.is_visible === false ? '#10B981' : '#6B7280'}
               />
               <View style={styles.modalOptionTextContainer}>
                 <Text style={styles.modalOptionText}>
-                  {selectedService?.isVisible === false ? 'إظهار الخدمة' : 'إخفاء الخدمة'}
-                </Text>
-                <Text style={styles.modalOptionDesc}>
-                  {selectedService?.isVisible === false
-                    ? 'الخدمة ستظهر للعملاء'
-                    : 'الخدمة لن تظهر نهائياً للعملاء'}
+                  {selectedService?.is_visible === false ? 'إظهار الخدمة' : 'إخفاء الخدمة'}
                 </Text>
               </View>
             </TouchableOpacity>
 
-            {/* ✅ زر الحذف - متاح للكل الآن */}
             <TouchableOpacity
               style={[styles.modalOption, styles.deleteOption]}
               onPress={() => {
-                setModalVisible(false);
+                setShowOptionsModal(false);
                 handleDeleteService(selectedService);
               }}
             >
@@ -736,7 +554,7 @@ export default function ServicesManagementScreen({ navigation }) {
 
             <TouchableOpacity
               style={[styles.modalOption, styles.cancelOption]}
-              onPress={() => setModalVisible(false)}
+              onPress={() => setShowOptionsModal(false)}
             >
               <Text style={styles.cancelOptionText}>إلغاء</Text>
             </TouchableOpacity>
@@ -744,65 +562,8 @@ export default function ServicesManagementScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* Modal إدخال نص الصيانة */}
-      <Modal visible={showMaintenanceInput} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>نص الصيانة</Text>
-              <TouchableOpacity onPress={() => setShowMaintenanceInput(false)}>
-                <Ionicons name="close" size={24} color="#EF4444" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.label}>اختر نصاً مقترحاً:</Text>
-            <View style={styles.optionsContainer}>
-              {MAINTENANCE_OPTIONS.map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.optionButton,
-                    maintenanceText === option && styles.optionButtonActive
-                  ]}
-                  onPress={() => setMaintenanceText(option)}
-                >
-                  <Text style={[
-                    styles.optionButtonText,
-                    maintenanceText === option && styles.optionButtonTextActive
-                  ]}>{option}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.label}>أو اكتب نصاً مخصصاً:</Text>
-            <TextInput
-              style={styles.input}
-              value={maintenanceText}
-              onChangeText={setMaintenanceText}
-              placeholder="اكتب النص الذي تريد ظهوره"
-              multiline
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowMaintenanceInput(false)}
-              >
-                <Text style={styles.cancelButtonText}>إلغاء</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleUpdateMaintenanceText}
-              >
-                <Text style={styles.saveButtonText}>حفظ</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
       {/* Modal إضافة/تعديل خدمة */}
-      <Modal visible={editModalVisible} transparent animationType="slide">
+      <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <ScrollView contentContainerStyle={styles.modalScrollContent}>
             <View style={styles.modalContent}>
@@ -810,10 +571,7 @@ export default function ServicesManagementScreen({ navigation }) {
                 <Text style={styles.modalTitle}>
                   {isEditing ? 'تعديل الخدمة' : 'إضافة خدمة جديدة'}
                 </Text>
-                <TouchableOpacity onPress={() => {
-                  setEditModalVisible(false);
-                  resetForm();
-                }}>
+                <TouchableOpacity onPress={() => { setModalVisible(false); resetForm(); }}>
                   <Ionicons name="close" size={24} color="#EF4444" />
                 </TouchableOpacity>
               </View>
@@ -823,8 +581,8 @@ export default function ServicesManagementScreen({ navigation }) {
                   <Text style={styles.label}>معرف الخدمة</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="laundry, bakery, drinks, etc"
-                    value={serviceId}
+                    placeholder="restaurant, supermarket, laundry"
+                    value={service_id}
                     onChangeText={setServiceId}
                     autoCapitalize="none"
                   />
@@ -834,12 +592,11 @@ export default function ServicesManagementScreen({ navigation }) {
               <Text style={styles.label}>اسم الخدمة</Text>
               <TextInput
                 style={styles.input}
-                placeholder="مثال: مكوجي, مخبز, مشروبات"
-                value={serviceName}
+                placeholder="مثال: مطاعم, سوبر ماركت"
+                value={service_name}
                 onChangeText={setServiceName}
               />
 
-              {/* نوع الخدمة */}
               <Text style={styles.label}>نوع الخدمة</Text>
               <View style={styles.typeContainer}>
                 {SERVICE_TYPES.map((type) => (
@@ -847,40 +604,31 @@ export default function ServicesManagementScreen({ navigation }) {
                     key={type.value}
                     style={[
                       styles.typeButton,
-                      serviceType === type.value && styles.typeButtonActive
+                      service_type === type.value && styles.typeButtonActive
                     ]}
                     onPress={() => setServiceType(type.value)}
                   >
                     <Text style={[
                       styles.typeButtonText,
-                      serviceType === type.value && styles.typeButtonTextActive
+                      service_type === type.value && styles.typeButtonTextActive
                     ]}>{type.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              {/* خدمات فرعية - للخدمات من نوع items_service */}
-              {serviceType === 'items_service' && (
+              {service_type === 'items_service' && (
                 <View style={styles.subServicesSection}>
                   <Text style={styles.label}>الخدمات الفرعية</Text>
-                  <Text style={styles.subServicesHint}>
-                    أضف الخدمات التي تقدمها (مثل: كوي فقط، غسيل وكوي، تنظيف جاف، إلخ)
-                  </Text>
-
-                  {/* عرض الخدمات الفرعية المضافة */}
-                  {subServices.length > 0 && (
+                  {sub_services.length > 0 && (
                     <View style={styles.subServicesList}>
-                      {subServices.map((sub, index) => (
+                      {sub_services.map((sub, index) => (
                         <View key={index} style={styles.subServiceItem}>
-                          <View style={styles.subServiceInfo}>
-                            <Ionicons name="pricetag-outline" size={16} color="#4F46E5" />
-                            <Text style={styles.subServiceName}>{sub}</Text>
-                          </View>
+                          <Text style={styles.subServiceName}>{sub}</Text>
                           <View style={styles.subServiceActions}>
-                            <TouchableOpacity onPress={() => editSubService(index)} style={styles.subServiceEdit}>
+                            <TouchableOpacity onPress={() => editSubService(index)}>
                               <Ionicons name="create-outline" size={18} color="#4F46E5" />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => removeSubService(index)} style={styles.subServiceDelete}>
+                            <TouchableOpacity onPress={() => removeSubService(index)}>
                               <Ionicons name="close-circle" size={18} color="#EF4444" />
                             </TouchableOpacity>
                           </View>
@@ -888,12 +636,10 @@ export default function ServicesManagementScreen({ navigation }) {
                       ))}
                     </View>
                   )}
-
-                  {/* إضافة خدمة فرعية جديدة */}
                   <View style={styles.addSubServiceRow}>
                     <TextInput
                       style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                      placeholder="اكتب اسم الخدمة الفرعية"
+                      placeholder="أضف خدمة فرعية"
                       value={currentSubService}
                       onChangeText={setCurrentSubService}
                     />
@@ -901,62 +647,14 @@ export default function ServicesManagementScreen({ navigation }) {
                       style={styles.addSubServiceButton}
                       onPress={addSubService}
                     >
-                      <Ionicons name={editingSubIndex !== null ? "checkmark" : "add"} size={24} color="#FFF" />
+                      <Ionicons name={editingSubIndex !== null ? 'checkmark' : 'add'} size={24} color="#FFF" />
                     </TouchableOpacity>
                   </View>
                 </View>
               )}
 
-              {/* عرض اسم الكولكشن المقترح للخدمات ذات الأصناف */}
-              {serviceType === 'items_service' && serviceId && (
-                <View style={styles.collectionInfo}>
-                  <Ionicons name="information-circle-outline" size={20} color="#4F46E5" />
-                  <Text style={styles.collectionInfoText}>
-                    سيتم إنشاء كولكشن تلقائياً بإسم: {serviceId}_items
-                  </Text>
-                </View>
-              )}
-
-              {/* خيارات إضافية للخدمات بمنتجات */}
-              {serviceType === 'items' && (
-                <>
-                  <Text style={styles.label}>نوع التاجر</Text>
-                  <View style={styles.merchantTypeContainer}>
-                    {MERCHANT_TYPES.map((type) => (
-                      <TouchableOpacity
-                        key={type.value}
-                        style={[
-                          styles.merchantTypeButton,
-                          merchantType === type.value && styles.merchantTypeButtonActive
-                        ]}
-                        onPress={() => setMerchantType(type.value)}
-                      >
-                        <Text style={[
-                          styles.merchantTypeText,
-                          merchantType === type.value && styles.merchantTypeTextActive
-                        ]}>{type.label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </>
-              )}
-
-              {/* خيار Pickup */}
-              <View style={styles.switchContainer}>
-                <Text style={styles.label}>له Pickup (استلام)</Text>
-                <Switch
-                  value={hasPickup}
-                  onValueChange={setHasPickup}
-                  trackColor={{ false: '#E5E7EB', true: '#4F46E5' }}
-                />
-              </View>
-
               <Text style={styles.label}>صورة الخدمة</Text>
-              <TouchableOpacity
-                style={styles.imagePicker}
-                onPress={pickImage}
-                disabled={uploading}
-              >
+              <TouchableOpacity style={styles.imagePicker} onPress={() => pickImage('service')} disabled={uploading}>
                 {serviceImage ? (
                   <Image source={{ uri: serviceImage }} style={styles.previewImage} />
                 ) : (
@@ -967,6 +665,26 @@ export default function ServicesManagementScreen({ navigation }) {
                       <>
                         <Ionicons name="camera-outline" size={40} color="#9CA3AF" />
                         <Text style={styles.imagePlaceholderText}>اختر صورة</Text>
+                      </>
+                    )}
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* ✅ حقل صورة التتبع */}
+              <Text style={styles.label}>صورة تتبع الطلب</Text>
+              <Text style={styles.helperText}>هذه الصورة تظهر للعميل أثناء انتظار قبول الطلب</Text>
+              <TouchableOpacity style={styles.imagePicker} onPress={() => pickImage('tracking')} disabled={uploadingTracking}>
+                {trackingImage ? (
+                  <Image source={{ uri: trackingImage }} style={styles.previewImage} />
+                ) : (
+                  <View style={styles.imagePlaceholder}>
+                    {uploadingTracking ? (
+                      <ActivityIndicator size="large" color="#4F46E5" />
+                    ) : (
+                      <>
+                        <Ionicons name="image-outline" size={40} color="#9CA3AF" />
+                        <Text style={styles.imagePlaceholderText}>اختر صورة التتبع</Text>
                       </>
                     )}
                   </View>
@@ -1020,31 +738,21 @@ export default function ServicesManagementScreen({ navigation }) {
                 </View>
               </View>
 
-              <Text style={styles.label}>نص الصيانة</Text>
-              <View style={styles.optionsContainer}>
-                {MAINTENANCE_OPTIONS.map((option) => (
-                  <TouchableOpacity
-                    key={option}
-                    style={[
-                      styles.optionButton,
-                      serviceMaintenanceText === option && styles.optionButtonActive
-                    ]}
-                    onPress={() => setServiceMaintenanceText(option)}
-                  >
-                    <Text style={[
-                      styles.optionButtonText,
-                      serviceMaintenanceText === option && styles.optionButtonTextActive
-                    ]}>{option}</Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.switchContainer}>
+                <Text style={styles.label}>له Pickup (استلام)</Text>
+                <Switch
+                  value={has_pickup}
+                  onValueChange={setHasPickup}
+                  trackColor={{ false: '#E5E7EB', true: '#4F46E5' }}
+                />
               </View>
 
               <TouchableOpacity
-                style={[styles.saveButton, uploading && styles.disabled]}
+                style={[styles.saveButton, (submitting || uploading || uploadingTracking) && styles.disabled]}
                 onPress={isEditing ? handleUpdateService : handleAddService}
-                disabled={uploading}
+                disabled={submitting || uploading || uploadingTracking}
               >
-                {uploading ? (
+                {submitting || uploading || uploadingTracking ? (
                   <ActivityIndicator color="#FFF" />
                 ) : (
                   <Text style={styles.saveButtonText}>
@@ -1062,6 +770,7 @@ export default function ServicesManagementScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1072,17 +781,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
-  headerButtons: { flexDirection: 'row', gap: 12 },
-  headerButton: { padding: 4 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   content: { padding: 16 },
-  infoCard: {
-    backgroundColor: '#EEF2FF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
-  infoText: { fontSize: 14, color: '#4F46E5', lineHeight: 22 },
 
   serviceCard: {
     backgroundColor: '#FFF',
@@ -1103,14 +802,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     flexWrap: 'wrap',
   },
-  serviceName: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
-  typeBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
+  service_name: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
+  typeBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 },
   typeBadgeText: { fontSize: 9, fontWeight: '600' },
-  serviceId: { fontSize: 12, color: '#9CA3AF', marginBottom: 4 },
+  service_id: { fontSize: 12, color: '#9CA3AF', marginBottom: 4 },
   subServicesContainer: { marginBottom: 4 },
   subServicesLabel: { fontSize: 11, color: '#4B5563', marginBottom: 2 },
   subServicesList: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
@@ -1121,30 +816,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   subServiceText: { fontSize: 10, color: '#1F2937' },
-  collectionBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EEF2FF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-    marginBottom: 4,
-    gap: 4,
-  },
-  collectionText: { fontSize: 9, color: '#4F46E5', fontWeight: '600' },
   badgesContainer: { flexDirection: 'row', gap: 4, marginBottom: 4, flexWrap: 'wrap' },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
   statusText: { fontSize: 10, fontWeight: '600' },
-  maintenanceBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-    marginTop: 2,
-  },
-  maintenanceBadgeText: { fontSize: 10, color: '#92400E', fontWeight: '500' },
+
   serviceActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1162,11 +837,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 4,
   },
-  itemActionText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  itemActionText: { color: '#FFF', fontSize: 12, fontWeight: '600' },
   moreButton: { padding: 8 },
 
   // Modal styles
@@ -1212,27 +883,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   cancelOptionText: { fontSize: 16, color: '#1F2937', fontWeight: '500' },
+  modalScrollContent: { paddingVertical: 20 },
+
   label: { fontSize: 14, fontWeight: '600', color: '#4B5563', marginBottom: 8, marginTop: 8 },
-  optionsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  optionButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  optionButtonActive: {
-    backgroundColor: '#4F46E5',
-    borderColor: '#4F46E5',
-  },
-  optionButtonText: { fontSize: 12, color: '#4B5563' },
-  optionButtonTextActive: { color: '#FFF', fontWeight: '600' },
+  helperText: { fontSize: 12, color: '#9CA3AF', marginBottom: 8, marginTop: -4 },
   input: {
     backgroundColor: '#F9FAFB',
     borderWidth: 1,
@@ -1242,41 +896,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     fontSize: 14,
   },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginTop: 10,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: '#F3F4F6',
-  },
-  saveButton: {
-    backgroundColor: '#4F46E5',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  cancelButtonText: {
-    color: '#1F2937',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  saveButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  disabled: { opacity: 0.6 },
-  modalScrollContent: { paddingVertical: 20 },
   imagePicker: {
     width: '100%',
     height: 150,
@@ -1309,18 +928,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  categoryOptionActive: {
-    backgroundColor: '#4F46E5',
-    borderColor: '#4F46E5',
-  },
+  categoryOptionActive: { backgroundColor: '#4F46E5', borderColor: '#4F46E5' },
   categoryOptionText: { fontSize: 12, color: '#4B5563' },
   categoryOptionTextActive: { color: '#FFF', fontWeight: '600' },
-  typeContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 15,
-  },
+  typeContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 15 },
   typeButton: {
     flex: 1,
     paddingVertical: 10,
@@ -1331,121 +942,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  typeButtonActive: {
-    backgroundColor: '#4F46E5',
-    borderColor: '#4F46E5',
-  },
-  typeButtonText: {
-    fontSize: 12,
-    color: '#4B5563',
-  },
-  typeButtonTextActive: {
-    color: '#FFF',
-    fontWeight: '600',
-  },
-  merchantTypeContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 15,
-  },
-  merchantTypeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  merchantTypeButtonActive: {
-    backgroundColor: '#4F46E5',
-    borderColor: '#4F46E5',
-  },
-  merchantTypeText: {
-    fontSize: 12,
-    color: '#4B5563',
-  },
-  merchantTypeTextActive: {
-    color: '#FFF',
-    fontWeight: '600',
-  },
-  collectionInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EEF2FF',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 10,
-    gap: 8,
-  },
-  collectionInfoText: {
-    fontSize: 12,
-    color: '#4F46E5',
-    flex: 1,
-  },
-
-  // أنماط إضافية للخدمات الفرعية
-  subServicesSection: {
-    marginBottom: 15,
-    backgroundColor: '#F9FAFB',
-    padding: 15,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  subServicesHint: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 15,
-  },
-  subServicesList: {
-    marginBottom: 10,
-  },
-  subServiceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  subServiceInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  subServiceName: {
-    fontSize: 14,
-    color: '#1F2937',
-  },
-  subServiceActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  subServiceEdit: {
-    padding: 4,
-  },
-  subServiceDelete: {
-    padding: 4,
-  },
-  addSubServiceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 5,
-  },
-  addSubServiceButton: {
-    backgroundColor: '#4F46E5',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  typeButtonActive: { backgroundColor: '#4F46E5', borderColor: '#4F46E5' },
+  typeButtonText: { fontSize: 12, color: '#4B5563' },
+  typeButtonTextActive: { color: '#FFF', fontWeight: '600' },
   switchContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1454,5 +953,42 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+  },
+  saveButton: {
+    backgroundColor: '#4F46E5',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  disabled: { opacity: 0.6 },
+  saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+
+  // أنماط الخدمات الفرعية
+  subServicesSection: { marginBottom: 15 },
+  subServicesList: { marginBottom: 10 },
+  subServiceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  subServiceName: { fontSize: 14, color: '#1F2937' },
+  subServiceActions: { flexDirection: 'row', gap: 8 },
+  addSubServiceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addSubServiceButton: {
+    backgroundColor: '#4F46E5',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

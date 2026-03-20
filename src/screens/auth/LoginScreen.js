@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loginUser } from '../../appwrite/userService';
+import { supabase } from '../../lib/supabaseClient';
+import { TABLES } from '../../lib/tables';
 
 export default function LoginScreen({ navigation }) {
   const [phone, setPhone] = useState('');
@@ -16,25 +17,44 @@ export default function LoginScreen({ navigation }) {
     }
 
     setLoading(true);
-    const result = await loginUser(phone, password);
-    
-    if (result.success) {
-      const user = result.data;
-      await AsyncStorage.setItem('userData', JSON.stringify(user));
-      
-      if (user.role === 'merchant') {
+    try {
+      const email = `${phone}@user.zid.app`;
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      const { data: profile } = await supabase
+        .from(TABLES.PROFILES)
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      if (!profile.active) {
+        Alert.alert('خطأ', 'هذا الحساب غير نشط. تواصل مع الإدارة');
+        setLoading(false);
+        return;
+      }
+
+      await AsyncStorage.setItem('userData', JSON.stringify(profile));
+
+      if (profile.role === 'merchant') {
         navigation.replace('MerchantDashboard');
-      } else if (user.role === 'driver') {
+      } else if (profile.role === 'driver') {
         navigation.replace('DriverDashboard');
-      } else if (user.role === 'admin') {
+      } else if (profile.role === 'admin') {
         navigation.replace('AdminHome');
       } else {
         Alert.alert('خطأ', 'غير مصرح بالدخول');
       }
-    } else {
-      Alert.alert('خطأ', result.error);
+    } catch (error) {
+      console.error('Login error:', error);
+      Alert.alert('خطأ', error.message || 'حدث خطأ في الاتصال');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -49,7 +69,8 @@ export default function LoginScreen({ navigation }) {
         <View style={styles.form}>
           <TextInput
             style={[styles.input, { color: "#1F2937" }]}
-            placeholder="رقم التليفون" placeholderTextColor="#9CA3AF"
+            placeholder="رقم التليفون"
+            placeholderTextColor="#9CA3AF"
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
@@ -57,7 +78,8 @@ export default function LoginScreen({ navigation }) {
 
           <TextInput
             style={[styles.input, { color: "#1F2937" }]}
-            placeholder="كلمة المرور" placeholderTextColor="#9CA3AF"
+            placeholder="كلمة المرور"
+            placeholderTextColor="#9CA3AF"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -70,14 +92,14 @@ export default function LoginScreen({ navigation }) {
           <View style={styles.registerContainer}>
             <Text style={styles.registerText}>ليس لديك حساب؟</Text>
             <View style={styles.registerButtons}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.registerButton, styles.merchantButton]}
                 onPress={() => navigation.navigate('MerchantRegister', { role: 'merchant' })}
               >
                 <Text style={styles.registerButtonText}>تسجيل تاجر</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.registerButton, styles.driverButton]}
                 onPress={() => navigation.navigate('MerchantRegister', { role: 'driver' })}
               >

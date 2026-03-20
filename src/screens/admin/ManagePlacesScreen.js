@@ -14,7 +14,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { createPlace, getAllPlaces, deletePlace } from '../../services/placesService';
+import { createPlace, getAllPlaces, deletePlace, updatePlace } from '../../services/placesService';
 import { getAllServices } from '../../services/servicesService';
 
 export default function ManagePlacesScreen({ navigation }) {
@@ -24,17 +24,18 @@ export default function ManagePlacesScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  
-  // لضمان عدم تحديث الـ State بعد قفل الصفحة
+  const [typeModalVisible, setTypeModalVisible] = useState(false);
+
   const isMounted = useRef(true);
 
-  // فورم الإضافة
+  // فورم الإضافة والتعديل
+  const [editingPlace, setEditingPlace] = useState(null);
   const [name, setName] = useState('');
   const [type, setType] = useState('');
+  const [typeName, setTypeName] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
 
-  // 1. تحميل البيانات مرة واحدة عند الفتح
   useEffect(() => {
     isMounted.current = true;
     loadData();
@@ -44,7 +45,7 @@ export default function ManagePlacesScreen({ navigation }) {
   const loadData = async () => {
     try {
       if (!refreshing) setLoading(true);
-      
+
       const [placesRes, servicesRes] = await Promise.all([
         getAllPlaces(),
         getAllServices()
@@ -54,11 +55,10 @@ export default function ManagePlacesScreen({ navigation }) {
 
       if (placesRes.success) setPlaces(placesRes.data);
       if (servicesRes.success) {
-        // تصفية الخدمات المهمة فقط
-        const filtered = servicesRes.data.filter(s => 
-          s.hasItems || s.id === 'restaurant' || s.id === 'home_chef'
-        );
-        setServices(filtered);
+        // تصفية الخدمات النشطة والمرئية فقط
+        const activeServices = servicesRes.data.filter(s => s.is_active === true && s.is_visible === true);
+        const sortedServices = activeServices.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+        setServices(sortedServices);
       }
     } catch (error) {
       console.error("Load Error:", error);
@@ -70,32 +70,72 @@ export default function ManagePlacesScreen({ navigation }) {
     }
   };
 
-  const handleAddPlace = async () => {
+  const handleSavePlace = async () => {
     if (!name.trim() || !type) {
       Alert.alert('تنبيه', 'برجاء ملء البيانات الأساسية');
       return;
     }
-    
+
     setSubmitting(true);
     try {
-      const res = await createPlace({ 
-        name: name.trim(), 
-        type, 
-        address: address.trim(), 
-        phone: phone.trim() 
-      });
-      
+      const placeData = {
+        name: name.trim(),
+        type,
+        address: address.trim(),
+        phone: phone.trim()
+      };
+
+      let res;
+      if (editingPlace) {
+        res = await updatePlace(editingPlace.$id || editingPlace.id, placeData);
+      } else {
+        res = await createPlace(placeData);
+      }
+
       if (res.success) {
         setModalVisible(false);
-        setName(''); setType(''); setAddress(''); setPhone('');
+        resetForm();
         loadData();
-        Alert.alert('✅ تم', 'تم إضافة المكان بنجاح');
+        Alert.alert('✅ تم', editingPlace ? 'تم تحديث المكان بنجاح' : 'تم إضافة المكان بنجاح');
+      } else {
+        Alert.alert('خطأ', res.error);
       }
-    } catch (e) { 
-      Alert.alert('خطأ', e.message); 
-    } finally { 
-      setSubmitting(false); 
+    } catch (e) {
+      Alert.alert('خطأ', e.message);
+    } finally {
+      setSubmitting(false);
     }
+  };
+
+  const resetForm = () => {
+    setEditingPlace(null);
+    setName('');
+    setType('');
+    setTypeName('');
+    setAddress('');
+    setPhone('');
+  };
+
+  const openAddModal = () => {
+    resetForm();
+    setModalVisible(true);
+  };
+
+  const openEditModal = (place) => {
+    setEditingPlace(place);
+    setName(place.name || '');
+    setType(place.type || '');
+    const service = services.find(s => s.id === place.type);
+    setTypeName(service ? service.name : place.type);
+    setAddress(place.address || '');
+    setPhone(place.phone || '');
+    setModalVisible(true);
+  };
+
+  const selectService = (service) => {
+    setType(service.id);
+    setTypeName(service.name);
+    setTypeModalVisible(false);
   };
 
   const handleDelete = (id, name) => {
@@ -106,33 +146,38 @@ export default function ManagePlacesScreen({ navigation }) {
         if (res.success) {
           loadData();
           Alert.alert('تم', 'تم حذف المكان');
+        } else {
+          Alert.alert('خطأ', res.error);
         }
       }}
     ]);
   };
 
+  const getServiceColor = (serviceId) => {
+    const service = services.find(s => s.id === serviceId);
+    return service?.color || '#EF4444';
+  };
+
   const renderPlace = ({ item }) => {
     const serviceName = services.find(s => s.id === item.type)?.name || item.type;
-    const isRestaurant = item.type === 'restaurant';
-    const badgeColor = isRestaurant ? '#F59E0B20' : '#EF444420';
-    const textColor = isRestaurant ? '#F59E0B' : '#EF4444';
+    const serviceColor = getServiceColor(item.type);
 
     return (
       <View style={styles.placeCard}>
         <View style={styles.placeHeader}>
           <Text style={styles.placeName}>{item.name}</Text>
-          <View style={[styles.typeBadge, { backgroundColor: badgeColor }]}>
-            <Text style={[styles.typeText, { color: textColor }]}>{serviceName}</Text>
+          <View style={[styles.typeBadge, { backgroundColor: serviceColor + '20' }]}>
+            <Text style={[styles.typeText, { color: serviceColor }]}>{serviceName}</Text>
           </View>
         </View>
-        
+
         {item.address ? (
           <View style={styles.infoRow}>
             <Ionicons name="location-outline" size={16} color="#6B7280" />
             <Text style={styles.infoText}>{item.address}</Text>
           </View>
         ) : null}
-        
+
         {item.phone ? (
           <View style={styles.infoRow}>
             <Ionicons name="call-outline" size={16} color="#6B7280" />
@@ -141,17 +186,23 @@ export default function ManagePlacesScreen({ navigation }) {
         ) : null}
 
         <View style={styles.placeFooter}>
-          <View style={[styles.statusBadge, { backgroundColor: item.merchantId ? '#EF444420' : '#10B98120' }]}>
-            <Text style={[styles.statusText, { color: item.merchantId ? '#EF4444' : '#10B981' }]}>
-              {item.merchantId ? 'مرتبط بتاجر' : 'متاح'}
+          <View style={[styles.statusBadge, { backgroundColor: item.merchant_id ? '#EF444420' : '#10B98120' }]}>
+            <Text style={[styles.statusText, { color: item.merchant_id ? '#EF4444' : '#10B981' }]}>
+              {item.merchant_id ? 'مرتبط بتاجر' : 'متاح'}
             </Text>
           </View>
-          
-          {!item.merchantId && (
-            <TouchableOpacity onPress={() => handleDelete(item.$id, item.name)}>
-              <Ionicons name="trash-outline" size={20} color="#EF4444" />
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
+            <TouchableOpacity onPress={() => openEditModal(item)}>
+              <Ionicons name="create-outline" size={22} color="#4F46E5" />
             </TouchableOpacity>
-          )}
+
+            {!item.merchant_id && (
+              <TouchableOpacity onPress={() => handleDelete(item.$id || item.id, item.name)}>
+                <Ionicons name="trash-outline" size={22} color="#EF4444" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     );
@@ -172,19 +223,19 @@ export default function ManagePlacesScreen({ navigation }) {
           <Ionicons name="arrow-forward" size={28} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>إدارة الأماكن</Text>
-        <TouchableOpacity onPress={() => setModalVisible(true)}>
+        <TouchableOpacity onPress={openAddModal}>
           <Ionicons name="add-circle" size={28} color="#4F46E5" />
         </TouchableOpacity>
       </View>
 
       <FlatList
         data={places}
-        keyExtractor={item => item.$id}
+        keyExtractor={item => item.$id || item.id}
         renderItem={renderPlace}
         refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={() => { setRefreshing(true); loadData(); }} 
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); loadData(); }}
           />
         }
         contentContainerStyle={styles.list}
@@ -197,72 +248,109 @@ export default function ManagePlacesScreen({ navigation }) {
         }
       />
 
+      {/* Modal إضافة/تعديل مكان جديد */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <ScrollView contentContainerStyle={styles.modalScrollContent}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>إضافة مكان جديد</Text>
-              
+              <Text style={styles.modalTitle}>{editingPlace ? 'تعديل المكان' : 'إضافة مكان جديد'}</Text>
+
               <Text style={styles.label}>اسم المكان *</Text>
-              <TextInput 
-                style={styles.input} 
-                placeholder="مثال: مخبز البلدي" 
-                value={name} 
-                onChangeText={setName} 
+              <TextInput
+                style={styles.input}
+                placeholder="مثال: مخبز البلدي"
+                value={name}
+                onChangeText={setName}
               />
 
               <Text style={styles.label}>نوع النشاط *</Text>
-              <View style={styles.typesContainer}>
-                {services.map(s => (
-                  <TouchableOpacity 
-                    key={s.id} 
-                    style={[styles.typeChip, type === s.id && styles.typeChipActive]}
-                    onPress={() => setType(s.id)}
-                  >
-                    <Text style={[styles.typeChipText, type === s.id && styles.typeChipTextActive]}>
-                      {s.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <TouchableOpacity
+                style={styles.typeSelector}
+                onPress={() => setTypeModalVisible(true)}
+              >
+                <Text style={type ? styles.typeSelectorText : styles.typeSelectorPlaceholder}>
+                  {typeName || '-- اختر نوع النشاط --'}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#6B7280" />
+              </TouchableOpacity>
 
               <Text style={styles.label}>العنوان (اختياري)</Text>
-              <TextInput 
-                style={styles.input} 
-                placeholder="العنوان بالتفصيل" 
-                value={address} 
-                onChangeText={setAddress} 
+              <TextInput
+                style={styles.input}
+                placeholder="العنوان بالتفصيل"
+                value={address}
+                onChangeText={setAddress}
                 multiline
               />
 
               <Text style={styles.label}>رقم الهاتف (اختياري)</Text>
-              <TextInput 
-                style={styles.input} 
-                placeholder="01234567890" 
-                value={phone} 
-                onChangeText={setPhone} 
+              <TextInput
+                style={styles.input}
+                placeholder="01234567890"
+                value={phone}
+                onChangeText={setPhone}
                 keyboardType="phone-pad"
               />
 
-              <TouchableOpacity 
-                style={[styles.addButton, submitting && styles.disabled]} 
-                onPress={handleAddPlace} 
+              <TouchableOpacity
+                style={[styles.addButton, submitting && styles.disabled]}
+                onPress={handleSavePlace}
                 disabled={submitting}
               >
-                {submitting ? 
-                  <ActivityIndicator color="#FFF" /> : 
-                  <Text style={styles.addButtonText}>إضافة المكان</Text>
+                {submitting ?
+                  <ActivityIndicator color="#FFF" /> :
+                  <Text style={styles.addButtonText}>{editingPlace ? 'حفظ التعديلات' : 'إضافة المكان'}</Text>
                 }
               </TouchableOpacity>
 
-              <TouchableOpacity 
-                onPress={() => setModalVisible(false)} 
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
                 style={styles.cancelButton}
               >
                 <Text style={styles.cancelButtonText}>إلغاء</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Modal اختيار نوع النشاط (من الخدمات التي أضافها الأدمن) */}
+      <Modal visible={typeModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.typeModalContent}>
+            <View style={styles.typeModalHeader}>
+              <Text style={styles.typeModalTitle}>اختر نوع النشاط</Text>
+              <TouchableOpacity onPress={() => setTypeModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView>
+              {services.length === 0 ? (
+                <View style={styles.emptyServices}>
+                  <Ionicons name="alert-circle-outline" size={40} color="#F59E0B" />
+                  <Text style={styles.emptyServicesText}>لا توجد خدمات متاحة</Text>
+                  <Text style={styles.emptyServicesSub}>أضف خدمات أولاً من شاشة إدارة الخدمات</Text>
+                </View>
+              ) : (
+                services.map((service) => (
+                  <TouchableOpacity
+                    key={service.id}
+                    style={styles.serviceItem}
+                    onPress={() => selectService(service)}
+                  >
+                    <View style={[styles.serviceIcon, { backgroundColor: (service.color || '#4F46E5') + '20' }]}>
+                      <Ionicons name={service.icon || 'apps-outline'} size={20} color={service.color || '#4F46E5'} />
+                    </View>
+                    <Text style={styles.serviceName}>{service.name}</Text>
+                    {type === service.id && (
+                      <Ionicons name="checkmark-circle" size={20} color="#10B981" style={styles.serviceCheck} />
+                    )}
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          </View>
         </View>
       </Modal>
     </SafeAreaView>
@@ -287,17 +375,17 @@ const styles = StyleSheet.create({
   emptyText: { marginTop: 12, fontSize: 16, color: '#1F2937', fontWeight: '600' },
   emptySubText: { marginTop: 4, fontSize: 14, color: '#9CA3AF' },
 
-  placeCard: { 
-    backgroundColor: '#FFF', 
-    padding: 16, 
-    borderRadius: 12, 
-    marginBottom: 12, 
+  placeCard: {
+    backgroundColor: '#FFF',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  placeHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
+  placeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 8,
     alignItems: 'center',
   },
@@ -306,70 +394,115 @@ const styles = StyleSheet.create({
   typeText: { fontSize: 12, fontWeight: '600' },
   infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 8 },
   infoText: { fontSize: 14, color: '#4B5563', flex: 1 },
-  placeFooter: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginTop: 8, 
-    paddingTop: 8, 
-    borderTopWidth: 1, 
+  placeFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
     borderColor: '#F3F4F6',
     alignItems: 'center',
   },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   statusText: { fontSize: 12, fontWeight: '600' },
 
-  modalOverlay: { 
-    flex: 1, 
-    backgroundColor: 'rgba(0,0,0,0.5)', 
-    justifyContent: 'flex-end' 
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end'
   },
   modalScrollContent: { paddingBottom: 20, paddingTop: 60 },
-  modalContent: { 
-    backgroundColor: '#FFF', 
-    padding: 20, 
-    borderTopLeftRadius: 20, 
-    borderTopRightRadius: 20 
+  modalContent: {
+    backgroundColor: '#FFF',
+    padding: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20
   },
   modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, color: '#1F2937' },
   label: { fontSize: 14, fontWeight: '600', color: '#4B5563', marginBottom: 5, marginTop: 10 },
-  input: { 
-    backgroundColor: '#F9FAFB', 
+  input: {
+    backgroundColor: '#F9FAFB',
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 8,
-    padding: 12, 
+    padding: 12,
     marginBottom: 10,
     fontSize: 14,
   },
-  typesContainer: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    gap: 8, 
-    marginBottom: 10 
-  },
-  typeChip: { 
-    paddingHorizontal: 16, 
-    paddingVertical: 8, 
-    borderRadius: 20, 
-    backgroundColor: '#F3F4F6',
+  typeSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
   },
-  typeChipActive: { 
-    backgroundColor: '#4F46E5', 
-    borderColor: '#4F46E5',
-  },
-  typeChipText: { fontSize: 12, color: '#4B5563' },
-  typeChipTextActive: { color: '#FFF', fontWeight: '600' },
-  addButton: { 
-    backgroundColor: '#4F46E5', 
-    padding: 16, 
-    borderRadius: 8, 
-    alignItems: 'center', 
-    marginTop: 20 
+  typeSelectorText: { fontSize: 14, color: '#1F2937' },
+  typeSelectorPlaceholder: { fontSize: 14, color: '#9CA3AF' },
+  addButton: {
+    backgroundColor: '#4F46E5',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 20
   },
   disabled: { opacity: 0.6 },
   addButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
   cancelButton: { marginTop: 10, alignItems: 'center' },
   cancelButtonText: { color: '#EF4444', fontSize: 16, fontWeight: '600' },
+
+  // Modal اختيار الخدمة
+  typeModalContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  typeModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  typeModalTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
+  serviceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  serviceIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  serviceName: { fontSize: 16, color: '#1F2937', flex: 1 },
+  serviceCheck: { marginLeft: 8 },
+  emptyServices: {
+    alignItems: 'center',
+    padding: 30,
+  },
+  emptyServicesText: {
+    fontSize: 16,
+    color: '#F59E0B',
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  emptyServicesSub: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 4,
+    textAlign: 'center',
+  },
 });

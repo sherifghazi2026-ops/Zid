@@ -13,8 +13,10 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../../lib/supabaseClient';
+import { TABLES } from '../../lib/tables';
 import { getOrders, updateOrderStatus, deleteOrder, ORDER_STATUS } from '../../services/orderService';
-import { getUsersByRole } from '../../appwrite/userService';
+import { getUsersByRole } from '../../services/userService';
 
 export default function AdminOrdersScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
@@ -48,55 +50,44 @@ export default function AdminOrdersScreen({ navigation }) {
 
   const fetchOrders = async () => {
     const result = await getOrders();
-    if (result.success) {
-      setOrders(result.data);
-    }
+    if (result.success) setOrders(result.data);
   };
 
   const fetchDrivers = async () => {
     const result = await getUsersByRole('driver');
-    if (result.success) {
-      setDrivers(result.data);
-    }
+    if (result.success) setDrivers(result.data);
   };
 
   const fetchMerchants = async () => {
     const result = await getUsersByRole('merchant');
-    if (result.success) {
-      setMerchants(result.data);
-    }
+    if (result.success) setMerchants(result.data);
   };
 
   const filterOrders = () => {
     let filtered = [...orders];
-
     if (selectedFilter !== 'all') {
       filtered = filtered.filter(order => order.status === selectedFilter);
     }
-
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(order =>
-        order.customerPhone?.toLowerCase().includes(query) ||
-        order.customerAddress?.toLowerCase().includes(query) ||
-        order.$id?.toLowerCase().includes(query) ||
-        order.merchantName?.toLowerCase().includes(query) ||
-        order.driverName?.toLowerCase().includes(query)
+        order.customer_phone?.toLowerCase().includes(query) ||
+        order.customer_address?.toLowerCase().includes(query) ||
+        order.id?.toLowerCase().includes(query) ||
+        order.merchant_name?.toLowerCase().includes(query) ||
+        order.driver_name?.toLowerCase().includes(query)
       );
     }
-
     setFilteredOrders(filtered);
   };
 
   const handleUpdateStatus = async () => {
     if (!selectedOrder || !newStatus) return;
-
     let additionalData = {};
     if (newStatus === ORDER_STATUS.CANCELLED && cancellationReason) {
-      additionalData.cancellationReason = cancellationReason;
+      additionalData.cancellation_reason = cancellationReason;
     }
-
-    const result = await updateOrderStatus(selectedOrder.$id, newStatus, additionalData);
+    const result = await updateOrderStatus(selectedOrder.id, newStatus, additionalData);
     if (result.success) {
       Alert.alert('تم', 'تم تحديث حالة الطلب');
       setStatusModalVisible(false);
@@ -109,13 +100,11 @@ export default function AdminOrdersScreen({ navigation }) {
 
   const handleAssignDriver = async (driverId, driverName) => {
     if (!selectedOrder) return;
-
-    const result = await updateOrderStatus(selectedOrder.$id, ORDER_STATUS.PREPARING, {
-      driverId,
-      driverName,
-      assignedAt: new Date().toISOString()
+    const result = await updateOrderStatus(selectedOrder.id, ORDER_STATUS.PREPARING, {
+      driver_id: driverId,
+      driver_name: driverName,
+      assigned_at: new Date().toISOString()
     });
-
     if (result.success) {
       Alert.alert('تم', 'تم تعيين المندوب بنجاح');
       setAssignDriverModalVisible(false);
@@ -190,20 +179,18 @@ export default function AdminOrdersScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* شريط البحث */}
       <View style={styles.searchContainer}>
         <Ionicons name="search-outline" size={20} color="#9CA3AF" />
         <TextInput
           style={styles.searchInput}
-          placeholder="بحث برقم الهاتف أو العنوان..." placeholderTextColor="#9CA3AF"
+          placeholder="بحث برقم الهاتف أو العنوان..."
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
       </View>
 
-      {/* أزرار الفلترة */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterTabs}>
-        {['all', ORDER_STATUS.PENDING, ORDER_STATUS.ACCEPTED, ORDER_STATUS.PREPARING, 
+        {['all', ORDER_STATUS.PENDING, ORDER_STATUS.ACCEPTED, ORDER_STATUS.PREPARING,
           ORDER_STATUS.ON_THE_WAY, ORDER_STATUS.DELIVERED, ORDER_STATUS.CANCELLED].map(filter => (
           <TouchableOpacity
             key={filter}
@@ -233,9 +220,9 @@ export default function AdminOrdersScreen({ navigation }) {
             </View>
           ) : (
             filteredOrders.map((order) => (
-              <View key={order.$id} style={styles.orderCard}>
+              <View key={order.id} style={styles.orderCard}>
                 <View style={styles.orderHeader}>
-                  <Text style={styles.orderId}>طلب #{order.$id.slice(-6)}</Text>
+                  <Text style={styles.orderId}>طلب #{order.id ? String(order.id).slice(-6) : "000000"}</Text>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) + '20' }]}>
                     <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}>
                       {getStatusText(order.status)}
@@ -244,25 +231,25 @@ export default function AdminOrdersScreen({ navigation }) {
                 </View>
 
                 <View style={styles.orderDetails}>
-                  <Text style={styles.serviceName}>{order.serviceName}</Text>
+                  <Text style={styles.serviceName}>{order.service_name}</Text>
                   <View style={styles.detailRow}>
                     <Ionicons name="call-outline" size={16} color="#6B7280" />
-                    <Text style={styles.detailText}>{order.customerPhone}</Text>
+                    <Text style={styles.detailText}>{order.customer_phone}</Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Ionicons name="location-outline" size={16} color="#6B7280" />
-                    <Text style={styles.detailText}>{order.customerAddress}</Text>
+                    <Text style={styles.detailText}>{order.customer_address}</Text>
                   </View>
-                  {order.merchantName && (
+                  {order.merchant_name && (
                     <View style={styles.detailRow}>
                       <Ionicons name="business-outline" size={16} color="#6B7280" />
-                      <Text style={styles.detailText}>تاجر: {order.merchantName}</Text>
+                      <Text style={styles.detailText}>تاجر: {order.merchant_name}</Text>
                     </View>
                   )}
-                  {order.driverName && (
+                  {order.driver_name && (
                     <View style={styles.detailRow}>
                       <Ionicons name="bicycle-outline" size={16} color="#6B7280" />
-                      <Text style={styles.detailText}>مندوب: {order.driverName}</Text>
+                      <Text style={styles.detailText}>مندوب: {order.driver_name}</Text>
                     </View>
                   )}
                 </View>
@@ -307,7 +294,7 @@ export default function AdminOrdersScreen({ navigation }) {
 
                   <TouchableOpacity
                     style={[styles.actionButton, styles.deleteButton]}
-                    onPress={() => handleDeleteOrder(order.$id)}
+                    onPress={() => handleDeleteOrder(order.id)}
                   >
                     <Ionicons name="trash-outline" size={18} color="#FFF" />
                     <Text style={styles.actionButtonText}>حذف</Text>
@@ -319,34 +306,29 @@ export default function AdminOrdersScreen({ navigation }) {
         </ScrollView>
       )}
 
-      {/* Modal عرض التفاصيل */}
       <Modal visible={detailsModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>تفاصيل الطلب</Text>
             {selectedOrder && (
               <ScrollView>
-                <Text style={styles.detailLabel}>رقم الطلب: {selectedOrder.$id}</Text>
-                <Text style={styles.detailLabel}>الخدمة: {selectedOrder.serviceName}</Text>
-                <Text style={styles.detailLabel}>رقم العميل: {selectedOrder.customerPhone}</Text>
-                <Text style={styles.detailLabel}>العنوان: {selectedOrder.customerAddress}</Text>
+                <Text style={styles.detailLabel}>رقم الطلب: {selectedOrder.id}</Text>
+                <Text style={styles.detailLabel}>الخدمة: {selectedOrder.service_name}</Text>
+                <Text style={styles.detailLabel}>رقم العميل: {selectedOrder.customer_phone}</Text>
+                <Text style={styles.detailLabel}>العنوان: {selectedOrder.customer_address}</Text>
                 <Text style={styles.detailLabel}>الحالة: {getStatusText(selectedOrder.status)}</Text>
-                <Text style={styles.detailLabel}>التاجر: {selectedOrder.merchantName || 'غير معين'}</Text>
-                <Text style={styles.detailLabel}>المندوب: {selectedOrder.driverName || 'غير معين'}</Text>
-                <Text style={styles.detailLabel}>تاريخ الإنشاء: {new Date(selectedOrder.createdAt).toLocaleString('ar-EG')}</Text>
-                
-                {selectedOrder.acceptedAt && (
-                  <Text style={styles.detailLabel}>تاريخ القبول: {new Date(selectedOrder.acceptedAt).toLocaleString('ar-EG')}</Text>
+                <Text style={styles.detailLabel}>التاجر: {selectedOrder.merchant_name || 'غير معين'}</Text>
+                <Text style={styles.detailLabel}>المندوب: {selectedOrder.driver_name || 'غير معين'}</Text>
+                <Text style={styles.detailLabel}>تاريخ الإنشاء: {new Date(selectedOrder.created_at).toLocaleString('ar-EG')}</Text>
+                {selectedOrder.accepted_at && (
+                  <Text style={styles.detailLabel}>تاريخ القبول: {new Date(selectedOrder.accepted_at).toLocaleString('ar-EG')}</Text>
                 )}
-                
-                {selectedOrder.deliveredAt && (
-                  <Text style={styles.detailLabel}>تاريخ التسليم: {new Date(selectedOrder.deliveredAt).toLocaleString('ar-EG')}</Text>
+                {selectedOrder.delivered_at && (
+                  <Text style={styles.detailLabel}>تاريخ التسليم: {new Date(selectedOrder.delivered_at).toLocaleString('ar-EG')}</Text>
                 )}
-                
-                {selectedOrder.cancellationReason && (
-                  <Text style={styles.detailLabel}>سبب الإلغاء: {selectedOrder.cancellationReason}</Text>
+                {selectedOrder.cancellation_reason && (
+                  <Text style={styles.detailLabel}>سبب الإلغاء: {selectedOrder.cancellation_reason}</Text>
                 )}
-                
                 <Text style={styles.detailLabel}>المنتجات:</Text>
                 {selectedOrder.items?.map((item, i) => (
                   <Text key={i} style={styles.itemText}>• {item}</Text>
@@ -360,14 +342,12 @@ export default function AdminOrdersScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* Modal تغيير الحالة */}
       <Modal visible={statusModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>تغيير حالة الطلب</Text>
-            
             <ScrollView style={styles.statusOptions}>
-              {[ORDER_STATUS.PENDING, ORDER_STATUS.ACCEPTED, ORDER_STATUS.PREPARING, 
+              {[ORDER_STATUS.PENDING, ORDER_STATUS.ACCEPTED, ORDER_STATUS.PREPARING,
                 ORDER_STATUS.ON_THE_WAY, ORDER_STATUS.DELIVERED, ORDER_STATUS.CANCELLED].map(status => (
                 <TouchableOpacity
                   key={status}
@@ -380,17 +360,15 @@ export default function AdminOrdersScreen({ navigation }) {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-
             {newStatus === ORDER_STATUS.CANCELLED && (
               <TextInput
                 style={styles.reasonInput}
-                placeholder="سبب الإلغاء (اختياري)" placeholderTextColor="#9CA3AF"
+                placeholder="سبب الإلغاء (اختياري)"
                 value={cancellationReason}
                 onChangeText={setCancellationReason}
                 multiline
               />
             )}
-
             <View style={styles.modalButtons}>
               <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setStatusModalVisible(false)}>
                 <Text style={styles.cancelButtonText}>إلغاء</Text>
@@ -403,29 +381,26 @@ export default function AdminOrdersScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* Modal تعيين مندوب */}
       <Modal visible={assignDriverModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>تعيين مندوب</Text>
-            
             <ScrollView style={styles.driversList}>
               {drivers.map((driver) => (
                 <TouchableOpacity
-                  key={driver.$id}
+                  key={driver.id}
                   style={styles.driverItem}
-                  onPress={() => handleAssignDriver(driver.$id, driver.name)}
+                  onPress={() => handleAssignDriver(driver.id, driver.full_name || driver.name)}
                 >
                   <Ionicons name="person-circle-outline" size={40} color="#4F46E5" />
                   <View style={styles.driverInfo}>
-                    <Text style={styles.driverName}>{driver.name}</Text>
-                    <Text style={styles.driverArea}>{driver.serviceArea || 'غير محدد'}</Text>
+                    <Text style={styles.driverName}>{driver.full_name || driver.name}</Text>
+                    <Text style={styles.driverArea}>{driver.service_area || 'غير محدد'}</Text>
                     <Text style={styles.driverPhone}>{driver.phone}</Text>
                   </View>
                 </TouchableOpacity>
               ))}
             </ScrollView>
-
             <TouchableOpacity style={styles.closeButton} onPress={() => setAssignDriverModalVisible(false)}>
               <Text style={styles.closeButtonText}>إلغاء</Text>
             </TouchableOpacity>
@@ -486,14 +461,14 @@ const styles = StyleSheet.create({
   detailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 },
   detailText: { fontSize: 14, color: '#4B5563', flex: 1 },
   actionButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  actionButton: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    paddingVertical: 8, 
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
     paddingHorizontal: 4,
-    borderRadius: 6, 
+    borderRadius: 6,
     gap: 4,
     minWidth: 70,
   },
@@ -502,58 +477,27 @@ const styles = StyleSheet.create({
   assignButton: { backgroundColor: '#8B5CF6' },
   deleteButton: { backgroundColor: '#EF4444' },
   actionButtonText: { color: '#FFF', fontSize: 12, fontWeight: '600' },
-  
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#FFF', borderRadius: 16, padding: 20, width: '90%', maxHeight: '80%' },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1F2937', marginBottom: 16, textAlign: 'center' },
   detailLabel: { fontSize: 14, color: '#4B5563', marginBottom: 4 },
   itemText: { fontSize: 13, color: '#6B7280', marginLeft: 8, marginBottom: 2 },
   closeButton: { marginTop: 20, padding: 12, borderRadius: 8, backgroundColor: '#F3F4F6', alignItems: 'center' },
   closeButtonText: { color: '#1F2937', fontSize: 16, fontWeight: '600' },
-  
-  // Status modal
   statusOptions: { maxHeight: 300, marginVertical: 16 },
   statusOption: { padding: 12, borderRadius: 8, backgroundColor: '#F3F4F6', marginBottom: 8 },
   selectedStatus: { backgroundColor: '#4F46E5' },
   statusOptionText: { fontSize: 14, color: '#1F2937', textAlign: 'center' },
   selectedStatusText: { color: '#FFF' },
-  reasonInput: {
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
+  reasonInput: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, marginBottom: 16, minHeight: 80, textAlignVertical: 'top' },
   modalButtons: { flexDirection: 'row', gap: 10 },
   modalButton: { flex: 1, padding: 12, borderRadius: 8, alignItems: 'center' },
   cancelButton: { backgroundColor: '#F3F4F6' },
   confirmButton: { backgroundColor: '#4F46E5' },
   cancelButtonText: { color: '#1F2937', fontSize: 16, fontWeight: '600' },
   confirmButtonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
-  
-  // Driver modal
   driversList: { maxHeight: 400 },
-  driverItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
+  driverItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   driverInfo: { marginLeft: 12, flex: 1 },
   driverName: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
   driverArea: { fontSize: 12, color: '#6B7280', marginTop: 2 },

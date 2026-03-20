@@ -119,7 +119,7 @@ export default function OrderTracking({ navigation, route }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-forward" size={28} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>تتبع الطلب #{orderId.slice(-6)}</Text>
+        <Text style={styles.headerTitle}>تتبع الطلب #{orderId ? String(orderId).slice(-6) : "000000"}</Text>
         <View style={{ width: 40 }} />
       </View>
 

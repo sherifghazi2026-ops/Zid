@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { getAllProducts, createProduct, deleteProduct, toggleProductAvailability, uploadProductImage } from '../../services/productsService';
+import { getAllProducts, createProduct, deleteProduct, toggleProductAvailability, uploadProductImage } from '../../services/productService';
 
 export default function ManageProductsScreen({ navigation }) {
   const [products, setProducts] = useState([]);

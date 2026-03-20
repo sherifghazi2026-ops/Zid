@@ -1,15 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  SafeAreaView,
-  Image,
-  ActivityIndicator,
-  Alert,
-  TextInput,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Image, ActivityIndicator, Alert, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,20 +18,17 @@ export default function ServiceItemsScreen({ route, navigation }) {
   const [notes, setNotes] = useState('');
   const [sending, setSending] = useState(false);
 
-  useEffect(() => {
-    loadItems();
-    loadSavedData();
-  }, []);
+  useEffect(() => { loadItems(); loadSavedData(); }, []);
 
   const loadItems = async () => {
     const result = await getActiveItems(collectionName);
     if (result.success) {
       setItems(result.data);
-      // تهيئة الكميات
       const initialQtys = {};
       result.data.forEach(item => {
-        initialQtys[item.$id] = {};
-        subServices.forEach(sub => { initialQtys[item.$id][sub] = 0; });
+        const itemId = item.$id || item.id;
+        initialQtys[itemId] = {};
+        subServices.forEach(sub => { initialQtys[itemId][sub] = 0; });
       });
       setQuantities(initialQtys);
     }
@@ -55,22 +43,17 @@ export default function ServiceItemsScreen({ route, navigation }) {
   const updateQty = (itemId, subService, delta) => {
     setQuantities(prev => ({
       ...prev,
-      [itemId]: {
-        ...prev[itemId],
-        [subService]: Math.max(0, (prev[itemId]?.[subService] || 0) + delta)
-      }
+      [itemId]: { ...prev[itemId], [subService]: Math.max(0, (prev[itemId]?.[subService] || 0) + delta) }
     }));
   };
 
   const calculateTotal = () => {
     let total = 0;
     items.forEach(item => {
+      const itemId = item.$id || item.id;
       try {
-        const prices = JSON.parse(item.prices);
-        prices.forEach(p => {
-          const qty = quantities[item.$id]?.[p.subService] || 0;
-          total += qty * p.price;
-        });
+        const prices = typeof item.prices === 'string' ? JSON.parse(item.prices) : item.prices;
+        prices.forEach(p => { total += (quantities[itemId]?.[p.subService] || 0) * p.price; });
       } catch (e) {}
     });
     return total;
@@ -79,38 +62,25 @@ export default function ServiceItemsScreen({ route, navigation }) {
   const sendOrder = async () => {
     if (!phone || !address) { Alert.alert('تنبيه', 'رقم الجوال والعنوان مطلوبان'); return; }
     if (calculateTotal() === 0) { Alert.alert('تنبيه', 'اختر منتجات أولاً'); return; }
-
     setSending(true);
     try {
       const itemsList = [];
       items.forEach(item => {
+        const itemId = item.$id || item.id;
         try {
-          const prices = JSON.parse(item.prices);
+          const prices = typeof item.prices === 'string' ? JSON.parse(item.prices) : item.prices;
           prices.forEach(p => {
-            const qty = quantities[item.$id]?.[p.subService] || 0;
+            const qty = quantities[itemId]?.[p.subService] || 0;
             if (qty > 0) itemsList.push(`${item.name} (${p.subService}) x${qty} = ${qty * p.price}ج`);
           });
         } catch (e) {}
       });
-
-      await createOrder({
-        customerPhone: phone,
-        customerAddress: address,
-        serviceType: serviceId,
-        serviceName,
-        items: itemsList,
-        totalPrice: calculateTotal(),
-        notes,
-      });
-
+      await createOrder({ customerPhone: phone, customerAddress: address, serviceType: serviceId, serviceName, items: itemsList, totalPrice: calculateTotal(), notes });
       await AsyncStorage.setItem('zayed_phone', phone);
       await AsyncStorage.setItem('zayed_address', address);
       Alert.alert('✅ تم', 'تم إرسال طلبك', [{ text: 'حسناً', onPress: () => navigation.popToTop() }]);
-    } catch (error) {
-      Alert.alert('خطأ', 'فشل الإرسال');
-    } finally {
-      setSending(false);
-    }
+    } catch (error) { Alert.alert('خطأ', 'فشل الإرسال'); }
+    finally { setSending(false); }
   };
 
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#4F46E5" /></View>;
@@ -119,43 +89,36 @@ export default function ServiceItemsScreen({ route, navigation }) {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.headerTitle}>{serviceName}</Text>
-
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📞 بياناتك</Text>
           <TextInput style={styles.input} placeholder="رقم الجوال" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
           <TextInput style={styles.input} placeholder="العنوان" value={address} onChangeText={setAddress} />
         </View>
-
         {items.map(item => {
+          const itemId = item.$id || item.id;
           let prices = [];
-          try { prices = JSON.parse(item.prices); } catch (e) {}
+          try { prices = typeof item.prices === 'string' ? JSON.parse(item.prices) : item.prices; } catch (e) {}
           return (
-            <View key={item.$id} style={styles.itemCard}>
+            <View key={itemId} style={styles.itemCard}>
               <View style={styles.itemHeader}>
-                {item.imageUrl && <Image source={{ uri: item.imageUrl }} style={styles.itemImage} />}
+                {item.image_url && <Image source={{ uri: item.image_url }} style={styles.itemImage} />}
                 <Text style={styles.itemName}>{item.name}</Text>
               </View>
               {prices.map(p => (
                 <View key={p.subService} style={styles.serviceRow}>
                   <Text style={styles.serviceLabel}>{p.subService} ({p.price}ج)</Text>
                   <View style={styles.counter}>
-                    <TouchableOpacity onPress={() => updateQty(item.$id, p.subService, -1)} style={styles.counterBtn}><Ionicons name="remove" size={16} color="#FFF" /></TouchableOpacity>
-                    <Text style={styles.counterValue}>{quantities[item.$id]?.[p.subService] || 0}</Text>
-                    <TouchableOpacity onPress={() => updateQty(item.$id, p.subService, 1)} style={[styles.counterBtn, styles.plusBtn]}><Ionicons name="add" size={16} color="#FFF" /></TouchableOpacity>
+                    <TouchableOpacity onPress={() => updateQty(itemId, p.subService, -1)} style={styles.counterBtn}><Ionicons name="remove" size={16} color="#FFF" /></TouchableOpacity>
+                    <Text style={styles.counterValue}>{quantities[itemId]?.[p.subService] || 0}</Text>
+                    <TouchableOpacity onPress={() => updateQty(itemId, p.subService, 1)} style={[styles.counterBtn, styles.plusBtn]}><Ionicons name="add" size={16} color="#FFF" /></TouchableOpacity>
                   </View>
                 </View>
               ))}
             </View>
           );
         })}
-
-        <View style={styles.totalContainer}>
-          <Text style={styles.totalLabel}>الإجمالي:</Text>
-          <Text style={styles.totalPrice}>{calculateTotal()} ج</Text>
-        </View>
-
+        <View style={styles.totalContainer}><Text style={styles.totalLabel}>الإجمالي:</Text><Text style={styles.totalPrice}>{calculateTotal()} ج</Text></View>
         <TextInput style={[styles.input, styles.notes]} placeholder="ملاحظات (اختياري)" value={notes} onChangeText={setNotes} multiline />
-
         <TouchableOpacity style={[styles.sendButton, sending && styles.disabled]} onPress={sendOrder} disabled={sending}>
           {sending ? <ActivityIndicator color="#FFF" /> : <Text style={styles.sendButtonText}>إرسال الطلب</Text>}
         </TouchableOpacity>

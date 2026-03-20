@@ -202,7 +202,6 @@ export default function MerchantDashboard({ navigation }) {
           {isLaundry && (
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => navigation.navigate('ManageLaundryItemsScreen')}
             >
               <View style={[styles.menuIcon, { backgroundColor: '#3B82F620' }]}>
                 <Ionicons name="shirt-outline" size={24} color="#3B82F6" />

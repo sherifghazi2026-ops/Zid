@@ -1,88 +1,157 @@
 import 'react-native-gesture-handler';
 import React, { useState, useEffect } from 'react';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import { NavigationContainer } from '@react-navigation/native';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import { createStackNavigator } from '@react-navigation/stack';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import { Ionicons } from '@expo/vector-icons';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 
 import { CartProvider } from './src/context/CartContext';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import { TermsProvider } from './src/context/TermsContext';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import { loadFonts, fontFamily } from './src/utils/fonts';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import { loadSounds, cleanup } from './src/utils/SoundHelper';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import { initializeCoreServices } from './src/services/servicesService';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 
 // شاشات البداية والأساسية
 import SplashScreen from './src/screens/SplashScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import HomeScreen from './src/screens/HomeScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import CustomerAuthScreen from './src/screens/CustomerAuthScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import ServiceProviderScreen from './src/screens/ServiceProviderScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import CompleteProfileScreen from './src/screens/CompleteProfileScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import ProfileScreen from './src/screens/ProfileScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import MyOrdersScreen from './src/screens/MyOrdersScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import TermsScreen from './src/screens/TermsScreen';
-import OrderTrackingScreen from './src/screens/customer/OrderTrackingScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 
 // شاشات الخدمات للعميل
 import ServiceScreen from './src/screens/ServiceScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import MerchantsListScreen from './src/screens/MerchantsListScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import MerchantProductsScreen from './src/screens/MerchantProductsScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import IroningScreen from './src/screens/IroningScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import CartScreen from './src/screens/customer/CartScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import RateOrderScreen from './src/screens/customer/RateOrderScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import ProductDetailsScreen from './src/screens/customer/ProductDetailsScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import DishDetailsScreen from './src/screens/customer/DishDetailsScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import CustomerItemsServiceScreen from './src/screens/customer/ServiceItemsScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import AdminItemsServiceScreen from './src/screens/admin/ItemsServiceScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import ProductsServiceScreen from './src/screens/ProductsServiceScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 
 // شاشات التجار
 import MerchantDashboard from './src/screens/merchant/MerchantDashboard';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import MerchantOrdersScreen from './src/screens/merchant/MerchantOrdersScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import OrderDetailsScreen from './src/screens/merchant/OrderDetailsScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import MyProductsScreen from './src/screens/merchant/MyProductsScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import AddProductScreen from './src/screens/merchant/AddProductScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
+import MyDishesScreen from './src/screens/merchant/MyDishesScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import EditMerchantScreen from './src/screens/merchant/EditMerchantScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 
 // شاشات المندوبين
 import DriverDashboard from './src/screens/driver/DriverDashboard';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import DriverDeliveriesScreen from './src/screens/driver/DriverDeliveriesScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 
 // شاشات الدخول
 import DriverLoginScreen from './src/screens/auth/DriverLoginScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import LoginScreen from './src/screens/auth/LoginScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import MerchantRegisterScreen from './src/screens/auth/MerchantRegisterScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 
 // شاشات الأدمن
 import AdminHomeScreen from './src/screens/admin/AdminHomeScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import UserManagement from './src/screens/admin/UserManagement';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import UserEditScreen from './src/screens/admin/UserEditScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import AdminOrdersScreen from './src/screens/admin/AdminOrdersScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import AddUserScreen from './src/screens/admin/AddUserScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import ServicesManagementScreen from './src/screens/admin/ServicesManagementScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import AddServiceScreen from './src/screens/admin/AddServiceScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import AdminAssistantsScreen from './src/screens/admin/AdminAssistantsScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import EditServiceScreen from './src/screens/admin/EditServiceScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import ManageOffersScreen from './src/screens/admin/ManageOffersScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import ManagePlacesScreen from './src/screens/admin/ManagePlacesScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import VerificationRequestsScreen from './src/screens/admin/VerificationRequestsScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import ReviewProductsScreen from './src/screens/admin/ReviewProductsScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import ItemsServiceScreen from './src/screens/admin/ItemsServiceScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import ManageAllProductsScreen from './src/screens/admin/ManageAllProductsScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import ManageMerchantProductsScreen from './src/screens/admin/ManageMerchantProductsScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import AdminMerchantsListScreen from './src/screens/admin/AdminMerchantsListScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import AdminMerchantProductsScreen from './src/screens/admin/AdminMerchantProductsScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import AdminProductsReviewScreen from './src/screens/admin/AdminProductsReviewScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import AdminProductsServicesScreen from './src/screens/admin/AdminProductsServicesScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import ManageProductCategoriesScreen from './src/screens/admin/ManageProductCategoriesScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import ManageProductsScreen from './src/screens/admin/ManageProductsScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import ManageItemsScreen from './src/screens/admin/ManageItemsScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 
 // شاشات إضافية
 import OffersScreen from './src/screens/OffersScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 import EshopScreen from './src/screens/EshopScreen';
+import OrderTrackingScreen from "./src/screens/customer/OrderTrackingScreen";
 
 // شاشة AI مؤقتة
 const AiMainModal = ({ navigation }) => {
@@ -118,10 +187,10 @@ function CustomerStack() {
       <Stack.Screen name="ProductDetailsScreen" component={ProductDetailsScreen} />
       <Stack.Screen name="DishDetails" component={DishDetailsScreen} />
       <Stack.Screen name="Cart" component={CartScreen} />
-      <Stack.Screen name="OrderTrackingScreen" component={OrderTrackingScreen} />
       <Stack.Screen name="RateOrderScreen" component={RateOrderScreen} />
       <Stack.Screen name="ServiceItemsScreen" component={CustomerItemsServiceScreen} />
       <Stack.Screen name="ProductsServiceScreen" component={ProductsServiceScreen} />
+      <Stack.Screen name="OrderTrackingScreen" component={OrderTrackingScreen} />
     </Stack.Navigator>
   );
 }
@@ -185,6 +254,7 @@ function RootStack() {
       <Stack.Screen name="OrderDetailsScreen" component={OrderDetailsScreen} />
       <Stack.Screen name="MyProductsScreen" component={MyProductsScreen} />
       <Stack.Screen name="AddProductScreen" component={AddProductScreen} />
+      <Stack.Screen name="MyDishesScreen" component={MyDishesScreen} />
       <Stack.Screen name="EditMerchantScreen" component={EditMerchantScreen} />
 
       {/* شاشات المندوبين */}
@@ -218,6 +288,7 @@ function RootStack() {
 
       {/* شاشات إضافية */}
       <Stack.Screen name="AiMainModal" component={AiMainModal} />
+      <Stack.Screen name="OrderTrackingScreen" component={OrderTrackingScreen} />
     </Stack.Navigator>
   );
 }

@@ -12,8 +12,8 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { databases, DATABASE_ID } from '../../appwrite/config';
-import { Query } from 'appwrite';
+import { supabase } from '../../lib/supabaseClient';
+import { TABLES } from '../../lib/tables';
 import { getAllServices } from '../../services/servicesService';
 import { getMerchantsByType } from '../../services/merchantService';
 import { getAllProducts, deleteProduct } from '../../services/productService';
@@ -34,38 +34,29 @@ export default function ManageAllProductsScreen({ navigation }) {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      // 1. جلب جميع الخدمات
       const servicesResult = await getAllServices();
       if (!servicesResult.success) throw new Error('فشل جلب الخدمات');
-      
-      // تصفية الخدمات التي لها منتجات (جميع الخدمات ما عدا المكوجي والمطاعم لها طريقة خاصة)
-      const productServices = servicesResult.data.filter(s => 
+
+      const productServices = servicesResult.data.filter(s =>
         s.id !== 'laundry' && s.id !== 'restaurant' && s.id !== 'home_chef'
       );
-      
       setServices(productServices);
-      
-      // 2. جلب جميع المنتجات من Collection products
+
       const productsResult = await getAllProducts();
       const allProducts = productsResult.success ? productsResult.data : [];
-      
-      // 3. لكل خدمة، جلب التجار النشطين
+
       const merchantsTemp = {};
       const productsTemp = {};
-      
+
       for (const service of productServices) {
         const serviceId = service.id;
-        
-        // جلب التجار لهذه الخدمة
         const merchantsResult = await getMerchantsByType(serviceId);
         if (merchantsResult.success) {
           merchantsTemp[serviceId] = merchantsResult.data;
-          
-          // 4. لكل تاجر، تصفية منتجاته من allProducts
           const serviceProducts = {};
           for (const merchant of merchantsResult.data) {
-            serviceProducts[merchant.$id] = allProducts.filter(p => 
-              p.merchantId === merchant.$id && p.serviceId === serviceId
+            serviceProducts[merchant.$id || merchant.id] = allProducts.filter(p =>
+              p.merchant_id === (merchant.$id || merchant.id) && p.service_id === serviceId
             );
           }
           productsTemp[serviceId] = serviceProducts;
@@ -74,15 +65,14 @@ export default function ManageAllProductsScreen({ navigation }) {
           productsTemp[serviceId] = {};
         }
       }
-      
+
       setMerchantsMap(merchantsTemp);
       setProductsMap(productsTemp);
-      
-      // توسيع أول خدمة بشكل افتراضي
+
       if (productServices.length > 0) {
         setExpandedServices({ [productServices[0].id]: true });
       }
-      
+
     } catch (error) {
       console.error('❌ خطأ في تحميل البيانات:', error);
       Alert.alert('خطأ', 'فشل تحميل البيانات');
@@ -93,18 +83,12 @@ export default function ManageAllProductsScreen({ navigation }) {
   };
 
   const toggleService = (serviceId) => {
-    setExpandedServices(prev => ({
-      ...prev,
-      [serviceId]: !prev[serviceId]
-    }));
+    setExpandedServices(prev => ({ ...prev, [serviceId]: !prev[serviceId] }));
   };
 
   const toggleMerchant = (serviceId, merchantId) => {
     const key = `${serviceId}_${merchantId}`;
-    setExpandedMerchants(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
+    setExpandedMerchants(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleDeleteProduct = (productId) => {
@@ -121,7 +105,7 @@ export default function ManageAllProductsScreen({ navigation }) {
               const result = await deleteProduct(productId);
               if (result.success) {
                 Alert.alert('✅ تم', 'تم حذف المنتج');
-                loadAllData(); // إعادة تحميل
+                loadAllData();
               } else {
                 Alert.alert('خطأ', result.error);
               }
@@ -193,67 +177,46 @@ export default function ManageAllProductsScreen({ navigation }) {
             const merchants = merchantsMap[serviceId] || [];
             const serviceProducts = productsMap[serviceId] || {};
             const isServiceExpanded = expandedServices[serviceId];
-            
+
             return (
               <View key={serviceId} style={styles.serviceCard}>
-                {/* رأس الخدمة */}
-                <TouchableOpacity
-                  style={styles.serviceHeader}
-                  onPress={() => toggleService(serviceId)}
-                >
+                <TouchableOpacity style={styles.serviceHeader} onPress={() => toggleService(serviceId)}>
                   <View style={[styles.serviceIcon, { backgroundColor: service.color + '20' }]}>
                     <Ionicons name={service.icon || 'apps-outline'} size={24} color={service.color} />
                   </View>
                   <Text style={styles.serviceName}>{service.name}</Text>
                   <Text style={styles.serviceCount}>({merchants.length} تاجر)</Text>
-                  <Ionicons
-                    name={isServiceExpanded ? 'chevron-up' : 'chevron-down'}
-                    size={20}
-                    color="#6B7280"
-                  />
+                  <Ionicons name={isServiceExpanded ? 'chevron-up' : 'chevron-down'} size={20} color="#6B7280" />
                 </TouchableOpacity>
 
-                {/* التجار والمنتجات */}
                 {isServiceExpanded && (
                   <View style={styles.merchantsContainer}>
                     {merchants.length === 0 ? (
                       <Text style={styles.noMerchantsText}>لا يوجد تجار لهذه الخدمة</Text>
                     ) : (
                       merchants.map((merchant) => {
-                        const merchantId = merchant.$id;
+                        const merchantId = merchant.$id || merchant.id;
                         const products = serviceProducts[merchantId] || [];
                         const isMerchantExpanded = expandedMerchants[`${serviceId}_${merchantId}`];
-                        
+
                         return (
                           <View key={merchantId} style={styles.merchantCard}>
-                            {/* رأس التاجر */}
-                            <TouchableOpacity
-                              style={styles.merchantHeader}
-                              onPress={() => toggleMerchant(serviceId, merchantId)}
-                            >
-                              <Image
-                                source={{ uri: merchant.imageUrl || 'https://via.placeholder.com/40' }}
-                                style={styles.merchantAvatar}
-                              />
-                              <Text style={styles.merchantName}>{merchant.name}</Text>
+                            <TouchableOpacity style={styles.merchantHeader} onPress={() => toggleMerchant(serviceId, merchantId)}>
+                              <Image source={{ uri: merchant.image_url || 'https://via.placeholder.com/40' }} style={styles.merchantAvatar} />
+                              <Text style={styles.merchantName}>{merchant.name || merchant.full_name}</Text>
                               <Text style={styles.productCount}>({products.length})</Text>
-                              <Ionicons
-                                name={isMerchantExpanded ? 'chevron-up' : 'chevron-down'}
-                                size={18}
-                                color="#6B7280"
-                              />
+                              <Ionicons name={isMerchantExpanded ? 'chevron-up' : 'chevron-down'} size={18} color="#6B7280" />
                             </TouchableOpacity>
 
-                            {/* المنتجات */}
                             {isMerchantExpanded && (
                               <View style={styles.productsContainer}>
                                 {products.length === 0 ? (
                                   <Text style={styles.noProductsText}>لا توجد منتجات</Text>
                                 ) : (
                                   products.map((product) => (
-                                    <View key={product.$id} style={styles.productItem}>
-                                      {product.imageUrl ? (
-                                        <Image source={{ uri: product.imageUrl }} style={styles.productImage} />
+                                    <View key={product.$id || product.id} style={styles.productItem}>
+                                      {product.image_url ? (
+                                        <Image source={{ uri: product.image_url }} style={styles.productImage} />
                                       ) : (
                                         <View style={[styles.productImage, styles.placeholderImage]}>
                                           <Ionicons name="image-outline" size={16} color="#9CA3AF" />
@@ -268,10 +231,7 @@ export default function ManageAllProductsScreen({ navigation }) {
                                           </Text>
                                         </View>
                                       </View>
-                                      <TouchableOpacity
-                                        style={styles.deleteButton}
-                                        onPress={() => handleDeleteProduct(product.$id)}
-                                      >
+                                      <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteProduct(product.$id || product.id)}>
                                         <Ionicons name="trash-outline" size={18} color="#EF4444" />
                                       </TouchableOpacity>
                                     </View>

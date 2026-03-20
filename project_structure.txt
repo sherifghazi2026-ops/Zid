@@ -1,0 +1,160 @@
+.
+├── App.js
+├── App.js.backup
+├── README.md
+├── TestApp.js
+├── app.json
+├── babel.config.js
+├── eas.json
+├── local.properties
+├── metro.config.js
+├── package-lock.json
+├── package.json
+├── project_structure.txt
+├── report.txt
+├── scripts
+├── secrets
+├── src
+│   ├── components
+│   │   ├── CameraCapture.js
+│   │   ├── CustomDrawer.js
+│   │   ├── DeliveryTracking.js
+│   │   ├── DynamicMongez.js
+│   │   └── Mongez.js
+│   ├── constants
+│   │   ├── businessTypes.js
+│   │   ├── collections.js
+│   │   ├── colors.js
+│   │   └── restaurants.js
+│   ├── context
+│   │   ├── CartContext.js
+│   │   └── TermsContext.js
+│   ├── data
+│   │   └── products.json
+│   ├── hooks
+│   │   └── useInterval.js
+│   ├── lib
+│   │   ├── supabaseClient.js
+│   │   └── tables.js
+│   ├── screens
+│   │   ├── 0,
+│   │   ├── AdminHomeScreen.js
+│   │   ├── CompleteProfileScreen.js
+│   │   ├── CustomerAuthScreen.js
+│   │   ├── EshopScreen.js
+│   │   ├── HomeScreen.js
+│   │   ├── IroningScreen.js
+│   │   ├── ItemsServiceScreen.js
+│   │   ├── MerchantProductsScreen.js
+│   │   ├── MerchantsListScreen.js
+│   │   ├── MyOrdersScreen.js
+│   │   ├── OffersScreen.js
+│   │   ├── ProServiceScreen.js
+│   │   ├── ProductsServiceScreen.js
+│   │   ├── ProfileScreen.js
+│   │   ├── ProviderProductsScreen.js
+│   │   ├── ProvidersListScreen.js
+│   │   ├── ServiceItemsScreen.js
+│   │   ├── ServiceProviderScreen.js
+│   │   ├── ServiceScreen.js
+│   │   ├── SplashScreen.js
+│   │   ├── TermsScreen.js
+│   │   ├── admin
+│   │   │   ├── AddRestaurantScreen.js
+│   │   │   ├── AddServiceScreen.js
+│   │   │   ├── AddUserScreen.js
+│   │   │   ├── AdminAssistantsScreen.js
+│   │   │   ├── AdminHomeScreen.js
+│   │   │   ├── AdminMerchantProductsScreen.js
+│   │   │   ├── AdminMerchantsListScreen.js
+│   │   │   ├── AdminOrdersScreen.js
+│   │   │   ├── AdminProductsReviewScreen.js
+│   │   │   ├── AdminProductsServicesScreen.js
+│   │   │   ├── EditRestaurantScreen.js
+│   │   │   ├── EditServiceScreen.js
+│   │   │   ├── ItemsServiceScreen.js
+│   │   │   ├── ManageAllProductsScreen.js
+│   │   │   ├── ManageHomeChefsScreen.js
+│   │   │   ├── ManageItemsScreen.js
+│   │   │   ├── ManageLaundryItemsScreen.js
+│   │   │   ├── ManageMerchantProductsScreen.js
+│   │   │   ├── ManageOffersScreen.js
+│   │   │   ├── ManagePlacesScreen.js
+│   │   │   ├── ManageProductCategoriesScreen.js
+│   │   │   ├── ManageProductsScreen.js
+│   │   │   ├── ManageRestaurantsScreen.js
+│   │   │   ├── ReviewDishesScreen.js
+│   │   │   ├── ReviewProductsScreen.js
+│   │   │   ├── ServicesManagementScreen.js
+│   │   │   ├── UserEditScreen.js
+│   │   │   ├── UserManagement.js
+│   │   │   └── VerificationRequestsScreen.js
+│   │   ├── auth
+│   │   │   ├── DriverLoginScreen.js
+│   │   │   ├── LoginScreen.js
+│   │   │   └── MerchantRegisterScreen.js
+│   │   ├── customer
+│   │   │   ├── CartScreen.js
+│   │   │   ├── CustomerOrderScreen.js
+│   │   │   ├── DishDetailsScreen.js
+│   │   │   ├── OrderTracking.js
+│   │   │   ├── OrderTrackingScreen.js
+│   │   │   ├── ProductDetailsScreen.js
+│   │   │   ├── RateOrderScreen.js
+│   │   │   └── ServiceItemsScreen.js
+│   │   ├── driver
+│   │   │   ├── DriverDashboard.js
+│   │   │   └── DriverDeliveriesScreen.js
+│   │   ├── homechef
+│   │   │   ├── HomeChefDishesScreen.js
+│   │   │   └── HomeChefsScreen.js
+│   │   ├── item.}
+│   │   ├── merchant
+│   │   │   ├── AddDishScreen.js
+│   │   │   ├── AddHomeChefDishScreen.js
+│   │   │   ├── AddItemScreen.js
+│   │   │   ├── AddProductScreen.js
+│   │   │   ├── EditDishScreen.js
+│   │   │   ├── HomeChefDashboard.js
+│   │   │   ├── ManageMenuScreen.js
+│   │   │   ├── MerchantDashboard.js
+│   │   │   ├── MerchantOrdersScreen.js
+│   │   │   ├── MerchantProductsScreen.js
+│   │   │   ├── MyDishesScreen.js
+│   │   │   ├── MyProductsScreen.js
+│   │   │   └── OrderDetailsScreen.js
+│   │   ├── provider
+│   │   │   └── AddDishScreen.js
+│   │   └── restaurant
+│   │       ├── QuickOrderScreen.js
+│   │       ├── RestaurantDishesScreen.js
+│   │       ├── RestaurantListScreen.js
+│   │       ├── RestaurantOrderScreen.js
+│   │       └── RestaurantPDFViewer.js
+│   ├── services
+│   │   ├── assistantService.js
+│   │   ├── authService.js
+│   │   ├── dishService.js
+│   │   ├── driverService.js
+│   │   ├── groqService.js
+│   │   ├── homeChefService.js
+│   │   ├── itemService.js
+│   │   ├── merchantService.js
+│   │   ├── notificationService.js
+│   │   ├── offersService.js
+│   │   ├── orderService.js
+│   │   ├── placesService.js
+│   │   ├── productService.js
+│   │   ├── restaurantService.js
+│   │   ├── reviewService.js
+│   │   ├── servicesService.js
+│   │   ├── uploadService.js
+│   │   └── userService.js
+│   └── utils
+│       ├── SoundHelper.js
+│       ├── fonts.js
+│       ├── permissions.js
+│       └── systemPrompt.js
+└── txt
+
+22 directories, 136 files

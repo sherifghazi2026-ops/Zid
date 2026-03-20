@@ -12,11 +12,10 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { databases, DATABASE_ID } from '../../appwrite/config';
-import { Query } from 'appwrite';
+import { supabase } from '../../lib/supabaseClient';
+import { TABLES } from '../../lib/tables';
 
 export default function AdminMerchantsListScreen({ navigation, route }) {
-  // التأكد من وجود params
   const { serviceId, serviceName, serviceColor = '#4F46E5' } = route.params || {};
 
   const [merchants, setMerchants] = useState([]);
@@ -34,17 +33,28 @@ export default function AdminMerchantsListScreen({ navigation, route }) {
 
   const loadMerchants = async () => {
     try {
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        'users',
-        [
-          Query.equal('role', 'merchant'),
-          Query.equal('merchantType', serviceId),
-          Query.equal('active', true),
-          Query.orderAsc('name')
-        ]
-      );
-      setMerchants(response.documents || []);
+      const { data, error } = await supabase
+        .from(TABLES.PROFILES)
+        .select('*')
+        .eq('role', 'merchant')
+        .eq('merchant_type', serviceId)
+        .eq('active', true)
+        .order('full_name', { ascending: true });
+
+      if (error) throw error;
+
+      const formattedData = (data || []).map(item => ({
+        $id: item.id,
+        id: item.id,
+        name: item.full_name,
+        full_name: item.full_name,
+        phone: item.phone,
+        image_url: item.image_url || item.avatar_url,
+        merchant_type: item.merchant_type,
+        place_name: item.place_name,
+      }));
+
+      setMerchants(formattedData);
     } catch (error) {
       console.error('خطأ في جلب التجار:', error);
       Alert.alert('خطأ', 'فشل تحميل التجار');
@@ -58,18 +68,21 @@ export default function AdminMerchantsListScreen({ navigation, route }) {
     <TouchableOpacity
       style={styles.merchantCard}
       onPress={() => navigation.navigate('AdminMerchantProductsScreen', {
-        merchantId: item.$id,
+        merchantId: item.id,
         merchantName: item.name,
         serviceId: serviceId
       })}
     >
       <Image
-        source={{ uri: item.imageUrl || 'https://via.placeholder.com/60' }}
+        source={{ uri: item.image_url || 'https://via.placeholder.com/60' }}
         style={styles.merchantImage}
       />
       <View style={styles.merchantInfo}>
         <Text style={styles.merchantName}>{item.name}</Text>
         <Text style={styles.merchantPhone}>{item.phone}</Text>
+        {item.place_name && (
+          <Text style={styles.merchantPlace}>{item.place_name}</Text>
+        )}
       </View>
       <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
     </TouchableOpacity>
@@ -98,7 +111,7 @@ export default function AdminMerchantsListScreen({ navigation, route }) {
       <FlatList
         data={merchants}
         renderItem={renderMerchant}
-        keyExtractor={item => item.$id}
+        keyExtractor={item => item.id}
         contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={loadMerchants} />
@@ -141,6 +154,7 @@ const styles = StyleSheet.create({
   merchantInfo: { flex: 1 },
   merchantName: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
   merchantPhone: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  merchantPlace: { fontSize: 12, color: '#10B981', marginTop: 2 },
   emptyContainer: { alignItems: 'center', padding: 40 },
   emptyText: { marginTop: 12, fontSize: 16, color: '#6B7280' },
 });

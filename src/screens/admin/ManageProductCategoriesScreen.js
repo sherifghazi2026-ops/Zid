@@ -13,7 +13,7 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getAllProducts, PRODUCT_CATEGORIES } from '../../services/productsService';
+import { getAllProducts, PRODUCT_CATEGORIES } from '../../services/productService';
 
 export default function ManageProductCategoriesScreen({ navigation }) {
   const [categories, setCategories] = useState([]);

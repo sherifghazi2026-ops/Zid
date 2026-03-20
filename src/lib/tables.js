@@ -1,0 +1,23 @@
+export const TABLES = {
+  PROFILES: 'profiles',
+  ORDERS: 'orders',
+  SERVICES: 'services',
+  RESTAURANTS: 'restaurants',
+  DISHES: 'dishes',
+  HOME_CHEFS: 'home_chefs',
+  PRODUCTS: 'products',
+  ASSISTANTS: 'assistants',
+  LAUNDRY_ITEMS: 'laundry_items',
+};
+
+export const PROFILES_COLLECTION_ID = TABLES.PROFILES;
+export const ORDERS_COLLECTION_ID = TABLES.ORDERS;
+export const SERVICES_COLLECTION_ID = TABLES.SERVICES;
+export const RESTAURANTS_COLLECTION_ID = TABLES.RESTAURANTS;
+export const DISHES_COLLECTION_ID = TABLES.DISHES;
+export const HOME_CHEFS_COLLECTION_ID = TABLES.HOME_CHEFS;
+export const PRODUCTS_COLLECTION_ID = TABLES.PRODUCTS;
+export const ASSISTANTS_COLLECTION_ID = TABLES.ASSISTANTS;
+export const LAUNDRY_ITEMS_COLLECTION_ID = TABLES.LAUNDRY_ITEMS;
+
+export const BUCKET_ID = 'files';

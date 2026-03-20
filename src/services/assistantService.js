@@ -2,21 +2,13 @@ import { supabase } from '../lib/supabaseClient';
 import { TABLES } from '../lib/tables';
 
 export const ASSISTANT_SCREENS = {
-  HOME: 'home',
-  RESTAURANT: 'restaurant',
-  HOME_CHEF: 'home_chef',
-  OFFERS: 'offers',
-  CART: 'cart',
-  PROFILE: 'profile',
-  ORDERS: 'orders',
-  ADMIN: 'admin',
-  SERVICE: 'service'
+  HOME: 'home', RESTAURANT: 'restaurant', HOME_CHEF: 'home_chef',
+  OFFERS: 'offers', CART: 'cart', PROFILE: 'profile',
+  ORDERS: 'orders', ADMIN: 'admin', SERVICE: 'service'
 };
 
 export const ASSISTANT_POSITIONS = {
-  BOTTOM_RIGHT: 'bottom-right',
-  BOTTOM_LEFT: 'bottom-left',
-  BOTTOM_CENTER: 'bottom-center'
+  BOTTOM_RIGHT: 'bottom-right', BOTTOM_LEFT: 'bottom-left', BOTTOM_CENTER: 'bottom-center'
 };
 
 export const AVAILABLE_MODELS = [
@@ -26,95 +18,32 @@ export const AVAILABLE_MODELS = [
   { label: 'Llama 3 70B (قوي)', value: 'llama3-70b-8192' }
 ];
 
-export const getAllServices = async () => {
-  try {
-    const { data, error } = await supabase
-      .from(TABLES.SERVICES)
-      .select('*')
-      .order('order', { ascending: true });
-
-    if (error) throw error;
-
-    const formattedData = (data || []).map(item => ({
-      $id: item.id,
-      ...item,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-    }));
-
-    return { success: true, data: formattedData };
-  } catch (error) {
-    console.error('❌ خطأ في جلب الخدمات:', error);
-    return { success: false, error: error.message, data: [] };
-  }
-};
-
 export const getAssistantsForScreen = async (screenName, serviceId = null) => {
   try {
-    console.log(`🔍 جلب المساعدين للشاشة: ${screenName}, الخدمة ID: ${serviceId || 'عام'}`);
-
-    let query = supabase
-      .from(TABLES.ASSISTANTS)
-      .select('*')
-      .eq('is_active', true)
-      .order('order', { ascending: true })
-      .limit(20);
-
-    if (screenName === 'service' && serviceId) {
-      console.log(`📌 تصفية حسب service_id: ${serviceId}`);
-      query = query.eq('service_id', serviceId);
-    } else {
-      console.log(`📌 تصفية حسب الشاشة: ${screenName}`);
-      query = query.eq('screen', screenName);
-    }
-
+    let query = supabase.from(TABLES.ASSISTANTS).select('*').eq('is_active', true).order('order', { ascending: true });
+    if (screenName === 'service' && serviceId) query = query.eq('service_id', serviceId);
+    else query = query.eq('screen', screenName);
     const { data, error } = await query;
-
     if (error) throw error;
-
-    const formattedData = (data || []).map(item => ({
-      $id: item.id,
-      ...item,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-    }));
-
-    console.log(`✅ تم جلب ${formattedData.length} مساعد للشاشة ${screenName}`);
-    return { success: true, data: formattedData };
-
+    return { success: true, data: data || [] };
   } catch (error) {
-    console.log('⚠️ المساعدين مش متاحين حالياً:', error.message);
     return { success: true, data: [] };
   }
 };
 
 export const getAllAssistants = async () => {
   try {
-    const { data, error } = await supabase
-      .from(TABLES.ASSISTANTS)
-      .select('*')
-      .order('screen', { ascending: true })
-      .order('order', { ascending: true });
-
+    const { data, error } = await supabase.from(TABLES.ASSISTANTS).select('*').order('screen').order('order');
     if (error) throw error;
-
-    const formattedData = (data || []).map(item => ({
-      $id: item.id,
-      ...item,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-    }));
-
-    return { success: true, data: formattedData };
+    return { success: true, data: data || [] };
   } catch (error) {
-    console.error('❌ خطأ في جلب جميع المساعدين:', error);
     return { success: false, error: error.message, data: [] };
   }
 };
 
 export const createAssistant = async (assistantData) => {
   try {
-    const newAssistant = {
+    const { data, error } = await supabase.from(TABLES.ASSISTANTS).insert([{
       name: assistantData.name,
       screen: assistantData.screen,
       icon: assistantData.icon || 'chatbubble',
@@ -128,78 +57,35 @@ export const createAssistant = async (assistantData) => {
       service_name: assistantData.serviceName || null,
       model: assistantData.model || 'llama-3.3-70b-versatile',
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    const { data, error } = await supabase
-      .from(TABLES.ASSISTANTS)
-      .insert([newAssistant])
-      .select()
-      .single();
-
+    }]).select().single();
     if (error) throw error;
-
-    return {
-      success: true,
-      data: {
-        $id: data.id,
-        ...data,
-        created_at: data.created_at,
-        updated_at: data.updated_at,
-      }
-    };
+    return { success: true, data: { $id: data.id, ...data } };
   } catch (error) {
-    console.error('❌ خطأ في إنشاء مساعد:', error);
     return { success: false, error: error.message };
   }
 };
 
 export const updateAssistant = async (assistantId, assistantData) => {
   try {
-    const updateData = {
-      ...assistantData,
-      service_id: assistantData.serviceId || null,
-      service_name: assistantData.serviceName || null,
-      model: assistantData.model || 'llama-3.3-70b-versatile',
-      updated_at: new Date().toISOString()
-    };
-
     const { data, error } = await supabase
       .from(TABLES.ASSISTANTS)
-      .update(updateData)
+      .update({ ...assistantData, updated_at: new Date().toISOString() })
       .eq('id', assistantId)
       .select()
       .single();
-
     if (error) throw error;
-
-    return {
-      success: true,
-      data: {
-        $id: data.id,
-        ...data,
-        created_at: data.created_at,
-        updated_at: data.updated_at,
-      }
-    };
+    return { success: true, data: { $id: data.id, ...data } };
   } catch (error) {
-    console.error('❌ خطأ في تحديث مساعد:', error);
     return { success: false, error: error.message };
   }
 };
 
 export const deleteAssistant = async (assistantId) => {
   try {
-    const { error } = await supabase
-      .from(TABLES.ASSISTANTS)
-      .delete()
-      .eq('id', assistantId);
-
+    const { error } = await supabase.from(TABLES.ASSISTANTS).delete().eq('id', assistantId);
     if (error) throw error;
-
     return { success: true };
   } catch (error) {
-    console.error('❌ خطأ في حذف مساعد:', error);
     return { success: false, error: error.message };
   }
 };
@@ -208,27 +94,13 @@ export const toggleAssistantStatus = async (assistantId, is_active) => {
   try {
     const { data, error } = await supabase
       .from(TABLES.ASSISTANTS)
-      .update({
-        is_active,
-        updated_at: new Date().toISOString()
-      })
+      .update({ is_active, updated_at: new Date().toISOString() })
       .eq('id', assistantId)
       .select()
       .single();
-
     if (error) throw error;
-
-    return {
-      success: true,
-      data: {
-        $id: data.id,
-        ...data,
-        created_at: data.created_at,
-        updated_at: data.updated_at,
-      }
-    };
+    return { success: true, data: { $id: data.id, ...data } };
   } catch (error) {
-    console.error('❌ خطأ في تغيير حالة المساعد:', error);
     return { success: false, error: error.message };
   }
 };

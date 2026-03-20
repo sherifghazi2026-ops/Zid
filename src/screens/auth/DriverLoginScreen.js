@@ -15,7 +15,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loginUser } from '../../appwrite/userService';
+import { supabase } from '../../lib/supabaseClient';
+import { TABLES } from '../../lib/tables';
 
 const appIcon = require('../../../assets/icons/Zidicon.png');
 
@@ -30,25 +31,42 @@ export default function DriverLoginScreen({ navigation }) {
       Alert.alert('تنبيه', 'أدخل رقم التليفون وكلمة المرور');
       return;
     }
+
     setLoading(true);
     try {
-      const result = await loginUser(phone, password);
-      if (result.success) {
-        const user = result.data;
-        if (user.role !== 'driver') {
-          Alert.alert('خطأ', 'هذا الحساب ليس لمندوب');
-          setLoading(false);
-          return;
-        }
-        await AsyncStorage.setItem('userToken', user.userId);
-        await AsyncStorage.setItem('userData', JSON.stringify(user));
-        await AsyncStorage.setItem('userRole', 'driver');
-        navigation.replace('DriverDashboard');
-      } else {
-        Alert.alert('خطأ', result.error);
+      const email = `${phone}@driver.zid.app`;
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      const { data: profile } = await supabase
+        .from(TABLES.PROFILES)
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profile.role !== 'driver') {
+        Alert.alert('خطأ', 'هذا الحساب ليس لمندوب');
+        setLoading(false);
+        return;
       }
+
+      if (!profile.active) {
+        Alert.alert('خطأ', 'هذا الحساب غير نشط. تواصل مع الإدارة');
+        setLoading(false);
+        return;
+      }
+
+      await AsyncStorage.setItem('userToken', profile.id);
+      await AsyncStorage.setItem('userData', JSON.stringify(profile));
+      await AsyncStorage.setItem('userRole', 'driver');
+      navigation.replace('DriverDashboard');
     } catch (error) {
-      Alert.alert('خطأ', 'حدث خطأ في الاتصال');
+      console.error('Login error:', error);
+      Alert.alert('خطأ', error.message || 'حدث خطأ في الاتصال');
     } finally {
       setLoading(false);
     }

@@ -16,7 +16,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { createUserByAdmin } from '../../appwrite/userService';
+import { supabase } from '../../lib/supabaseClient';
+import { TABLES } from '../../lib/tables';
 import { uploadToImageKit } from '../../services/uploadService';
 import { getAllServices } from '../../services/servicesService';
 
@@ -27,9 +28,7 @@ const ROLES = [
   { label: 'أدمن', value: 'admin' },
 ];
 
-const SPECIALTIES = [
-  'مصري', 'إيطالي', 'صيني', 'هندي', 'مشاوي', 'حلويات', 'مأكولات بحرية', 'صحية', 'نباتي'
-];
+const SPECIALTIES = ['مصري', 'إيطالي', 'صيني', 'هندي', 'مشاوي', 'حلويات', 'مأكولات بحرية', 'صحية', 'نباتي'];
 
 export default function AddUserScreen({ navigation }) {
   const [name, setName] = useState('');
@@ -37,7 +36,7 @@ export default function AddUserScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('customer');
   const [merchantType, setMerchantType] = useState('');
-  const [isActive, setIsActive] = useState(true);
+  const [is_active, setIsActive] = useState(true);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -47,7 +46,6 @@ export default function AddUserScreen({ navigation }) {
   const [showRolePicker, setShowRolePicker] = useState(false);
   const [showMerchantTypePicker, setShowMerchantTypePicker] = useState(false);
 
-  // حقول الأماكن
   const [places, setPlaces] = useState([]);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [showPlacePicker, setShowPlacePicker] = useState(false);
@@ -67,12 +65,11 @@ export default function AddUserScreen({ navigation }) {
     loadAvailableServices();
   }, []);
 
-  // ✅ تعديل: جلب الأماكن فقط إذا كان نوع النشاط ليس home_chef
   useEffect(() => {
     if (role === 'merchant' && merchantType && merchantType !== 'home_chef') {
       loadPlacesByType(merchantType);
     } else {
-      setPlaces([]); // إفراغ الأماكن لـ home_chef
+      setPlaces([]);
     }
   }, [merchantType, role]);
 
@@ -81,9 +78,8 @@ export default function AddUserScreen({ navigation }) {
     try {
       const result = await getAllServices();
       if (result.success) {
-        const activeServices = result.data.filter(s => s.isActive && s.isVisible);
+        const activeServices = result.data.filter(s => s.is_active && s.is_visible);
         setAvailableServices(activeServices);
-        console.log(`✅ تم جلب ${activeServices.length} خدمة متاحة`);
       }
     } catch (error) {
       console.error('خطأ في جلب الخدمات:', error);
@@ -95,14 +91,15 @@ export default function AddUserScreen({ navigation }) {
   const loadPlacesByType = async (type) => {
     setLoadingPlaces(true);
     try {
-      const { getAvailablePlacesByType } = await import('../../services/placesService');
-      const result = await getAvailablePlacesByType(type);
-      
-      if (result.success) {
-        setPlaces(result.data);
-      } else {
-        setPlaces([]);
-      }
+      const { data, error } = await supabase
+        .from(TABLES.PLACES)
+        .select('*')
+        .eq('type', type)
+        .eq('is_active', true)
+        .or('merchant_id.is.null,merchant_id.eq.""');
+
+      if (error) throw error;
+      setPlaces(data || []);
     } catch (error) {
       console.error('خطأ في جلب الأماكن:', error);
       setPlaces([]);
@@ -153,9 +150,12 @@ export default function AddUserScreen({ navigation }) {
       Alert.alert('تنبيه', 'الرجاء إدخال الاسم ورقم الهاتف وكلمة المرور');
       return;
     }
-
     if (phone.length < 10) {
       Alert.alert('تنبيه', 'رقم الهاتف غير صحيح');
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert('تنبيه', 'كلمة المرور يجب أن تكون 6 أحرف على الأقل');
       return;
     }
 
@@ -166,62 +166,81 @@ export default function AddUserScreen({ navigation }) {
       let healthCertUrlFinal = null;
       if (healthCert) {
         const uploadResult = await uploadToImageKit(healthCert, `cert_${Date.now()}.jpg`, 'certificates');
-        if (uploadResult.success) {
-          healthCertUrlFinal = uploadResult.fileUrl;
-        }
+        if (uploadResult.success) healthCertUrlFinal = uploadResult.fileUrl;
       }
 
+      const { data: existingUsers, error: checkError } = await supabase
+        .from(TABLES.PROFILES)
+        .select('id')
+        .eq('phone', phone);
+
+      if (checkError) throw checkError;
+      if (existingUsers && existingUsers.length > 0) {
+        Alert.alert('خطأ', 'رقم الهاتف موجود بالفعل');
+        setLoading(false);
+        setUploading(false);
+        return;
+      }
+
+      const email = `${phone}@phone.auth`;
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({ email, password });
+      if (signUpError) throw signUpError;
+
       const userData = {
-        name,
-        phone,
-        password,
-        role,
-        active: isActive,
+        id: authData.user.id,
+        full_name: name,
+        phone: phone,
+        password: password,
+        role: role,
+        active: is_active,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
       if (role === 'merchant') {
-        userData.merchantType = merchantType;
-
+        userData.merchant_type = merchantType;
         if (merchantType === 'home_chef') {
           userData.specialties = specialties;
-          userData.deliveryFee = parseFloat(deliveryFee);
-          userData.deliveryRadius = parseFloat(deliveryRadius);
-          userData.healthCertUrl = healthCertUrlFinal;
+          userData.delivery_fee = parseFloat(deliveryFee);
+          userData.delivery_radius = parseFloat(deliveryRadius);
+          userData.health_cert_url = healthCertUrlFinal;
         }
-        
-        // ✅ إضافة المكان المختار فقط إذا كان موجوداً وليس home_chef
         if (selectedPlace && merchantType !== 'home_chef') {
-          userData.selectedPlace = selectedPlace;
+          userData.place_id = selectedPlace.id;
+          userData.place_name = selectedPlace.name;
         }
       }
 
       if (role === 'driver') {
-        userData.serviceArea = serviceArea;
-        userData.maxDeliveryRadius = parseFloat(maxDeliveryRadius);
-        userData.isAvailable = isAvailable;
+        userData.service_area = serviceArea;
+        userData.max_delivery_radius = parseFloat(maxDeliveryRadius);
+        userData.is_available = isAvailable;
       }
 
-      const result = await createUserByAdmin(userData);
+      const { error: insertError } = await supabase.from(TABLES.PROFILES).insert([userData]);
+      if (insertError) throw insertError;
 
-      if (result.success) {
-        Alert.alert('✅ تم', 'تم إضافة المستخدم بنجاح');
-        navigation.goBack();
-      } else {
-        Alert.alert('خطأ', result.error);
+      if (role === 'merchant' && selectedPlace && merchantType !== 'home_chef' && authData.user) {
+        const { error: updatePlaceError } = await supabase
+          .from(TABLES.PLACES)
+          .update({
+            merchant_id: authData.user.id,
+            merchant_name: name,
+            is_assigned: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', selectedPlace.id);
+        if (updatePlaceError) console.error('خطأ في تحديث المكان:', updatePlaceError);
       }
+
+      Alert.alert('✅ تم', 'تم إضافة المستخدم بنجاح');
+      navigation.goBack();
     } catch (error) {
+      console.error('❌ خطأ:', error);
       Alert.alert('خطأ', error.message);
     } finally {
       setLoading(false);
       setUploading(false);
-    }
-  };
-
-  const handleGoBack = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.replace('AdminHome');
     }
   };
 
@@ -231,39 +250,19 @@ export default function AddUserScreen({ navigation }) {
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{title}</Text>
-            <TouchableOpacity onPress={() => setVisible(false)}>
-              <Ionicons name="close" size={24} color="#EF4444" />
-            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setVisible(false)}><Ionicons name="close" size={24} color="#EF4444" /></TouchableOpacity>
           </View>
           <FlatList
             data={items}
             keyExtractor={(item) => item.value}
             renderItem={({ item }) => (
               <TouchableOpacity
-                style={[
-                  styles.pickerItem,
-                  selectedValue === item.value && styles.pickerItemSelected
-                ]}
-                onPress={() => {
-                  onSelect(item.value);
-                  setVisible(false);
-                }}
+                style={[styles.pickerItem, selectedValue === item.value && styles.pickerItemSelected]}
+                onPress={() => { onSelect(item.value); setVisible(false); }}
               >
-                {item.icon && (
-                  <Ionicons
-                    name={item.icon}
-                    size={20}
-                    color={selectedValue === item.value ? '#4F46E5' : '#6B7280'}
-                    style={{ marginRight: 8 }}
-                  />
-                )}
-                <Text style={[
-                  styles.pickerItemText,
-                  selectedValue === item.value && styles.pickerItemTextSelected
-                ]}>{item.label}</Text>
-                {selectedValue === item.value && (
-                  <Ionicons name="checkmark" size={20} color="#4F46E5" />
-                )}
+                {item.icon && <Ionicons name={item.icon} size={20} color={selectedValue === item.value ? '#4F46E5' : '#6B7280'} style={{ marginRight: 8 }} />}
+                <Text style={[styles.pickerItemText, selectedValue === item.value && styles.pickerItemTextSelected]}>{item.label}</Text>
+                {selectedValue === item.value && <Ionicons name="checkmark" size={20} color="#4F46E5" />}
               </TouchableOpacity>
             )}
           />
@@ -288,7 +287,7 @@ export default function AddUserScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleGoBack}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-forward" size={28} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>إضافة مستخدم جديد</Text>
@@ -298,36 +297,16 @@ export default function AddUserScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.form}>
           <Text style={styles.label}>الاسم الكامل</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="مثال: أحمد محمد"
-          />
+          <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="مثال: أحمد محمد" />
 
           <Text style={styles.label}>رقم الهاتف</Text>
-          <TextInput
-            style={styles.input}
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="01xxxxxxxxx"
-            keyboardType="phone-pad"
-          />
+          <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="01xxxxxxxxx" keyboardType="phone-pad" />
 
-          <Text style={styles.label}>كلمة المرور</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholder="********"
-          />
+          <Text style={styles.label}>كلمة المرور (6 أحرف على الأقل)</Text>
+          <TextInput style={styles.input} value={password} onChangeText={setPassword} secureTextEntry placeholder="********" />
 
           <Text style={styles.label}>الدور</Text>
-          <TouchableOpacity
-            style={styles.selector}
-            onPress={() => setShowRolePicker(true)}
-          >
+          <TouchableOpacity style={styles.selector} onPress={() => setShowRolePicker(true)}>
             <Text style={role ? styles.selectorText : styles.selectorPlaceholder}>
               {ROLES.find(r => r.value === role)?.label || 'اختر الدور'}
             </Text>
@@ -338,32 +317,23 @@ export default function AddUserScreen({ navigation }) {
             <>
               <Text style={styles.label}>اختر نوع النشاط التجاري</Text>
               {merchantTypes.length > 0 ? (
-                <TouchableOpacity
-                  style={styles.selector}
-                  onPress={() => setShowMerchantTypePicker(true)}
-                >
+                <TouchableOpacity style={styles.selector} onPress={() => setShowMerchantTypePicker(true)}>
                   <Text style={merchantType ? styles.selectorText : styles.selectorPlaceholder}>
                     {merchantTypes.find(t => t.value === merchantType)?.label || 'اختر النشاط'}
                   </Text>
                   <Ionicons name="chevron-down" size={20} color="#6B7280" />
                 </TouchableOpacity>
               ) : (
-                <View style={styles.emptyServices}>
-                  <Text style={styles.emptyServicesText}>لا توجد خدمات متاحة</Text>
-                </View>
+                <View style={styles.emptyServices}><Text style={styles.emptyServicesText}>لا توجد خدمات متاحة</Text></View>
               )}
 
-              {/* ✅ حقل المكان يظهر فقط إذا كان النشاط ليس home_chef */}
               {merchantType && merchantType !== 'home_chef' && (
                 <>
                   <Text style={styles.label}>اختر المكان</Text>
                   {loadingPlaces ? (
                     <ActivityIndicator size="small" color="#4F46E5" style={styles.loader} />
                   ) : places.length > 0 ? (
-                    <TouchableOpacity
-                      style={styles.selector}
-                      onPress={() => setShowPlacePicker(true)}
-                    >
+                    <TouchableOpacity style={styles.selector} onPress={() => setShowPlacePicker(true)}>
                       <Text style={selectedPlace ? styles.selectorText : styles.selectorPlaceholder}>
                         {selectedPlace ? selectedPlace.name : '-- اختر المكان --'}
                       </Text>
@@ -383,18 +353,8 @@ export default function AddUserScreen({ navigation }) {
                   <Text style={styles.label}>التخصصات</Text>
                   <View style={styles.specialtiesContainer}>
                     {SPECIALTIES.map((item) => (
-                      <TouchableOpacity
-                        key={item}
-                        style={[
-                          styles.specialtyChip,
-                          specialties.includes(item) && styles.specialtyChipActive
-                        ]}
-                        onPress={() => toggleSpecialty(item)}
-                      >
-                        <Text style={[
-                          styles.specialtyText,
-                          specialties.includes(item) && styles.specialtyTextActive
-                        ]}>{item}</Text>
+                      <TouchableOpacity key={item} style={[styles.specialtyChip, specialties.includes(item) && styles.specialtyChipActive]} onPress={() => toggleSpecialty(item)}>
+                        <Text style={[styles.specialtyText, specialties.includes(item) && styles.specialtyTextActive]}>{item}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -402,35 +362,18 @@ export default function AddUserScreen({ navigation }) {
                   <View style={styles.row}>
                     <View style={styles.half}>
                       <Text style={styles.label}>رسوم التوصيل (ج)</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={deliveryFee}
-                        onChangeText={setDeliveryFee}
-                        keyboardType="numeric"
-                        placeholder="0"
-                      />
+                      <TextInput style={styles.input} value={deliveryFee} onChangeText={setDeliveryFee} keyboardType="numeric" placeholder="0" />
                     </View>
                     <View style={styles.half}>
                       <Text style={styles.label}>نطاق التوصيل (كم)</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={deliveryRadius}
-                        onChangeText={setDeliveryRadius}
-                        keyboardType="numeric"
-                        placeholder="10"
-                      />
+                      <TextInput style={styles.input} value={deliveryRadius} onChangeText={setDeliveryRadius} keyboardType="numeric" placeholder="10" />
                     </View>
                   </View>
 
                   <Text style={styles.label}>الشهادة الصحية</Text>
                   <TouchableOpacity style={styles.certPicker} onPress={pickHealthCert}>
-                    {healthCert ? (
-                      <Image source={{ uri: healthCert }} style={styles.previewImage} />
-                    ) : (
-                      <View style={styles.certPlaceholder}>
-                        <Ionicons name="document-text" size={40} color="#9CA3AF" />
-                        <Text style={styles.certPlaceholderText}>رفع الشهادة الصحية</Text>
-                      </View>
+                    {healthCert ? <Image source={{ uri: healthCert }} style={styles.previewImage} /> : (
+                      <View style={styles.certPlaceholder}><Ionicons name="document-text" size={40} color="#9CA3AF" /><Text style={styles.certPlaceholderText}>رفع الشهادة الصحية</Text></View>
                     )}
                   </TouchableOpacity>
                 </>
@@ -441,95 +384,50 @@ export default function AddUserScreen({ navigation }) {
           {role === 'driver' && (
             <>
               <Text style={styles.label}>منطقة الخدمة</Text>
-              <TextInput
-                style={styles.input}
-                value={serviceArea}
-                onChangeText={setServiceArea}
-                placeholder="مثال: الشيخ زايد"
-              />
-
+              <TextInput style={styles.input} value={serviceArea} onChangeText={setServiceArea} placeholder="مثال: الشيخ زايد" />
               <Text style={styles.label}>أقصى مسافة توصيل (كم)</Text>
-              <TextInput
-                style={styles.input}
-                value={maxDeliveryRadius}
-                onChangeText={setMaxDeliveryRadius}
-                keyboardType="numeric"
-                placeholder="10"
-              />
-
+              <TextInput style={styles.input} value={maxDeliveryRadius} onChangeText={setMaxDeliveryRadius} keyboardType="numeric" placeholder="10" />
               <View style={styles.switchContainer}>
                 <Text style={styles.label}>متاح للتوصيل</Text>
-                <Switch
-                  value={isAvailable}
-                  onValueChange={setIsAvailable}
-                  trackColor={{ false: '#E5E7EB', true: '#4F46E5' }}
-                />
+                <Switch value={isAvailable} onValueChange={setIsAvailable} trackColor={{ false: '#E5E7EB', true: '#4F46E5' }} />
               </View>
             </>
           )}
 
           <View style={styles.switchContainer}>
             <Text style={styles.label}>الحساب نشط</Text>
-            <Switch
-              value={isActive}
-              onValueChange={setIsActive}
-              trackColor={{ false: '#E5E7EB', true: '#4F46E5' }}
-            />
+            <Switch value={is_active} onValueChange={setIsActive} trackColor={{ false: '#E5E7EB', true: '#4F46E5' }} />
           </View>
 
-          <TouchableOpacity
-            style={[styles.addButton, (loading || uploading) && styles.disabled]}
-            onPress={handleAddUser}
-            disabled={loading || uploading}
-          >
-            {(loading || uploading) ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <Text style={styles.addButtonText}>إضافة المستخدم</Text>
-            )}
+          <TouchableOpacity style={[styles.addButton, (loading || uploading) && styles.disabled]} onPress={handleAddUser} disabled={loading || uploading}>
+            {(loading || uploading) ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>إضافة المستخدم</Text>}
           </TouchableOpacity>
         </View>
       </ScrollView>
 
       {renderPicker(showRolePicker, setShowRolePicker, ROLES, role, setRole, 'اختر الدور')}
       {merchantTypes.length > 0 && renderPicker(showMerchantTypePicker, setShowMerchantTypePicker, merchantTypes, merchantType, setMerchantType, 'اختر النشاط')}
-      
-      {/* ✅ Picker اختيار المكان - يظهر فقط إذا كان هناك أماكن */}
+
       <Modal visible={showPlacePicker} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>اختر المكان</Text>
-              <TouchableOpacity onPress={() => setShowPlacePicker(false)}>
-                <Ionicons name="close" size={24} color="#EF4444" />
-              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowPlacePicker(false)}><Ionicons name="close" size={24} color="#EF4444" /></TouchableOpacity>
             </View>
             <FlatList
               data={places}
-              keyExtractor={(item) => item.$id}
+              keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  style={[
-                    styles.pickerItem,
-                    selectedPlace?.$id === item.$id && styles.pickerItemSelected
-                  ]}
-                  onPress={() => {
-                    setSelectedPlace(item);
-                    setShowPlacePicker(false);
-                  }}
+                  style={[styles.pickerItem, selectedPlace?.id === item.id && styles.pickerItemSelected]}
+                  onPress={() => { setSelectedPlace(item); setShowPlacePicker(false); }}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={[
-                      styles.pickerItemText,
-                      selectedPlace?.$id === item.$id && styles.pickerItemTextSelected
-                    ]}>{item.name}</Text>
-                    {item.address ? (
-                      <Text style={styles.placeAddress}>{item.address}</Text>
-                    ) : null}
+                    <Text style={[styles.pickerItemText, selectedPlace?.id === item.id && styles.pickerItemTextSelected]}>{item.name}</Text>
+                    {item.address ? <Text style={styles.placeAddress}>{item.address}</Text> : null}
                   </View>
-                  {selectedPlace?.$id === item.$id && (
-                    <Ionicons name="checkmark" size={20} color="#4F46E5" />
-                  )}
+                  {selectedPlace?.id === item.id && <Ionicons name="checkmark" size={20} color="#4F46E5" />}
                 </TouchableOpacity>
               )}
             />
@@ -544,156 +442,41 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 14, color: '#6B7280' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 20,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
   content: { padding: 20 },
   form: { backgroundColor: '#FFF', borderRadius: 12, padding: 20 },
   label: { fontSize: 14, fontWeight: '600', color: '#4B5563', marginBottom: 5, marginTop: 10 },
-  input: {
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 15,
-    fontSize: 14,
-  },
-  selector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 15,
-  },
+  input: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, marginBottom: 15, fontSize: 14 },
+  selector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, marginBottom: 15 },
   selectorText: { fontSize: 14, color: '#1F2937', flex: 1, marginLeft: 8 },
   selectorPlaceholder: { fontSize: 14, color: '#9CA3AF' },
-  emptyServices: {
-    backgroundColor: '#FEF3C7',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 15,
-    alignItems: 'center',
-  },
+  emptyServices: { backgroundColor: '#FEF3C7', padding: 12, borderRadius: 8, marginBottom: 15, alignItems: 'center' },
   emptyServicesText: { fontSize: 14, color: '#92400E' },
-  emptyPlaces: {
-    backgroundColor: '#FEF3C7',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 15,
-    alignItems: 'center',
-  },
-  emptyPlacesText: {
-    fontSize: 14,
-    color: '#92400E',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  emptyPlacesSub: {
-    fontSize: 12,
-    color: '#92400E',
-    textAlign: 'center',
-  },
+  emptyPlaces: { backgroundColor: '#FEF3C7', padding: 16, borderRadius: 8, marginBottom: 15, alignItems: 'center' },
+  emptyPlacesText: { fontSize: 14, color: '#92400E', fontWeight: '600', marginBottom: 4 },
+  emptyPlacesSub: { fontSize: 12, color: '#92400E', textAlign: 'center' },
   loader: { marginVertical: 10 },
   row: { flexDirection: 'row', gap: 10 },
   half: { flex: 1 },
-  specialtiesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 15,
-  },
-  specialtyChip: {
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  specialtyChipActive: {
-    backgroundColor: '#EF4444',
-    borderColor: '#EF4444',
-  },
+  specialtiesContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 15 },
+  specialtyChip: { backgroundColor: '#F3F4F6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB' },
+  specialtyChipActive: { backgroundColor: '#EF4444', borderColor: '#EF4444' },
   specialtyText: { fontSize: 12, color: '#4B5563' },
   specialtyTextActive: { color: '#FFF', fontWeight: '600' },
-  certPicker: {
-    width: '100%',
-    height: 150,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    marginBottom: 15,
-    overflow: 'hidden',
-  },
+  certPicker: { width: '100%', height: 150, borderWidth: 1, borderColor: '#E5E7EB', borderStyle: 'dashed', borderRadius: 8, marginBottom: 15, overflow: 'hidden' },
   previewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-  certPlaceholder: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-  },
+  certPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
   certPlaceholderText: { marginTop: 8, fontSize: 14, color: '#9CA3AF' },
-  switchContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  addButton: {
-    backgroundColor: '#4F46E5',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-  },
+  switchContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
+  addButton: { backgroundColor: '#4F46E5', padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 10 },
   disabled: { opacity: 0.6 },
   addButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#FFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
-  pickerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
+  pickerItem: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   pickerItemSelected: { backgroundColor: '#EEF2FF' },
   pickerItemText: { fontSize: 16, color: '#1F2937', flex: 1 },
   pickerItemTextSelected: { color: '#4F46E5', fontWeight: '600' },

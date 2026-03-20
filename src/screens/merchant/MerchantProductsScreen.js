@@ -12,13 +12,12 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { databases, DATABASE_ID } from '../../appwrite/config';
-import { Query } from 'appwrite';
+import { getMerchantProductsByService } from '../../services/productService';
 import { useCart } from '../../context/CartContext';
 import DynamicMongez from '../../components/DynamicMongez';
 
 export default function MerchantProductsScreen({ navigation, route }) {
-  const { merchantId, merchantName, merchantImage, serviceType, serviceName } = route.params;
+  const { merchantId, merchantName, merchantPlace, merchantImage, serviceType, serviceName } = route.params;
   const { addToCart } = useCart();
 
   const [products, setProducts] = useState([]);
@@ -31,124 +30,62 @@ export default function MerchantProductsScreen({ navigation, route }) {
 
   const loadProducts = async () => {
     console.log(`🔍 جلب منتجات التاجر ${merchantName} (${merchantId}) للخدمة ${serviceType}`);
-    
-    try {
-      // ✅ للمطاعم والأكل البيتي، نجيب من dishes collection
-      if (serviceType === 'restaurant' || serviceType === 'home_chef') {
-        const providerType = serviceType === 'restaurant' ? 'restaurant' : 'home_chef';
-        
-        const response = await databases.listDocuments(
-          DATABASE_ID,
-          'dishes',
-          [
-            Query.equal('providerId', merchantId),
-            Query.equal('providerType', providerType),
-            Query.equal('status', 'approved'),
-            Query.equal('isAvailable', true),
-            Query.orderAsc('name')
-          ]
-        );
-        
-        console.log(`✅ تم جلب ${response.documents.length} طبق من dishes`);
-        setProducts(response.documents);
-      } 
-      // ✅ للخدمات الأخرى (سوبر ماركت، مخبز)، نجيب من products collection
-      else {
-        const response = await databases.listDocuments(
-          DATABASE_ID,
-          'products',
-          [
-            Query.equal('merchantId', merchantId),
-            Query.equal('serviceId', 'products'),
-            Query.equal('status', 'approved'),
-            Query.equal('isAvailable', true),
-            Query.orderAsc('name')
-          ]
-        );
-        
-        console.log(`✅ تم جلب ${response.documents.length} منتج من products`);
-        setProducts(response.documents);
-      }
-    } catch (error) {
-      console.error('❌ خطأ في جلب المنتجات:', error);
-      Alert.alert('خطأ', 'فشل في تحميل المنتجات');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    const result = await getMerchantProductsByService(merchantId, serviceType);
+    if (result.success) {
+      console.log(`✅ تم جلب ${result.data.length} منتج`);
+      setProducts(result.data);
+    } else {
+      console.error('❌ فشل جلب المنتجات:', result.error);
     }
+    setLoading(false);
+    setRefreshing(false);
   };
 
-  const handleAddToCart = (item) => {
-    // ✅ تجهيز العنصر حسب نوعه
-    const cartItem = {
-      ...item,
+  const handleAddToCart = (product) => {
+    addToCart({
+      ...product,
       merchantId,
       merchantName,
+      merchantPlace,
       serviceType,
-      quantity: 1,
-      cartItemId: Date.now().toString()
-    };
-
-    // ✅ للخدمات من نوع مطاعم أو أكل بيتي، نضبط الاسم والعرض
-    if (serviceType === 'restaurant' || serviceType === 'home_chef') {
-      cartItem.name = item.name;
-      cartItem.price = item.price;
-      cartItem.imageUrl = item.images?.[0] || null;
-    }
-
-    addToCart(cartItem);
-    Alert.alert('✅ تم', 'تمت إضافة العنصر إلى السلة');
+      quantity: 1
+    });
+    Alert.alert('✅ تم', 'تمت إضافة المنتج إلى السلة');
   };
 
-  const renderItem = ({ item }) => {
-    // ✅ عرض مختلف للمطاعم (صور متعددة)
-    const isRestaurant = serviceType === 'restaurant' || serviceType === 'home_chef';
-    
-    let imageUrl = null;
-    if (isRestaurant) {
-      imageUrl = item.images?.[0] || null;
-    } else {
-      imageUrl = item.imageUrl || null;
-    }
+  const renderProduct = ({ item }) => (
+    <View style={styles.productCard}>
+      {item.image_url ? (
+        <Image source={{ uri: item.image_url }} style={styles.productImage} />
+      ) : (
+        <View style={[styles.productImage, styles.placeholderImage]}>
+          <Ionicons name="image-outline" size={30} color="#9CA3AF" />
+        </View>
+      )}
 
-    return (
-      <View style={styles.productCard}>
-        {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.productImage} />
-        ) : (
-          <View style={[styles.productImage, styles.placeholderImage]}>
-            <Ionicons name="image-outline" size={30} color="#9CA3AF" />
+      <View style={styles.productInfo}>
+        <Text style={styles.productName}>{item.name}</Text>
+        <Text style={styles.productPrice}>{item.price} ج</Text>
+        {item.description && (
+          <Text style={styles.productDesc} numberOfLines={2}>{item.description}</Text>
+        )}
+        {item.videoUrl && (
+          <View style={styles.videoIndicator}>
+            <Ionicons name="videocam" size={14} color="#EF4444" />
+            <Text style={styles.videoText}>فيديو</Text>
           </View>
         )}
 
-        <View style={styles.productInfo}>
-          <Text style={styles.productName}>{item.name}</Text>
-          <Text style={styles.productPrice}>{item.price} ج</Text>
-          {item.description && (
-            <Text style={styles.productDesc} numberOfLines={2}>{item.description}</Text>
-          )}
-
-          {/* ✅ عرض المكونات للأطباق */}
-          {isRestaurant && item.ingredients && item.ingredients.length > 0 && (
-            <View style={styles.ingredientsContainer}>
-              <Text style={styles.ingredientsLabel}>المكونات:</Text>
-              <Text style={styles.ingredientsText} numberOfLines={1}>
-                {item.ingredients.join(' • ')}
-              </Text>
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => handleAddToCart(item)}
-          >
-            <Ionicons name="add-circle" size={24} color="#4F46E5" />
-            <Text style={styles.addButtonText}>إضافة للسلة</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => handleAddToCart(item)}
+        >
+          <Ionicons name="add-circle" size={24} color="#4F46E5" />
+          <Text style={styles.addButtonText}>إضافة للسلة</Text>
+        </TouchableOpacity>
       </View>
-    );
-  };
+    </View>
+  );
 
   if (loading) {
     return (
@@ -158,13 +95,15 @@ export default function MerchantProductsScreen({ navigation, route }) {
     );
   }
 
+  const displayName = merchantPlace || merchantName;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={28} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{merchantName}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>{displayName}</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Cart')}>
           <Ionicons name="cart" size={24} color="#4F46E5" />
         </TouchableOpacity>
@@ -176,15 +115,15 @@ export default function MerchantProductsScreen({ navigation, route }) {
 
       <FlatList
         data={products}
-        renderItem={renderItem}
-        keyExtractor={item => item.$id}
+        renderItem={renderProduct}
+        keyExtractor={item => item.id || item.$id}
         contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={loadProducts} />
         }
         ListHeaderComponent={
           products.length > 0 ? (
-            <Text style={styles.sectionTitle}>منتجات {merchantName}</Text>
+            <Text style={styles.sectionTitle}>منتجات {displayName}</Text>
           ) : null
         }
         ListEmptyComponent={
@@ -202,7 +141,8 @@ export default function MerchantProductsScreen({ navigation, route }) {
           serviceId: serviceType,
           serviceName: serviceName,
           merchantId: merchantId,
-          merchantName: merchantName
+          merchantName: merchantName,
+          merchantPlace: merchantPlace
         }}
       />
     </SafeAreaView>
@@ -245,14 +185,13 @@ const styles = StyleSheet.create({
   productName: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginBottom: 4 },
   productPrice: { fontSize: 14, fontWeight: 'bold', color: '#F59E0B', marginBottom: 4 },
   productDesc: { fontSize: 12, color: '#6B7280', marginBottom: 4 },
-  ingredientsContainer: {
+  videoIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
-    flexWrap: 'wrap',
+    gap: 4,
   },
-  ingredientsLabel: { fontSize: 11, color: '#4B5563', marginRight: 4 },
-  ingredientsText: { fontSize: 11, color: '#6B7280', flex: 1 },
+  videoText: { fontSize: 11, color: '#EF4444', fontWeight: '600' },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
