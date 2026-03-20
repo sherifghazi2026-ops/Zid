@@ -20,3 +20,4 @@
 npm install
 expo start
 # Last update
+# Zid-App
